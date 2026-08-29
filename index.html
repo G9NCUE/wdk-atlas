@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WDK Atlas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inconsolata:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-main">
+        <p class="eyebrow">WDK by Tether</p>
+        <h1 id="title">WDK Atlas</h1>
+        <p id="subtitle" class="subtitle"></p>
+        <label class="pending-toggle">
+          <input type="checkbox" id="toggle-pending" checked />
+          <span class="pending-toggle-switch" aria-hidden="true"></span>
+          Include planned &amp; in progress features
+        </label>
+      </div>
+      <div class="header-side">
+        <ul class="legend" aria-label="Status legend">
+          <li><span class="swatch shipped"></span> live</li>
+          <li><span class="swatch wip"></span> wip</li>
+          <li><span class="swatch planned"></span> planned</li>
+          <li><span class="swatch ecosystem"></span> ecosystem</li>
+        </ul>
+      </div>
+    </header>
+
+    <p id="error" class="error" hidden></p>
+
+    <div id="poster" class="poster" hidden></div>
+
+    <div
+      id="tooltip"
+      class="tooltip"
+      role="dialog"
+      aria-modal="true"
+      hidden
+    ></div>
+
+    <script src="vendor/js-yaml.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
