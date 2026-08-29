@@ -168,6 +168,7 @@ modules:
     repo: https://github.com/tetherto/wdk-wallet-solana
     roadmap:
       - { label: Abstract signers, status: wip, progress: 50 }
+      - { label: Ledger support, status: wip, progress: 40 }
 
   - id: wdk-wallet-solana-gasless
     name: wdk-wallet-solana-gasless
