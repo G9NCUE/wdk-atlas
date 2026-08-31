@@ -25,6 +25,10 @@
         </label>
       </div>
       <div class="header-side">
+        <nav class="pages" aria-label="Pages">
+          <a href="./" data-page="main">The kit</a>
+          <a href="./?page=dev" data-page="dev">Developer tools</a>
+        </nav>
         <ul class="legend" aria-label="Status legend">
           <li><span class="swatch shipped"></span> live</li>
           <li><span class="swatch wip"></span> wip</li>
@@ -38,13 +42,7 @@
 
     <div id="poster" class="poster" hidden></div>
 
-    <div
-      id="tooltip"
-      class="tooltip"
-      role="dialog"
-      aria-modal="true"
-      hidden
-    ></div>
+    <aside id="drawer" class="drawer" role="dialog" aria-labelledby="drawer-title" hidden></aside>
 
     <script src="vendor/js-yaml.min.js"></script>
     <script src="app.js"></script>
