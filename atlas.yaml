@@ -23,53 +23,72 @@ subtitle: |-
 #     summary: Placeholder north star. Replace with the real destination later.
 
 sections:
-  - id: core
-    label: Core
-    blurb: Modular wallet and protocol functionality
-    lanes:
-      - id: kernel
-        label: Orchestrator & interfaces
-      - id: wallets
-        label: Wallets
-      - id: protocols
-        label: Protocols
-        groups:
-          - { id: swidge, label: Swidge }
-          - { id: swap, label: Swap }
-          - { id: bridge, label: Bridge }
-          - { id: sda, label: Smart Deposit Address }
-          - { id: lending, label: Lending }
-          - { id: fiat, label: Fiat }
-          - { id: multisig, label: Multisig }
-      - id: pricing
-        label: API clients
-
-  - id: platform
-    label: Platform support
-    blurb: Run WDK packages in a platform-agnostic worklet architecture
-    lanes:
-      - id: worklets
-        label: Worklet Tools
-      - id: native
-        label: Native & mobile
-
-  - id: starters
-    label: Starters and consumers
-    blurb: Recipes and reference implementations of WDK
+  - id: app
+    label: Your app
+    blurb: What people install. Start from a starter or from scratch
     lanes:
       - id: apps
         label: Starters
-      - id: reference
-        label: Reference
+        blurb: One reference app per phone technology
 
-  - id: tooling
-    label: Tooling
-    blurb: Auxiliary tools to build with WDK
+  - id: platform
+    label: Phone plumbing
+    blurb: Carries the app's taps to the engine and the answers back
+    lanes:
+      - id: native
+        label: Host binding
+        blurb: The phone side. Each one talks to the engine through the sealed room below
+      - id: services
+        label: Services
+        blurb: Run in the app beside the host binding. Look things up or keep things safe. Never touch the keys
+
+  - id: core
+    label: The engine
+    blurb: A sealed room on the phone. Everything in this box runs inside it, so the keys never sit in the app
+    module: pear-wrk-wdk
+    lanes:
+      - id: kernel
+        label: The assembler
+        blurb: Creates each wallet and hands every protocol its account
+      - id: protocols
+        label: Protocols
+        blurb: Things you do with money beyond sending. Each one holds a wallet and asks it to sign
+        groups:
+          - { id: swidge, label: Swap & bridge }
+          - { id: swap, label: Swap }
+          - { id: bridge, label: Bridge }
+          - { id: lending, label: Earn & borrow }
+          - { id: fiat, label: Buy & sell for cash }
+          - { id: multisig, label: Shared approval }
+          - { id: sda, label: Smart deposit address }
+      - id: wallets
+        label: Wallets
+        blurb: One per chain. Hold the keys and sign. Variants hang under their base
+      - id: modules
+        label: Other modules
+        blurb: Loaded by the assembler like a protocol, but not about money
+      - id: internals
+        label: Under the hood
+        blurb: Engine-side pieces the app never calls directly
+      - id: foundation
+        label: Foundation
+        blurb: The blank forms every wallet and protocol fills in, so they all plug in the same way
+
+  - id: dev
+    page: dev
+    label: Developer tools
+    blurb: For building with WDK. Not part of a shipped wallet
+    lanes:
+      - id: reference
+        label: Learn
+      - id: tools
+        label: Build
 
 modules:
   # --- Core ---
   - id: wdk
     name: wdk
+    title: The assembler
     section: core
     band: kernel
     status: shipped
@@ -82,8 +101,9 @@ modules:
 
   - id: wdk-wallet
     name: wdk-wallet
+    title: The shared rulebook
     section: core
-    band: kernel
+    band: foundation
     status: shipped
     publisher: tetherto
     summary: Shared wallet interfaces that chain modules implement.
@@ -97,14 +117,17 @@ modules:
 
   - id: wdk-policies
     name: wdk-policies
+    title: Transaction rules
     section: core
     band: kernel
     status: planned
     publisher: tetherto
     summary: Transaction policy engine for wallet and protocol writes.
+    repo: https://github.com/tetherto/wdk-policies
 
   - id: wdk-wallet-btc
     name: wdk-wallet-btc
+    title: Bitcoin
     section: core
     band: wallets
     status: shipped
@@ -118,6 +141,7 @@ modules:
 
   - id: wdk-wallet-evm
     name: wdk-wallet-evm
+    title: Ethereum & EVM chains
     section: core
     band: wallets
     status: shipped
@@ -125,12 +149,15 @@ modules:
     chains: [EVM]
     summary: Ethereum and EVM-compatible chains.
     repo: https://github.com/tetherto/wdk-wallet-evm
+    relations:
+      - { type: requires, target: wdk-failover-provider }
     roadmap:
       - { label: Abstract signers, status: wip, progress: 80 }
       - { label: Ledger support, status: wip, progress: 60 }
 
   - id: wdk-wallet-evm-erc-4337
     name: wdk-wallet-evm-erc-4337
+    title: Ethereum, smart account (ERC-4337)
     section: core
     band: wallets
     status: shipped
@@ -145,6 +172,7 @@ modules:
 
   - id: wdk-wallet-evm-7702-gasless
     name: wdk-wallet-evm-7702-gasless
+    title: Ethereum, fees paid in USD₮
     section: core
     band: wallets
     status: shipped
@@ -154,11 +182,13 @@ modules:
     repo: https://github.com/tetherto/wdk-wallet-evm-7702-gasless
     relations:
       - { type: requires, target: wdk-wallet-evm }
+      - { type: requires, target: wdk-failover-provider }
     roadmap:
       - { label: Abstract signers, status: planned }
 
   - id: wdk-wallet-solana
     name: wdk-wallet-solana
+    title: Solana
     section: core
     band: wallets
     status: shipped
@@ -172,6 +202,7 @@ modules:
 
   - id: wdk-wallet-solana-gasless
     name: wdk-wallet-solana-gasless
+    title: Solana, fees paid in USD₮
     section: core
     band: wallets
     status: shipped
@@ -186,6 +217,7 @@ modules:
 
   - id: wdk-wallet-ton
     name: wdk-wallet-ton
+    title: TON
     section: core
     band: wallets
     status: shipped
@@ -198,6 +230,7 @@ modules:
 
   - id: wdk-wallet-ton-gasless
     name: wdk-wallet-ton-gasless
+    title: TON, fees paid in USD₮
     section: core
     band: wallets
     status: shipped
@@ -212,6 +245,7 @@ modules:
 
   - id: wdk-wallet-tron
     name: wdk-wallet-tron
+    title: TRON
     section: core
     band: wallets
     status: shipped
@@ -224,6 +258,7 @@ modules:
 
   - id: wdk-wallet-tron-gasfree
     name: wdk-wallet-tron-gasfree
+    title: TRON, fees paid in USD₮
     section: core
     band: wallets
     status: shipped
@@ -238,6 +273,7 @@ modules:
 
   - id: wdk-wallet-spark
     name: wdk-wallet-spark
+    title: Bitcoin Lightning (Spark)
     section: core
     band: wallets
     status: shipped
@@ -250,6 +286,7 @@ modules:
 
   - id: wdk-wallet-aptos
     name: wdk-wallet-aptos
+    title: Aptos
     section: core
     band: wallets
     status: shipped
@@ -262,6 +299,7 @@ modules:
 
   - id: wdk-wallet-rgb
     name: wdk-wallet-rgb
+    title: Bitcoin assets (RGB)
     section: core
     band: wallets
     status: shipped
@@ -276,6 +314,7 @@ modules:
 
   - id: wdk-rgb-lightning
     name: wdk-rgb-lightning
+    title: RGB over Lightning
     section: core
     band: wallets
     status: shipped
@@ -289,6 +328,7 @@ modules:
 
   - id: wdk-wallet-cosmos
     name: wdk-wallet-cosmos
+    title: Cosmos
     section: core
     band: wallets
     status: shipped
@@ -301,6 +341,7 @@ modules:
 
   - id: wdk-wallet-arkade
     name: wdk-wallet-arkade
+    title: Bitcoin (Ark)
     section: core
     band: wallets
     status: shipped
@@ -309,12 +350,13 @@ modules:
     summary: Arkade / Ark wallet module.
     notes:
       - Not maintained by Tether
-    repo: https://github.com/arkade-os/wdk
+    repo: https://github.com/arkade-os/arkade-wdk
     relations:
       - { type: requires, target: wdk-wallet-btc }
 
   - id: wdk-protocol-swap-velora-evm
     name: wdk-protocol-swap-velora-evm
+    title: Swap via Velora
     section: core
     band: protocols
     kind: swap
@@ -328,6 +370,7 @@ modules:
 
   - id: wdk-protocol-bridge-usdt0-evm
     name: wdk-protocol-bridge-usdt0-evm
+    title: Move USD₮0 between chains
     section: core
     band: protocols
     kind: bridge
@@ -341,6 +384,7 @@ modules:
 
   - id: wdk-protocol-swidge-orchestra
     name: wdk-protocol-swidge-orchestra
+    title: Swap & bridge via Flashnet
     section: core
     band: protocols
     kind: swidge
@@ -357,6 +401,7 @@ modules:
 
   - id: wdk-protocol-swidge-rhinofi
     name: wdk-protocol-swidge-rhinofi
+    title: Swap & bridge via Rhino.fi
     section: core
     band: protocols
     kind: swidge
@@ -372,6 +417,7 @@ modules:
 
   - id: wdk-protocol-swidge-symbiosis
     name: wdk-protocol-swidge-symbiosis
+    title: Swap & bridge via Symbiosis
     section: core
     band: protocols
     kind: swidge
@@ -387,6 +433,7 @@ modules:
 
   - id: wdk-protocol-swidge-lifi
     name: wdk-protocol-swidge-lifi
+    title: Swap & bridge via LI.FI
     section: core
     band: protocols
     kind: swidge
@@ -402,6 +449,7 @@ modules:
 
   - id: wdk-protocol-swidge-0x
     name: wdk-protocol-swidge-0x
+    title: Swap via 0x
     section: core
     band: protocols
     kind: swidge
@@ -417,6 +465,7 @@ modules:
 
   - id: wdk-protocol-lending-aave-evm
     name: wdk-protocol-lending-aave-evm
+    title: Earn & borrow via Aave
     section: core
     band: protocols
     kind: lending
@@ -430,6 +479,7 @@ modules:
 
   - id: wdk-protocol-fiat-moonpay
     name: wdk-protocol-fiat-moonpay
+    title: Buy with a card via MoonPay
     section: core
     band: protocols
     kind: fiat
@@ -440,6 +490,7 @@ modules:
 
   - id: wdk-protocol-fiat-transak
     name: wdk-protocol-fiat-transak
+    title: Buy & sell via Transak
     section: core
     band: protocols
     kind: fiat
@@ -452,6 +503,7 @@ modules:
 
   - id: wdk-protocol-multisig-safe
     name: wdk-protocol-multisig-safe
+    title: Shared approval via Safe
     section: core
     band: protocols
     kind: multisig
@@ -466,6 +518,7 @@ modules:
 
   - id: wdk-protocol-multisig-squads
     name: wdk-protocol-multisig-squads
+    title: Shared approval via Squads
     section: core
     band: protocols
     kind: multisig
@@ -480,6 +533,7 @@ modules:
 
   - id: wdk-protocol-multisig-psbt
     name: wdk-protocol-multisig-psbt
+    title: Shared approval on Bitcoin
     section: core
     band: protocols
     kind: multisig
@@ -492,6 +546,7 @@ modules:
 
   - id: wdk-protocol-sda-coming-soon
     name: implementations coming soon
+    title: Smart deposit addresses
     section: core
     band: protocols
     kind: sda
@@ -502,6 +557,7 @@ modules:
 
   - id: wdk-protocol-lending-morpho-evm
     name: wdk-protocol-lending-morpho-evm
+    title: Earn & borrow via Morpho
     section: core
     band: protocols
     kind: lending
@@ -515,17 +571,21 @@ modules:
 
   - id: wdk-pricing-provider
     name: wdk-pricing-provider
-    section: core
-    band: pricing
+    title: Price feed (template)
+    section: platform
+    band: services
     status: shipped
     publisher: tetherto
     summary: Interface for fiat pricing providers.
     repo: https://github.com/tetherto/wdk-pricing-provider
+    relations:
+      - { type: requires, target: wdk-failover-provider }
 
   - id: wdk-pricing-bitfinex-http
     name: wdk-pricing-bitfinex-http
-    section: core
-    band: pricing
+    title: Prices from Bitfinex
+    section: platform
+    band: services
     status: shipped
     publisher: tetherto
     summary: Bitfinex HTTP pricing provider.
@@ -535,8 +595,9 @@ modules:
 
   - id: wdk-pricing-coingecko-http
     name: wdk-pricing-coingecko-http
-    section: core
-    band: pricing
+    title: Prices from CoinGecko
+    section: platform
+    band: services
     status: shipped
     publisher: tetherto
     summary: CoinGecko HTTP pricing provider.
@@ -546,8 +607,9 @@ modules:
 
   - id: wdk-indexer-http
     name: wdk-indexer-http
-    section: core
-    band: pricing
+    title: Balances & history
+    section: platform
+    band: services
     status: shipped
     publisher: tetherto
     summary: HTTP indexer for balances and history.
@@ -557,8 +619,9 @@ modules:
   # --- Platform support ---
   - id: wdk-worklet-bundler
     name: wdk-worklet-bundler
-    section: platform
-    band: worklets
+    title: Packs the engine for the phone
+    section: dev
+    band: tools
     status: shipped
     publisher: tetherto
     summary: Bundler for WDK worklets.
@@ -566,8 +629,8 @@ modules:
 
   - id: pear-wrk-wdk
     name: pear-wrk-wdk
-    section: platform
-    band: worklets
+    title: Runs the engine
+    section: core
     status: shipped
     publisher: tetherto
     summary: Pear / Bare runtime worker for WDK.
@@ -575,6 +638,7 @@ modules:
 
   - id: wdk-react-native-core
     name: wdk-react-native-core
+    title: React Native bridge
     section: platform
     band: native
     status: shipped
@@ -584,6 +648,7 @@ modules:
 
   - id: wdk-react-native-secure-storage
     name: wdk-react-native-secure-storage
+    title: Secure storage, React Native
     section: platform
     band: native
     status: shipped
@@ -595,6 +660,7 @@ modules:
 
   - id: wdk-uikit-react-native
     name: wdk-uikit-react-native
+    title: UI kit, React Native
     section: platform
     band: native
     status: shipped
@@ -606,6 +672,7 @@ modules:
 
   - id: wdk-core-kotlin
     name: wdk-core-kotlin
+    title: Android bridge (Kotlin)
     section: platform
     band: native
     status: shipped
@@ -615,6 +682,7 @@ modules:
 
   - id: wdk-core-swift
     name: wdk-core-swift
+    title: iPhone bridge (Swift)
     section: platform
     band: native
     status: shipped
@@ -626,7 +694,8 @@ modules:
   # --- Starters and consumers ---
   - id: wdk-starter-react-native
     name: wdk-starter-react-native
-    section: starters
+    title: Starter app, React Native
+    section: app
     band: apps
     status: shipped
     publisher: tetherto
@@ -638,7 +707,8 @@ modules:
 
   - id: wdk-starter-kotlin
     name: wdk-starter-kotlin
-    section: starters
+    title: Starter app, Android
+    section: app
     band: apps
     status: shipped
     publisher: tetherto
@@ -649,7 +719,8 @@ modules:
 
   - id: wdk-starter-swift
     name: wdk-starter-swift
-    section: starters
+    title: Starter app, iPhone
+    section: app
     band: apps
     status: shipped
     publisher: tetherto
@@ -660,16 +731,19 @@ modules:
 
   - id: wdk-doctor-app
     name: WDK Doctor App
-    section: starters
-    band: apps
+    title: Setup checker
+    section: dev
+    band: tools
     status: wip
     publisher: tetherto
     progress: 20
     summary: Diagnostic app for inspecting and troubleshooting a WDK setup.
+    repo: https://github.com/tetherto/wdk-doctor-app
 
   - id: wdk-examples
     name: wdk-examples
-    section: starters
+    title: Example code
+    section: dev
     band: reference
     status: shipped
     publisher: tetherto
@@ -678,7 +752,8 @@ modules:
 
   - id: wdk-playground
     name: wdk-playground
-    section: starters
+    title: Try it in the browser
+    section: dev
     band: reference
     status: shipped
     publisher: tetherto
@@ -689,7 +764,9 @@ modules:
   # --- Tooling ---
   - id: wdk-utils
     name: wdk-utils
-    section: tooling
+    title: Shared utilities
+    section: dev
+    band: tools
     status: shipped
     publisher: tetherto
     summary: Shared utilities used across WDK packages.
@@ -697,7 +774,9 @@ modules:
 
   - id: wdk-asset-registry
     name: wdk-asset-registry
-    section: tooling
+    title: Known tokens list
+    section: platform
+    band: services
     status: shipped
     publisher: tetherto
     summary: Asset metadata registry.
@@ -705,33 +784,43 @@ modules:
 
   - id: wdk-failover-provider
     name: wdk-failover-provider
-    section: tooling
+    title: Fallback network connection
+    section: core
+    band: internals
     status: shipped
     publisher: tetherto
-    summary: Failover wrapper for providers.
+    summary: Tries the next network connection when one fails. Used by the EVM wallets inside the worklet, and by the price feed in the app.
     repo: https://github.com/tetherto/wdk-failover-provider
-    relations:
-      - { type: requires, target: wdk-pricing-provider }
 
   - id: wdk-secret-manager
     name: wdk-secret-manager
-    section: tooling
+    title: Seed generation & encryption
+    section: core
+    band: internals
     status: shipped
     publisher: tetherto
-    summary: Secret and seed handling.
+    summary: Generates the seed and encrypts it so only the encrypted form ever leaves the room. Built to run inside the worklet as well as in ordinary JavaScript.
+    notes:
+      - In the shipped flow the worklet does this job with its own code (pear-wrk-wdk, handlers/secrets.js); this package is the standalone version of it
     repo: https://github.com/tetherto/wdk-secret-manager
 
   - id: wdk-signer-local
     name: wdk-signer-local
-    section: tooling
+    title: Signs on this device
+    section: core
+    band: internals
     status: shipped
     publisher: tetherto
-    summary: Local signer implementation.
+    summary: A native add-on inside the worklet that keeps keys in the phone's keychain or KeyStore behind biometrics and signs there.
+    notes:
+      - No wallet uses it yet; it is what the "Abstract signers" roadmap item on each wallet would plug in
     repo: https://github.com/tetherto/wdk-signer-local
 
   - id: wdk-cli
     name: wdk-cli
-    section: tooling
+    title: Command line
+    section: dev
+    band: tools
     status: shipped
     publisher: tetherto
     summary: Command-line interface for WDK.
@@ -739,7 +828,9 @@ modules:
 
   - id: wdk-mcp-toolkit
     name: wdk-mcp-toolkit
-    section: tooling
+    title: Tools for AI agents
+    section: dev
+    band: tools
     status: shipped
     publisher: tetherto
     summary: MCP tools for agents.
@@ -747,7 +838,9 @@ modules:
 
   - id: wdk-agent-skills
     name: wdk-agent-skills
-    section: tooling
+    title: Skills for AI agents
+    section: dev
+    band: tools
     status: shipped
     publisher: tetherto
     summary: Agent skills for working with WDK.
@@ -755,7 +848,9 @@ modules:
 
   - id: create-wdk-module
     name: create-wdk-module
-    section: tooling
+    title: New module scaffold
+    section: dev
+    band: tools
     status: shipped
     publisher: tetherto
     summary: Scaffold a new WDK module.
@@ -763,7 +858,9 @@ modules:
 
   - id: wdk-backup-cloud
     name: wdk-backup-cloud
-    section: tooling
+    title: Cloud backup
+    section: platform
+    band: services
     status: shipped
     publisher: tetherto
     summary: Cloud backup.
@@ -771,8 +868,10 @@ modules:
 
   - id: wdk-p2p-address-book
     name: wdk-p2p-address-book
-    section: tooling
+    title: Contacts, peer to peer
+    section: core
+    band: modules
     status: shipped
     publisher: tetherto
-    summary: P2P address book.
+    summary: Contacts kept in sync between your devices over the peer-to-peer network, no server. Runs as a module inside the worklet; the app only sees its API.
     repo: https://github.com/tetherto/wdk-p2p-address-book
