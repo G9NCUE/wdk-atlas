@@ -5,7 +5,11 @@
 # Highlight: wallet ↔ protocol packages that share a chain label.
 # relations: kept for variants / companions; not used for the ring highlight.
 # chains: short labels shown as badges on the box (EVM, BTC, TON, …).
-# roadmap: pending work tacked onto the box (independent of package status).
+# roadmap: one list at the root (below). Each item names the modules it touches; the chips
+# under a module box and the "Pending work" list in its drawer are derived from it.
+#   id, label, summary, quarter (2026Q3 | 2026Q4 | backlog), status (planned | wip | done),
+#   priority (P0..P2), progress (0-100, optional), parent (id of the umbrella item, optional),
+#   modules: list of module ids, or { id, status, progress } to override the state for that module.
 # progress: 0–100 fill-wash on WIP packages and WIP roadmap chips.
 
 # northStars: hidden for now. Restore the column in app.js when these are real.
@@ -97,9 +101,6 @@ modules:
     publisher: tetherto
     summary: Orchestrator. registerWallet / registerProtocol.
     repo: https://github.com/tetherto/wdk
-    roadmap:
-      - { label: Policy engine, status: wip }
-      - { label: Standardised error handling, status: wip, progress: 70 }
 
   - id: wdk-wallet
     name: wdk-wallet
@@ -138,12 +139,6 @@ modules:
     chains: [BTC]
     summary: Bitcoin SegWit wallet.
     repo: https://github.com/tetherto/wdk-wallet-btc
-    roadmap:
-      - label: Abstract signers
-        status: wip
-        progress: 80
-        children:
-          - { label: Ledger, status: wip, progress: 60 }
 
   - id: wdk-wallet-evm
     name: wdk-wallet-evm
@@ -157,12 +152,6 @@ modules:
     repo: https://github.com/tetherto/wdk-wallet-evm
     relations:
       - { type: requires, target: wdk-failover-provider }
-    roadmap:
-      - label: Abstract signers
-        status: wip
-        progress: 80
-        children:
-          - { label: Ledger, status: wip, progress: 60 }
 
   - id: wdk-wallet-evm-erc-4337
     name: wdk-wallet-evm-erc-4337
@@ -176,8 +165,6 @@ modules:
     repo: https://github.com/tetherto/wdk-wallet-evm-erc-4337
     relations:
       - { type: requires, target: wdk-wallet-evm }
-    roadmap:
-      - { label: Abstract signers, status: planned }
 
   - id: wdk-wallet-evm-7702-gasless
     name: wdk-wallet-evm-7702-gasless
@@ -192,8 +179,6 @@ modules:
     relations:
       - { type: requires, target: wdk-wallet-evm }
       - { type: requires, target: wdk-failover-provider }
-    roadmap:
-      - { label: Abstract signers, status: planned }
 
   - id: wdk-wallet-solana
     name: wdk-wallet-solana
@@ -205,12 +190,6 @@ modules:
     chains: [SOL]
     summary: Solana wallet module.
     repo: https://github.com/tetherto/wdk-wallet-solana
-    roadmap:
-      - label: Abstract signers
-        status: wip
-        progress: 50
-        children:
-          - { label: Ledger, status: wip, progress: 40 }
 
   - id: wdk-wallet-solana-gasless
     name: wdk-wallet-solana-gasless
@@ -224,8 +203,6 @@ modules:
     repo: https://github.com/tetherto/wdk-wallet-solana-gasless
     relations:
       - { type: requires, target: wdk-wallet-solana }
-    roadmap:
-      - { label: Abstract signers, status: planned }
 
   - id: wdk-wallet-ton
     name: wdk-wallet-ton
@@ -237,8 +214,6 @@ modules:
     chains: [TON]
     summary: TON wallet module.
     repo: https://github.com/tetherto/wdk-wallet-ton
-    roadmap:
-      - { label: Abstract signers, status: planned }
 
   - id: wdk-wallet-ton-gasless
     name: wdk-wallet-ton-gasless
@@ -252,8 +227,6 @@ modules:
     repo: https://github.com/tetherto/wdk-wallet-ton-gasless
     relations:
       - { type: requires, target: wdk-wallet-ton }
-    roadmap:
-      - { label: Abstract signers, status: planned }
 
   - id: wdk-wallet-tron
     name: wdk-wallet-tron
@@ -265,8 +238,6 @@ modules:
     chains: [TRON]
     summary: TRON wallet module.
     repo: https://github.com/tetherto/wdk-wallet-tron
-    roadmap:
-      - { label: Abstract signers, status: planned }
 
   - id: wdk-wallet-tron-gasfree
     name: wdk-wallet-tron-gasfree
@@ -280,8 +251,6 @@ modules:
     repo: https://github.com/tetherto/wdk-wallet-tron-gasfree
     relations:
       - { type: requires, target: wdk-wallet-tron }
-    roadmap:
-      - { label: Abstract signers, status: planned }
 
   - id: wdk-wallet-spark
     name: wdk-wallet-spark
@@ -306,8 +275,6 @@ modules:
     chains: [APTOS]
     summary: Aptos wallet module.
     repo: https://github.com/tetherto/wdk-wallet-aptos
-    roadmap:
-      - { label: Abstract signers, status: planned }
 
   - id: wdk-wallet-rgb
     name: wdk-wallet-rgb
@@ -891,3 +858,160 @@ modules:
     publisher: tetherto
     summary: Contacts kept in sync between your devices over the peer-to-peer network, no server. Runs as a module inside the worklet; the app only sees its API.
     repo: https://github.com/tetherto/wdk-p2p-address-book
+
+roadmap:
+  - id: signers
+    label: Abstract signers
+    summary: One signer interface on every wallet package, so seed, private key, hardware and remote signers plug into the same account.
+    quarter: 2026Q3
+    status: wip
+    priority: P0
+    modules:
+      - { id: wdk-wallet-btc, status: wip, progress: 80 }
+      - { id: wdk-wallet-evm, status: wip, progress: 80 }
+      - { id: wdk-wallet-solana, status: wip, progress: 50 }
+      - wdk-wallet-evm-erc-4337
+      - wdk-wallet-evm-7702-gasless
+      - wdk-wallet-solana-gasless
+      - wdk-wallet-ton
+      - wdk-wallet-ton-gasless
+      - wdk-wallet-tron
+      - wdk-wallet-tron-gasfree
+      - wdk-wallet-spark
+      - wdk-wallet-aptos
+  - id: ledger
+    label: Ledger
+    parent: signers
+    summary: Hardware signing through a standalone Ledger package, first on Bitcoin, EVM and Solana; other hardware wallets can follow the same path.
+    quarter: 2026Q3
+    status: wip
+    priority: P2
+    modules:
+      - { id: wdk-wallet-btc, status: wip, progress: 60 }
+      - { id: wdk-wallet-evm, status: wip, progress: 60 }
+      - { id: wdk-wallet-solana, status: wip, progress: 40 }
+  - id: passkey-signer
+    label: Passkey signer
+    parent: signers
+    summary: A pluggable passkey signer for EVM chains that expose the 256r1 precompile.
+    quarter: 2026Q3
+    status: planned
+    priority: P2
+    modules: [wdk-wallet-evm]
+  - id: mpc-signer
+    label: MPC signer
+    parent: signers
+    summary: Spike on pluggable MPC signers, or recipes for using existing MPC services with WDK.
+    quarter: 2026Q3
+    status: planned
+    priority: P2
+    modules: []
+  - id: policy-engine
+    label: Policy engine
+    summary: Phase 2 libraries for common rules, phase 3 a policy DSL, phase 4 policies in the developer portal.
+    quarter: 2026Q3
+    status: wip
+    priority: P0
+    modules: [wdk, wdk-policies]
+  - id: error-handling
+    label: Standardised error handling
+    summary: The same error classes and messages across every wallet module.
+    quarter: 2026Q3
+    status: wip
+    priority: P1
+    progress: 70
+    modules: [wdk, wdk-wallet]
+  - id: native-cores-v2
+    label: Swift and Kotlin cores on par with React Native
+    summary: Strong typing, sensitive storage and a plug-in interface for native packages, matching the React Native host.
+    quarter: 2026Q3
+    status: wip
+    priority: P0
+    modules: [wdk-core-kotlin, wdk-core-swift]
+  - id: sda
+    label: Smart deposit address
+    summary: Deposit on chain X, receive on chain Y. The interface is in wdk-wallet; the first module is next.
+    quarter: 2026Q3
+    status: wip
+    priority: P0
+    modules: [wdk-wallet, wdk-protocol-sda-coming-soon]
+  - id: multisig-safe
+    label: Safe multisig on EVM
+    quarter: 2026Q3
+    status: wip
+    priority: P1
+    modules: [wdk-protocol-multisig-safe]
+  - id: multisig-squads
+    label: Squads multisig on Solana
+    quarter: 2026Q3
+    status: wip
+    priority: P1
+    modules: [wdk-protocol-multisig-squads]
+  - id: multisig-psbt
+    label: PSBT multisig on Bitcoin
+    quarter: backlog
+    status: planned
+    priority: P2
+    modules: [wdk-protocol-multisig-psbt]
+  - id: sss-tools
+    label: Shamir secret sharing tools
+    summary: Publish and document the secret-sharing helpers, with guidance on shard custody.
+    quarter: 2026Q3
+    status: wip
+    priority: P0
+    modules: [wdk-utils]
+  - id: doctor-wallet
+    label: WDK doctor wallet
+    summary: Bundle any set of packages, build the showcase app around it, drive the worklet lifecycle by hand. Dogfooding for core and contributor modules.
+    quarter: 2026Q3
+    status: wip
+    priority: P1
+    modules: [wdk-doctor-app, wdk-worklet-bundler]
+  - id: cli-completion
+    label: CLI completion
+    summary: Swap, bridge, gasless transactions and x402 payments from the command line.
+    quarter: 2026Q3
+    status: wip
+    priority: P1
+    modules: [wdk-cli]
+  - id: docs-revamp
+    label: Docs revamp and developer portal
+    summary: Recipes and guides; core concepts explained (seed lifecycle, class inheritance, policy engine, cloud backup).
+    quarter: 2026Q3
+    status: wip
+    priority: P1
+    modules: []
+  - id: leave-beta
+    label: Security audit, then 1.0.0
+    summary: First external audit; packages leave their beta tags once it completes.
+    quarter: 2026Q3
+    status: planned
+    priority: P1
+    modules: []
+  - id: asset-registry-api
+    label: Asset registry in the wallet API
+    summary: Make the known-tokens registry reachable from every wallet package.
+    quarter: 2026Q3
+    status: planned
+    priority: P2
+    modules: [wdk-asset-registry, wdk-wallet]
+  - id: ci-testnet
+    label: Testnet transactions in CI
+    summary: End-to-end transactions on testnets as a scheduled job, to catch chain runtime changes.
+    quarter: 2026Q3
+    status: planned
+    priority: P2
+    modules: []
+  - id: unified-usdt-balance
+    label: Unified USDT balance
+    quarter: backlog
+    status: planned
+    priority: P2
+    modules: []
+  - id: new-chains
+    label: New chains under review
+    summary: Sui and Hyperliquid, pending demand.
+    quarter: backlog
+    status: planned
+    priority: P2
+    modules: []
