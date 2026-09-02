@@ -25,11 +25,19 @@
   --blocked-fill: color-mix(in srgb, var(--error) 14%, var(--card));
   --blocked-line: var(--error);
   --ecosystem: var(--purple);
+  --dark-grey: hsl(0 0% 13%);
+  --white-5: hsl(0 0% 100% / 0.05);
+  --white-8: hsl(0 0% 100% / 0.08);
+  --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.4);
   --radius-card: 10px;
   --radius-control: 6px;
   --radius-btn: 5px;
-  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", Inter, sans-serif;
+  --radius-btn-primary: 4px;
+  --btn-height: 36px;
+  --btn-sm-height: 30px;
+  --font-sans: Inter, "Inter Fallback", ui-sans-serif, system-ui, sans-serif;
+  /* Sharp Grotesk is Tether's licensed display face and is not bundled here. */
+  --font-display: "Sharp Grotesk", sharpGrotesk, "Space Grotesk", Inter, sans-serif;
   --font-mono: Inconsolata, ui-monospace, monospace;
   --module-width: 196px;
   --rail-gap: 32px;
@@ -50,14 +58,10 @@ body {
 
 body {
   background-color: var(--bg);
-  background-image:
-    linear-gradient(hsl(30 10% 15% / 0.55) 1px, transparent 1px),
-    linear-gradient(90deg, hsl(30 10% 15% / 0.55) 1px, transparent 1px);
-  background-size: 48px 48px;
   color: var(--ink);
   font-family: var(--font-sans);
   font-size: 15px;
-  line-height: 1.4;
+  line-height: 20px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -159,7 +163,7 @@ h1:empty,
 
 .nav a:hover,
 .nav a[aria-current] {
-  background: var(--card-elevated);
+  background: var(--dark-grey);
 }
 
 .nav a:focus-visible {
@@ -179,8 +183,108 @@ h1:empty,
   border: 0;
 }
 
-body.page-roadmap .pending-toggle {
+body.page-roadmap .pending-toggle,
+body.page-questions .pending-toggle,
+body.page-questions .legend {
   display: none;
+}
+
+.prose {
+  max-width: 78ch;
+  padding: 0 16px 40px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--secondary);
+}
+
+.prose h1,
+.prose h2,
+.prose h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.prose h1 { font-size: 26px; margin: 0 0 16px; }
+.prose h2 { font-size: 20px; margin: 36px 0 10px; }
+.prose h3 { font-size: 16px; margin: 24px 0 8px; }
+
+.prose p,
+.prose ul,
+.prose ol {
+  margin: 0 0 12px;
+}
+
+.prose li + li {
+  margin-top: 10px;
+}
+
+.prose ol {
+  padding-left: 22px;
+}
+
+.prose strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.prose a {
+  color: var(--accent);
+}
+
+.prose code {
+  padding: 1px 5px;
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line-subtle);
+  border-radius: 4px;
+}
+
+.prose pre {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  background: var(--card);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-card);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.prose pre code {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.prose table {
+  width: 100%;
+  margin: 0 0 16px;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.prose th,
+.prose td {
+  padding: 8px 10px;
+  border: 1px solid var(--line-subtle);
+  vertical-align: top;
+  text-align: left;
+}
+
+.prose th {
+  color: var(--ink);
+  background: var(--card);
+  font-weight: 600;
+}
+
+.prose hr {
+  margin: 28px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
 }
 
 .roadmap-page {
@@ -333,10 +437,10 @@ body.page-roadmap .pending-toggle {
 h1 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 600;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
+  letter-spacing: 0;
+  line-height: 32px;
 }
 
 .subtitle {
@@ -351,15 +455,16 @@ h1 {
   align-items: center;
   gap: 12px;
   margin-top: 18px;
-  padding: 10px 14px 10px 12px;
+  height: var(--btn-height);
+  padding: 0 14px 0 10px;
   max-width: 100%;
   color: var(--ink);
-  background: var(--card);
-  border: 1px solid var(--line-subtle);
-  border-radius: var(--radius-card);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
   font-size: 14px;
   font-weight: 500;
-  line-height: 1.3;
+  line-height: 20px;
   cursor: pointer;
 }
 
@@ -507,7 +612,7 @@ h1 {
 
 .poster {
   position: relative;
-  padding: 16px 20px 40px;
+  padding: 16px 16px 48px;
   min-width: 1280px;
 }
 
@@ -537,15 +642,15 @@ h1 {
   font-family: var(--font-display);
   font-size: 22px;
   font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
+  letter-spacing: 0;
+  line-height: 26px;
 }
 
 .section-blurb {
   margin: 6px 0 16px;
   max-width: 40rem;
   font-size: 13px;
-  line-height: 1.45;
+  line-height: 18px;
   color: var(--secondary);
 }
 
@@ -565,14 +670,22 @@ h1 {
 .section-why summary {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border: 1px solid var(--line-subtle);
-  border-radius: var(--radius-btn);
-  color: var(--accent);
-  font-weight: 500;
+  gap: 8px;
+  height: var(--btn-sm-height);
+  padding: 0 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-btn-primary);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
   cursor: pointer;
   list-style: none;
+  transition: background-color 0.2s;
+}
+
+.section-why summary:hover {
+  background: var(--white-5);
 }
 
 .section-why summary::-webkit-details-marker {
@@ -586,13 +699,14 @@ h1 {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  border: 1px solid currentColor;
+  border: 1px solid var(--accent);
+  color: var(--accent);
   font-size: 11px;
   font-weight: 600;
 }
 
 .section-why[open] summary {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--line-subtle));
+  background: var(--white-5);
 }
 
 .section-why ul {
@@ -642,7 +756,7 @@ summary .module {
   padding: 18px 16px 20px;
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  background: var(--surface);
 }
 
 .section[data-section="core"] .lanes {
@@ -666,6 +780,7 @@ summary .module {
 .lane-blurb {
   margin: -6px 0 12px;
   font-size: 13px;
+  line-height: 18px;
   color: var(--secondary);
   max-width: 70ch;
 }
@@ -682,8 +797,9 @@ summary .module {
 
 .lane-label {
   margin: 0 0 10px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
+  line-height: 1;
   letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--muted);
@@ -722,12 +838,14 @@ summary .module {
   font: inherit;
   color: inherit;
   background: var(--card);
-  border: 1px solid var(--line-subtle);
+  border: 1px solid var(--line);
   border-radius: var(--radius-card);
+  transition: background-color 0.3s, border-color 0.15s;
 }
 
 .module:hover {
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--line-subtle));
+  background-color: var(--card-elevated);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
 }
 
 .module:focus-visible {
@@ -830,8 +948,10 @@ summary .module {
 
 .group-label {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0.3px;
   color: var(--secondary);
 }
 
@@ -997,10 +1117,10 @@ summary .module {
   width: 320px;
   padding: 18px 18px 28px;
   overflow: auto;
-  background: var(--card-elevated);
-  border-right: 1px solid var(--line-subtle);
+  background: var(--surface);
+  border-right: 1px solid var(--line);
   color: var(--ink);
-  box-shadow: 8px 0 24px rgb(0 0 0 / 0.35);
+  box-shadow: var(--shadow-pop);
 }
 
 body.drawer-open {
@@ -1012,20 +1132,20 @@ body.drawer-open {
   top: 12px;
   right: 12px;
   appearance: none;
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--line-subtle);
+  width: 32px;
+  height: 32px;
+  border: 0;
   border-radius: var(--radius-btn);
   background: transparent;
-  color: var(--secondary);
-  font-size: 16px;
+  color: var(--ink);
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
+  transition: background-color 0.2s;
 }
 
 .drawer-close:hover {
-  color: var(--ink);
-  border-color: var(--muted);
+  background: var(--white-5);
 }
 
 .drawer h2 {

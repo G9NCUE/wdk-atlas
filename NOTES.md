@@ -74,26 +74,35 @@ dependencies are, and whether it is in the worklet bundle.
 
 ## 5. Questions for the maintainer
 
-1. **Two implementations of seed encryption.** `pear-wrk-wdk/handlers/secrets.js` and
-   `wdk-secret-manager` do the same job; the docs credit the package, the starter uses neither
-   directly. Which is canonical?
-2. **`wdk-signer-local` has no consumer.** Is it waiting on "Abstract signers" (wip 80% on btc/evm)?
-3. **`wdk-rgb-lightning` has no `requires`** while `wdk-wallet-rgb` requires btc. Deliberate?
-4. **No Flutter host binding** in the list; Kotlin and Swift cores exist. Moor's `wdk_core_flutter`
-   POC sits on the Kotlin core's floor.
-5. **Bare is missing.** The engine stands on Holepunch's Bare runtime and BareKit; the atlas names
-   neither. An ecosystem entry would make the foundation honest.
-6. **"API clients" was the right name and Core the wrong section.** Pricing and the indexer run in
-   the app beside the host binding.
-7. `notes:` on `wdk-wallet` lists five interfaces as free text; as `relations: implements` on the
-   protocols they would be data.
-8. **Four repo links 404 from outside** (checked 2026-08-31): `tetherto/wdk-playground`,
-   `tetherto/wdk-core-swift`, `tetherto/wdk-starter-swift`, and `arkade-os/wdk`. Private, or not
-   created yet? The Swift core claudiovb linked on bundler#46 (`claudiovb/wdk-core-swift`) also
-   404s now. Arkade's module is at `arkade-os/arkade-wdk`; fixed in the YAML.
-9. **Two repos exist that the YAML doesn't link**: `tetherto/wdk-policies` (public, pushed
-   08-28, still marked *planned*) and `tetherto/wdk-doctor-app` (public, pushed 08-24). Links added;
-   the status of `wdk-policies` is the maintainer's call.
+Reviewed 2026-09-02 against package sources, npm and GitHub. Earlier items that turned out to be
+atlas fixes (RGB relation, wdk-wallet interface list, pricing/indexer placement) were applied and dropped.
+
+1. **Seed encryption: two implementations, one in use.** The shipped flow (React Native and Kotlin
+   cores) calls the worklet's `generateEntropyAndEncrypt` RPC; `pear-wrk-wdk/src/utils/crypto.js`
+   encrypts with AES-GCM and a random 32-byte key via `bare-crypto`. `wdk-secret-manager` uses
+   PBKDF2 + libsodium secretbox with a versioned header; nothing in the org imports it, yet the docs
+   credit it for the starter's "encrypted storage" (react-native-starter.mdx) and it sees ~900
+   npm downloads a month. The two formats are not interchangeable. Can the package be dropped, or
+   should the worklet adopt it so backups and restores share one format?
+2. **`wdk-signer-local` still has no consumer.** `ISigner` now exists in `wdk-wallet` and
+   `wdk-wallet-evm` ships seed and private-key signers; btc has none. `wdk-signer-local` exposes
+   plain functions (`sign`, `getPublicKey`, `createMnemonic`…), not an `ISigner`. Is it meant to be
+   wrapped as one, and when does btc get a signer?
+3. **Official stance on how to run WDK.** The packages run in plain Node; the phone cores run them in
+   a Bare worklet. The atlas now recommends the worklet and explains why (one runtime across
+   platforms, own thread, keys out of the app). Is that the product and communication line, and
+   should Bare / BareKit appear in the atlas as the foundation the engine stands on?
+4. **No Flutter host binding.** Kotlin and Swift cores exist; none of the 155 visible org repos is
+   Flutter. Moor's `wdk_core_flutter` POC sits on the Kotlin core. Planned, or community?
+5. **Four repo links still 404** (rechecked 2026-09-02): `tetherto/wdk-playground`,
+   `tetherto/wdk-core-swift`, `tetherto/wdk-starter-swift`, `arkade-os/wdk`;
+   `claudiovb/wdk-core-swift` too. The docs mention neither a playground nor a Swift core. Private,
+   or not created yet? The atlas shows three cards nobody can open.
+6. **`wdk-policies` and `wdk-doctor-app` are empty repos** (initial commit, README only). Phase 1 of
+   the policy engine already ships inside `wdk` (`src/policy`, since beta.16). Is `wdk-policies`
+   meant to extract that engine or to hold the phase 2 rule libraries? What is the doctor app's scope?
+   Also: `tetherto/wdk-safe-core-sdk` (fork of Safe{Core}, July 2026) is not in the atlas; a
+   dependency fork for the Safe multisig protocol, or a module?
 
 ## 6. Not done
 

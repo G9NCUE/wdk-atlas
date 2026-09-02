@@ -100,6 +100,8 @@ modules:
     status: shipped
     publisher: tetherto
     summary: Orchestrator. registerWallet / registerProtocol.
+    notes:
+      - Phase 1 of the policy engine already ships inside this package (src/policy, since 1.0.0-beta.16). The wdk-policies repo is an empty README
     repo: https://github.com/tetherto/wdk
 
   - id: wdk-wallet
@@ -111,12 +113,8 @@ modules:
     publisher: tetherto
     summary: Shared wallet interfaces that chain modules implement.
     notes:
-      - ILendingProtocol
-      - IFiatProtocol
-      - IMultisigProtocol
-      - ISwidgeProtocol
-      - ISdaProtocol
-      - ISigner — the signer form; wdk-signer-local fills it today, Ledger next
+      - Protocol forms in src/protocols (checked 2026-09-02): bridge, fiat, lending, sda, swap, swidge
+      - ISigner, the signer form. wdk-wallet-evm ships seed and private-key signers; btc has none yet
     repo: https://github.com/tetherto/wdk-wallet
 
   - id: wdk-policies
@@ -288,8 +286,6 @@ modules:
     notes:
       - Not maintained by Tether
     repo: https://github.com/UTEXO-Protocol/wdk-wallet-rgb
-    relations:
-      - { type: requires, target: wdk-wallet-btc }
 
   - id: wdk-rgb-lightning
     name: wdk-rgb-lightning
