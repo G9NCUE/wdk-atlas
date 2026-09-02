@@ -234,7 +234,7 @@ function renderLane(lane, modules) {
   );
 }
 
-function renderSection(section) {
+function renderSection(section, { collapsible = true } = {}) {
   const lanes = section.lanes || [];
   const inSection = atlas.modules.filter(
     (module) => module.section === section.id
@@ -255,6 +255,25 @@ function renderSection(section) {
         )
         .filter(Boolean)
     );
+  }
+
+  if (section.why) {
+    body = el(
+      "div",
+      { class: "section-body" },
+      el(
+        "details",
+        { class: "section-why" },
+        el("summary", null, section.why.label || "Why?"),
+        el("ul", null, (section.why.points || []).map((point) => el("li", null, point)))
+      ),
+      body
+    );
+  }
+
+  // A page with a single section: the page heading already names it, so no summary to fold.
+  if (!collapsible) {
+    return el("section", { class: "section section-plain", "data-section": section.id }, body);
   }
 
   const key = `atlas:${section.id}`;
@@ -287,16 +306,30 @@ function renderSection(section) {
   return details;
 }
 
-function renderPoster() {
-  document.querySelector("#title").textContent = atlas.title || "WDK Atlas";
-  document.querySelector("#subtitle").textContent = atlas.subtitle || "";
+const pageHeadings = {
+  main: { title: "WDK Atlas", subtitle: "", hidden: true },   // the logo carries the brand; keep an h1 for assistive tech
+  dev: {
+    title: "Developer Resources",
+    subtitle: "Docs, examples and tools for building with WDK. Not part of a shipped wallet.",
+  },
+};
 
-  const sections = el("div", { class: "sections" });
-  for (const section of atlas.sections) {
-    if ((section.page || "main") === page) sections.append(renderSection(section));
-  }
-  for (const link of document.querySelectorAll(".pages a")) {
+function renderPoster() {
+  const heading = pageHeadings[page] || pageHeadings.main;
+  const title = document.querySelector("#title");
+  title.textContent = heading.title;
+  title.classList.toggle("visually-hidden", Boolean(heading.hidden));
+  document.querySelector("#subtitle").textContent = heading.subtitle;
+  document.body.classList.add(`page-${page}`);
+
+  for (const link of document.querySelectorAll(".nav a")) {
     link.toggleAttribute("aria-current", link.getAttribute("data-page") === page);
+  }
+
+  const onPage = atlas.sections.filter((section) => (section.page || "main") === page);
+  const sections = el("div", { class: "sections" });
+  for (const section of onPage) {
+    sections.append(renderSection(section, { collapsible: onPage.length > 1 }));
   }
 
   poster.replaceChildren(el("div", { class: "atlas" }, sections));
@@ -458,6 +491,11 @@ async function main() {
     }
   }
   togglePending.addEventListener("change", applyToggles);
+
+  const topbar = document.querySelector("#topbar");
+  const onScroll = () => topbar.classList.toggle("is-scrolled", window.scrollY > 8);
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
 
   poster.addEventListener("click", onPosterClick);
   drawer.addEventListener("click", onDrawerClick);
