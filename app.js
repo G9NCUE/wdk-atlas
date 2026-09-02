@@ -436,7 +436,66 @@ const pageHeadings = {
     title: "Roadmap",
     subtitle: "What is in progress and what is planned, by quarter, from the same atlas.yaml as the map.",
   },
+  questions: {
+    title: "Questions",
+    subtitle: "Open questions for Jonathan and the team. Read from the questions section of NOTES.md.",
+  },
 };
+
+// Questions page: unlisted. Ten taps on the logo reveal the link; the browser remembers it.
+const QUESTIONS_KEY = "atlas:questions";
+const QUESTIONS_TAPS = 10;
+
+function questionsUnlocked() {
+  try { return localStorage.getItem(QUESTIONS_KEY) === "on"; } catch { return false; }
+}
+
+function revealQuestions() {
+  document.querySelector("#nav-questions").hidden = false;
+}
+
+function wireLogoTaps() {
+  const brand = document.querySelector(".brand");
+  let taps = 0;
+  let timer = null;
+  brand.addEventListener("click", (event) => {
+    event.preventDefault();
+    clearTimeout(timer);
+    taps += 1;
+    if (taps >= QUESTIONS_TAPS) {
+      taps = 0;
+      try { localStorage.setItem(QUESTIONS_KEY, "on"); } catch {}
+      revealQuestions();
+      location.href = "./?page=questions";
+      return;
+    }
+    // A lone tap still goes home; a run of taps does not reload the page in between.
+    timer = setTimeout(() => {
+      if (taps === 1) location.href = brand.getAttribute("href");
+      taps = 0;
+    }, 400);
+  });
+}
+
+// The "Questions for the maintainer" section of NOTES.md, up to the next second-level heading.
+function questionsSection(markdown) {
+  const lines = markdown.split("\n");
+  const start = lines.findIndex((line) => /^##\s.*questions/i.test(line));
+  if (start < 0) return null;
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^##\s/.test(line));
+  return rest.slice(0, end < 0 ? rest.length : end).join("\n").trim();
+}
+
+async function renderQuestions() {
+  const response = await fetch("NOTES.md");
+  if (!response.ok) throw new Error(`Could not load NOTES.md (${response.status}).`);
+  const section = questionsSection(await response.text());
+  if (!section) throw new Error("NOTES.md has no '## … Questions' section.");
+  const prose = el("article", { class: "prose" });
+  prose.innerHTML = marked.parse(section);
+  return prose;
+}
 
 function renderPoster() {
   const heading = pageHeadings[page] || pageHeadings.main;
@@ -453,6 +512,17 @@ function renderPoster() {
   if (page === "roadmap") {
     poster.replaceChildren(el("div", { class: "atlas" }, renderRoadmap()));
     poster.hidden = false;
+    return;
+  }
+
+  if (page === "questions") {
+    revealQuestions();
+    renderQuestions()
+      .then((prose) => {
+        poster.replaceChildren(el("div", { class: "atlas" }, prose));
+        poster.hidden = false;
+      })
+      .catch((error) => showError(error.message));
     return;
   }
 
@@ -626,6 +696,9 @@ async function main() {
     }
   }
   togglePending.addEventListener("change", applyToggles);
+
+  if (questionsUnlocked()) revealQuestions();
+  wireLogoTaps();
 
   const topbar = document.querySelector("#topbar");
   const onScroll = () => topbar.classList.toggle("is-scrolled", window.scrollY > 8);
