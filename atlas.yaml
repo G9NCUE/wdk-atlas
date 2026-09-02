@@ -2,29 +2,67 @@
 # Official modules: every repo in wdk-repos.txt.
 # Ecosystem modules: documented outside-org packages from docs.wallet.tether.io.
 #
-# Highlight: wallet ↔ protocol packages that share a chain label.
-# relations: kept for variants / companions; not used for the ring highlight.
-# chains: short labels shown as badges on the box (EVM, BTC, TON, …).
+# The main page draws the sections as a cross-section, one band per section, with the rail step
+# from `path`. A section with `matrix: [lane ids]` draws those lanes as a chain × capability grid
+# (columns from `chains` below, rows from the lanes' `groups`, a module's row from its `kind`).
+# relations: requires / implements between modules; selecting a module fades everything unrelated.
+# chains: chain labels (EVM, BTC, TON, …); they place a module in the columns of the engine grid.
+# short: optional shorter title for the grid, where the row and column already say the rest.
 # roadmap: one list at the root (below). Each item names the modules it touches; the chips
 # under a module box and the "Pending work" list in its drawer are derived from it.
-#   id, label, summary, quarter (2026Q3 | 2026Q4 | backlog), status (planned | wip | done),
+#   id, label, summary, quarter (2026Q1 … 2027Q2 | backlog), status (planned | wip | done),
 #   priority (P0..P2), progress (0-100, optional), parent (id of the umbrella item, optional),
 #   modules: list of module ids, or { id, status, progress } to override the state for that module.
 # progress: 0–100 fill-wash on WIP packages and WIP roadmap chips.
 
-# northStars: hidden for now. Restore the column in app.js when these are real.
-# northStars:
-#   - id: one-seed
-#     title: One seed, every chain
-#     summary: Placeholder north star. Replace with the real destination later.
-#   - id: gasless-default
-#     title: Gasless by default
-#     summary: Placeholder north star. Replace with the real destination later.
+mission: Open-source, self-custodial wallet infrastructure for anyone.
+
+# North stars: the three destinations every roadmap initiative serves (roadmap items carry `northStar: <id>`).
+# `objectives` are the measurable key results behind each star; kept here, not rendered on the page.
+northStars:
+  - id: kit
+    title: A production-grade kit on every platform
+    summary: Secure, audited, out of beta, with the same SDK on iOS, Android, desktop and Node.
+    objectives:
+      - Complete the first quarterly security audit and take the packages out of beta
+      - One signer interface on every wallet package
+      - Swift and Kotlin cores on par with React Native
+      - Function coverage above 95% and testnet transactions in CI
+  - id: dx
+    title: The best developer experience
+    summary: From zero to a first transaction in minutes, for humans and for agents.
+    objectives:
+      - Six new recipes and examples across the docs, the CLI and the agent toolkits
+      - Developer experience score above 70
+      - Open issues answered within a week
+  - id: ecosystem
+    title: A thriving ecosystem
+    summary: Modules, chains and integrations built by others on top of WDK.
+    objectives:
+      - Twelve or more WDK-compatible modules or integrations published
+      - External pull requests merged up by 50% in the quarter
+      - Five live community projects on WDK; five funded through bounties
+      - Monthly update call with the ecosystem teams
+
+# Columns of the chain × capability grid inside the engine, in display order.
+# A module lands in every column named in its `chains`; `also` folds extra labels into a column
+# (Spark is a Bitcoin layer, so SPARK counts as BTC). Labels not listed here get a column of their own.
+chains:
+  - { id: BTC, label: Bitcoin, also: [SPARK] }
+  - { id: EVM, label: Ethereum & EVM }
+  - { id: SOL, label: Solana }
+  - { id: TON, label: TON }
+  - { id: TRON, label: TRON }
+  - { id: APTOS, label: Aptos }
+  - { id: COSMOS, label: Cosmos }
 
 sections:
   - id: app
     label: Your app
     blurb: What people install. Start from a starter or from scratch
+    path:
+      label: You tap Send
+      text: in a starter or your own screens
     lanes:
       - id: apps
         label: Starters
@@ -33,6 +71,9 @@ sections:
   - id: platform
     label: Phone plumbing
     blurb: Carries the app's taps to the engine and the answers back
+    path:
+      label: The phone carries it
+      text: the host binding hands the request across; services never see the keys
     lanes:
       - id: native
         label: Host binding
@@ -45,6 +86,12 @@ sections:
     label: The engine
     blurb: Plain JavaScript. It runs in Node as-is, and that is the quickest way to try it. On a phone the kit runs it inside a Bare worklet instead, and everything in this box lives there
     module: pear-wrk-wdk
+    seal: Keys never leave this box
+    path:
+      label: Inside the sealed room
+      text: the assembler picks the wallet; a protocol may ask it to sign
+    # Lanes listed here are drawn as one chain × capability grid instead of card rows.
+    matrix: [wallets, protocols]
     why:
       label: Why a Bare worklet, not plain Node?
       points:
@@ -60,25 +107,34 @@ sections:
         label: Protocols
         blurb: Things you do with money beyond sending. Each one holds a wallet and asks it to sign
         groups:
-          - { id: swidge, label: Swap & bridge }
-          - { id: swap, label: Swap }
-          - { id: bridge, label: Bridge }
+          - { id: swap, label: Swap, hint: same chain }
+          - { id: swidge, label: Swap & bridge, hint: across chains }
+          - { id: bridge, label: Bridge, hint: USD₮0 }
           - { id: lending, label: Earn & borrow }
-          - { id: fiat, label: Buy & sell for cash }
-          - { id: multisig, label: Shared approval }
+          - { id: multisig, label: Shared approval, hint: multisig }
+          - { id: fiat, label: Buy & sell for cash, hint: any chain }
           - { id: sda, label: Smart deposit address }
       - id: wallets
         label: Wallets
         blurb: One per chain. Hold the keys and sign. Variants hang under their base
+        groups:
+          - { id: base, label: Wallet, hint: holds the keys, signs }
+          - { id: gasless, label: Fees paid in USD₮, hint: gasless variant }
+          - { id: smart-account, label: Smart account, hint: account abstraction }
+          - { id: layer, label: Layers & assets, hint: on top of the base wallet }
       - id: modules
         label: Other modules
         blurb: Loaded by the assembler like a protocol, but not about money
       - id: internals
         label: Under the hood
         blurb: Engine-side pieces the app never calls directly
-      - id: foundation
-        label: Foundation
-        blurb: The blank forms every wallet and protocol fills in, and the reference data they all read
+
+  - id: foundation
+    label: Foundation
+    path:
+      label: Everything stands on
+      text: the shared rulebook
+    blurb: What everything else imports. Runs wherever the modules run, in the worklet on a phone, in Node elsewhere. The blank forms every wallet and protocol fills in, and the reference data they all read
 
   - id: dev
     page: dev
@@ -107,8 +163,7 @@ modules:
   - id: wdk-wallet
     name: wdk-wallet
     title: The shared rulebook
-    section: core
-    band: foundation
+    section: foundation
     status: shipped
     publisher: tetherto
     summary: Shared wallet interfaces that chain modules implement.
@@ -132,6 +187,7 @@ modules:
     title: Bitcoin
     section: core
     band: wallets
+    kind: base
     status: shipped
     publisher: tetherto
     chains: [BTC]
@@ -143,6 +199,7 @@ modules:
     title: Ethereum & EVM chains
     section: core
     band: wallets
+    kind: base
     status: shipped
     publisher: tetherto
     chains: [EVM]
@@ -154,8 +211,10 @@ modules:
   - id: wdk-wallet-evm-erc-4337
     name: wdk-wallet-evm-erc-4337
     title: Ethereum, smart account (ERC-4337)
+    short: ERC-4337
     section: core
     band: wallets
+    kind: smart-account
     status: shipped
     publisher: tetherto
     chains: [EVM]
@@ -167,8 +226,10 @@ modules:
   - id: wdk-wallet-evm-7702-gasless
     name: wdk-wallet-evm-7702-gasless
     title: Ethereum, fees paid in USD₮
+    short: EIP-7702 gasless
     section: core
     band: wallets
+    kind: gasless
     status: shipped
     publisher: tetherto
     chains: [EVM]
@@ -183,6 +244,7 @@ modules:
     title: Solana
     section: core
     band: wallets
+    kind: base
     status: shipped
     publisher: tetherto
     chains: [SOL]
@@ -194,6 +256,7 @@ modules:
     title: Solana, fees paid in USD₮
     section: core
     band: wallets
+    kind: gasless
     status: shipped
     publisher: tetherto
     chains: [SOL]
@@ -207,6 +270,7 @@ modules:
     title: TON
     section: core
     band: wallets
+    kind: base
     status: shipped
     publisher: tetherto
     chains: [TON]
@@ -218,6 +282,7 @@ modules:
     title: TON, fees paid in USD₮
     section: core
     band: wallets
+    kind: gasless
     status: shipped
     publisher: tetherto
     chains: [TON]
@@ -231,6 +296,7 @@ modules:
     title: TRON
     section: core
     band: wallets
+    kind: base
     status: shipped
     publisher: tetherto
     chains: [TRON]
@@ -242,6 +308,7 @@ modules:
     title: TRON, fees paid in USD₮
     section: core
     band: wallets
+    kind: gasless
     status: shipped
     publisher: tetherto
     chains: [TRON]
@@ -253,8 +320,10 @@ modules:
   - id: wdk-wallet-spark
     name: wdk-wallet-spark
     title: Bitcoin Lightning (Spark)
+    short: Lightning (Spark)
     section: core
     band: wallets
+    kind: layer
     status: shipped
     publisher: tetherto
     chains: [SPARK]
@@ -268,6 +337,7 @@ modules:
     title: Aptos
     section: core
     band: wallets
+    kind: base
     status: shipped
     publisher: tetherto
     chains: [APTOS]
@@ -277,8 +347,10 @@ modules:
   - id: wdk-wallet-rgb
     name: wdk-wallet-rgb
     title: Bitcoin assets (RGB)
+    short: RGB assets
     section: core
     band: wallets
+    kind: layer
     status: shipped
     publisher: UTEXO
     chains: [BTC]
@@ -292,6 +364,7 @@ modules:
     title: RGB over Lightning
     section: core
     band: wallets
+    kind: layer
     status: shipped
     publisher: UTEXO
     chains: [BTC]
@@ -306,6 +379,7 @@ modules:
     title: Cosmos
     section: core
     band: wallets
+    kind: base
     status: shipped
     publisher: SwapDK
     chains: [COSMOS]
@@ -317,8 +391,10 @@ modules:
   - id: wdk-wallet-arkade
     name: wdk-wallet-arkade
     title: Bitcoin (Ark)
+    short: Ark
     section: core
     band: wallets
+    kind: layer
     status: shipped
     publisher: Arkade
     chains: [BTC]
@@ -346,6 +422,7 @@ modules:
   - id: wdk-protocol-bridge-usdt0-evm
     name: wdk-protocol-bridge-usdt0-evm
     title: Move USD₮0 between chains
+    short: USD₮0 between chains
     section: core
     band: protocols
     kind: bridge
@@ -509,6 +586,7 @@ modules:
   - id: wdk-protocol-multisig-psbt
     name: wdk-protocol-multisig-psbt
     title: Shared approval on Bitcoin
+    short: PSBT
     section: core
     band: protocols
     kind: multisig
@@ -522,6 +600,7 @@ modules:
   - id: wdk-protocol-sda-coming-soon
     name: implementations coming soon
     title: Smart deposit addresses
+    short: Smart deposit addresses
     section: core
     band: protocols
     kind: sda
@@ -750,8 +829,7 @@ modules:
   - id: wdk-asset-registry
     name: wdk-asset-registry
     title: Known tokens list
-    section: core
-    band: foundation
+    section: foundation
     status: shipped
     publisher: tetherto
     summary: Shared asset schema plus a bundled list of common tokens. Pure in-memory, no RPC. Meant as the one asset identity model for every module; today only the CLI uses it.
@@ -857,6 +935,7 @@ modules:
 
 roadmap:
   - id: signers
+    northStar: kit
     label: Abstract signers
     summary: One signer interface on every wallet package, so seed, private key, hardware and remote signers plug into the same account.
     quarter: 2026Q3
@@ -876,6 +955,7 @@ roadmap:
       - wdk-wallet-spark
       - wdk-wallet-aptos
   - id: ledger
+    northStar: kit
     label: Ledger
     parent: signers
     summary: Hardware signing through a standalone Ledger package, first on Bitcoin, EVM and Solana; other hardware wallets can follow the same path.
@@ -887,6 +967,7 @@ roadmap:
       - { id: wdk-wallet-evm, status: wip, progress: 60 }
       - { id: wdk-wallet-solana, status: wip, progress: 40 }
   - id: passkey-signer
+    northStar: kit
     label: Passkey signer
     parent: signers
     summary: A pluggable passkey signer for EVM chains that expose the 256r1 precompile.
@@ -895,6 +976,7 @@ roadmap:
     priority: P2
     modules: [wdk-wallet-evm]
   - id: mpc-signer
+    northStar: kit
     label: MPC signer
     parent: signers
     summary: Spike on pluggable MPC signers, or recipes for using existing MPC services with WDK.
@@ -903,6 +985,7 @@ roadmap:
     priority: P2
     modules: []
   - id: policy-engine
+    northStar: kit
     label: Policy engine
     summary: Phase 2 libraries for common rules, phase 3 a policy DSL, phase 4 policies in the developer portal.
     quarter: 2026Q3
@@ -910,6 +993,7 @@ roadmap:
     priority: P0
     modules: [wdk, wdk-policies]
   - id: error-handling
+    northStar: kit
     label: Standardised error handling
     summary: The same error classes and messages across every wallet module.
     quarter: 2026Q3
@@ -918,6 +1002,7 @@ roadmap:
     progress: 70
     modules: [wdk, wdk-wallet]
   - id: native-cores-v2
+    northStar: kit
     label: Swift and Kotlin cores on par with React Native
     summary: Strong typing, sensitive storage and a plug-in interface for native packages, matching the React Native host.
     quarter: 2026Q3
@@ -925,38 +1010,44 @@ roadmap:
     priority: P0
     modules: [wdk-core-kotlin, wdk-core-swift]
   - id: sda
-    label: Smart deposit address
+    northStar: kit
+    label: Smart deposit address interface
     summary: Deposit on chain X, receive on chain Y. The interface is in wdk-wallet; the first module is next.
     quarter: 2026Q3
-    status: wip
+    status: done
     priority: P0
     modules: [wdk-wallet, wdk-protocol-sda-coming-soon]
   - id: multisig-safe
+    northStar: kit
     label: Safe multisig on EVM
     quarter: 2026Q3
     status: wip
     priority: P1
     modules: [wdk-protocol-multisig-safe]
   - id: multisig-squads
+    northStar: kit
     label: Squads multisig on Solana
     quarter: 2026Q3
     status: wip
     priority: P1
     modules: [wdk-protocol-multisig-squads]
   - id: multisig-psbt
+    northStar: kit
     label: PSBT multisig on Bitcoin
     quarter: backlog
     status: planned
     priority: P2
     modules: [wdk-protocol-multisig-psbt]
   - id: sss-tools
+    northStar: kit
     label: Shamir secret sharing tools
     summary: Publish and document the secret-sharing helpers, with guidance on shard custody.
     quarter: 2026Q3
-    status: wip
+    status: done
     priority: P0
     modules: [wdk-utils]
   - id: doctor-wallet
+    northStar: dx
     label: WDK doctor wallet
     summary: Bundle any set of packages, build the showcase app around it, drive the worklet lifecycle by hand. Dogfooding for core and contributor modules.
     quarter: 2026Q3
@@ -964,6 +1055,7 @@ roadmap:
     priority: P1
     modules: [wdk-doctor-app, wdk-worklet-bundler]
   - id: cli-completion
+    northStar: dx
     label: CLI completion
     summary: Swap, bridge, gasless transactions and x402 payments from the command line.
     quarter: 2026Q3
@@ -971,6 +1063,7 @@ roadmap:
     priority: P1
     modules: [wdk-cli]
   - id: docs-revamp
+    northStar: dx
     label: Docs revamp and developer portal
     summary: Recipes and guides; core concepts explained (seed lifecycle, class inheritance, policy engine, cloud backup).
     quarter: 2026Q3
@@ -978,6 +1071,7 @@ roadmap:
     priority: P1
     modules: []
   - id: leave-beta
+    northStar: kit
     label: Security audit, then 1.0.0
     summary: First external audit; packages leave their beta tags once it completes.
     quarter: 2026Q3
@@ -985,13 +1079,15 @@ roadmap:
     priority: P1
     modules: []
   - id: asset-registry-api
+    northStar: dx
     label: Asset registry in the wallet API
     summary: Make the known-tokens registry reachable from every wallet package.
     quarter: 2026Q3
     status: planned
     priority: P2
-    modules: [wdk-asset-registry, wdk-wallet]
+    modules: [wdk-wallet]
   - id: ci-testnet
+    northStar: kit
     label: Testnet transactions in CI
     summary: End-to-end transactions on testnets as a scheduled job, to catch chain runtime changes.
     quarter: 2026Q3
@@ -999,15 +1095,258 @@ roadmap:
     priority: P2
     modules: []
   - id: unified-usdt-balance
+    northStar: kit
     label: Unified USDT balance
     quarter: backlog
     status: planned
     priority: P2
     modules: []
   - id: new-chains
+    northStar: ecosystem
     label: New chains under review
     summary: Sui and Hyperliquid, pending demand.
     quarter: backlog
     status: planned
     priority: P2
     modules: []
+
+  # ---- From the Q1/Q2 2026 roadmap sheet: shipped work, kept for the record.
+  - id: rn-core-v1
+    northStar: kit
+    label: React Native host binding
+    summary: First host binding to the worklet, for the Tether Wallet app.
+    quarter: 2026Q1
+    status: done
+    modules: [wdk-react-native-core]
+  - id: swift-core-v1
+    northStar: kit
+    label: Swift core, first version
+    summary: JSON-RPC interface to the worklet. Shipped in Q1, published later.
+    quarter: 2026Q1
+    status: done
+    modules: [wdk-core-swift]
+  - id: solana-signers-v1
+    northStar: kit
+    label: Universal and Ledger signers on Solana
+    summary: The first wallet package with a pluggable signer, and the first hardware signer.
+    quarter: 2026Q1
+    status: done
+    modules: [wdk-wallet-solana]
+  - id: eip-7702
+    northStar: kit
+    label: EIP-7702 support and gasless module
+    quarter: 2026Q1
+    status: done
+    modules: [wdk-wallet-evm, wdk-wallet-evm-7702-gasless]
+  - id: sss-module
+    northStar: kit
+    label: Shamir secret sharing module
+    summary: Built in Q1; publishing and documenting it is the Q3 item.
+    quarter: 2026Q1
+    status: done
+  - id: regression-ci
+    northStar: kit
+    label: Regression tests in CI
+    summary: The test runners from the playground, run as a regression suite on every change.
+    quarter: 2026Q1
+    status: done
+  - id: dependency-review
+    northStar: kit
+    label: Dependency review on every repo
+    summary: Dependabot installed across the org.
+    quarter: 2026Q1
+    status: done
+  - id: module-scaffold-cli
+    northStar: dx
+    label: CLI to scaffold a module
+    quarter: 2026Q1
+    status: done
+    modules: [create-wdk-module]
+  - id: agent-skills
+    northStar: dx
+    label: Agent skills repo
+    summary: Skills that make the modules usable from coding agents.
+    quarter: 2026Q1
+    status: done
+    modules: [wdk-agent-skills]
+  - id: openclaw-mcp
+    northStar: dx
+    label: OpenClaw support in the MCP toolkit
+    quarter: 2026Q1
+    status: done
+    modules: [wdk-mcp-toolkit]
+  - id: x402-support
+    northStar: ecosystem
+    label: x402 payments
+    summary: Agents pay for HTTP resources with USD₮ through WDK.
+    quarter: 2026Q1
+    status: done
+  - id: review-pipeline
+    northStar: ecosystem
+    label: Community package review pipeline
+    summary: A documented path for third-party modules to be reviewed and listed.
+    quarter: 2026Q1
+    status: done
+  - id: p2p-address-book
+    northStar: kit
+    label: Peer-to-peer address book
+    summary: Built for the Tether Wallet contacts feature.
+    quarter: 2026Q2
+    status: done
+    modules: [wdk-p2p-address-book]
+  - id: abstractionkit
+    northStar: kit
+    label: EVM modules moved from RelayKit to AbstractionKit
+    quarter: 2026Q2
+    status: done
+    modules: [wdk-wallet-evm-erc-4337]
+  - id: failover
+    northStar: kit
+    label: Failover provider for RPCs and pricing
+    quarter: 2026Q2
+    status: done
+    modules: [wdk-failover-provider]
+  - id: swidge-interface
+    northStar: kit
+    label: One interface for swap and bridge
+    summary: The Swidge form, so contributors write one module for both.
+    quarter: 2026Q2
+    status: done
+    modules: [wdk-wallet]
+  - id: lightning-decoding
+    northStar: kit
+    label: BOLT11 and LNURL decoding
+    quarter: 2026Q2
+    status: done
+    modules: [wdk-utils]
+  - id: asset-registry-module
+    northStar: kit
+    label: Asset registry module
+    summary: Token lists and CAIP-19 ids, so every module names assets the same way.
+    quarter: 2026Q2
+    status: done
+    modules: [wdk-asset-registry]
+  - id: solana-gasless
+    northStar: kit
+    label: Solana gasless module
+    quarter: 2026Q2
+    status: done
+    modules: [wdk-wallet-solana-gasless]
+  - id: policy-engine-phase-1
+    northStar: kit
+    label: Local transaction policy engine, phase 1
+    summary: Rules on wallet and protocol writes, inside the assembler.
+    quarter: 2026Q2
+    status: done
+    modules: [wdk]
+  - id: social-recovery
+    northStar: kit
+    label: Social login and recovery
+    quarter: 2026Q2
+    status: wip
+    priority: P1
+  - id: docs-phase-1
+    northStar: dx
+    label: Docs revamp, phase 1
+    summary: Use-case naming, core concepts, and the move from GitBook to Fumadocs.
+    quarter: 2026Q2
+    status: done
+  - id: wdk-cli-v1
+    northStar: dx
+    label: WDK command line, first version
+    summary: A wallet on the command line for agents and humans.
+    quarter: 2026Q2
+    status: done
+    modules: [wdk-cli]
+  - id: dogfood-wallet
+    northStar: dx
+    label: React Native dogfooding wallet
+    summary: End-to-end testing of new packages before they reach the starter.
+    quarter: 2026Q2
+    status: done
+  - id: walletconnect-examples
+    northStar: dx
+    label: WalletConnect examples
+    quarter: 2026Q2
+    status: done
+  - id: langchain
+    northStar: ecosystem
+    label: LangChain support
+    quarter: 2026Q2
+    status: done
+  - id: contributor-reviews
+    northStar: ecosystem
+    label: Five contributor modules reviewed
+    summary: Rhino.fi, Orchestra, CoinGecko, Morpho and Arkade.
+    quarter: 2026Q2
+    status: done
+  - id: onramp-providers
+    northStar: ecosystem
+    label: Two new on-ramp providers
+    summary: Onramper and Transak, for the Tether Wallet.
+    quarter: 2026Q2
+    status: done
+  # ---- Q3 2026 items from the sheet that the atlas did not have yet.
+  - id: rn-starter
+    northStar: dx
+    label: React Native starter wallet
+    quarter: 2026Q3
+    status: done
+    modules: [wdk-starter-react-native]
+  - id: aptos-module
+    northStar: ecosystem
+    label: Aptos wallet, contributed and merged
+    quarter: 2026Q3
+    status: done
+    modules: [wdk-wallet-aptos]
+  - id: cards-interface
+    northStar: ecosystem
+    label: Cards interface, with a first contributor
+    summary: The form for connecting card providers, and one external module that fills it.
+    quarter: 2026Q3
+    status: wip
+    priority: P0
+    modules: [wdk-wallet]
+  - id: recipes
+    northStar: dx
+    label: Recipes and examples
+    summary: Claw and Hermes agents with the CLI, a QVAC example, transaction simulation APIs.
+    quarter: 2026Q3
+    status: planned
+    priority: P0
+    modules: [wdk-examples]
+  - id: x402-facilitator
+    northStar: ecosystem
+    label: x402 facilitator on EVM or Solana
+    summary: Needs Tether's stance first.
+    quarter: 2026Q3
+    status: planned
+    priority: P1
+  - id: browser-extension
+    northStar: kit
+    label: Browser extension
+    quarter: 2026Q3
+    status: planned
+    priority: P1
+  - id: keet
+    northStar: ecosystem
+    label: Wallet features for Keet
+    summary: Understand what the Keet team needs to land a wallet in the app.
+    quarter: 2026Q3
+    status: planned
+    priority: P1
+  - id: mpp
+    northStar: ecosystem
+    label: MPP support
+    summary: Paradigm's Machine Payments Protocol, an x402 alternative.
+    quarter: 2026Q3
+    status: planned
+    priority: P2
+  - id: kyt-policy
+    northStar: ecosystem
+    label: KYT providers through the policy engine
+    summary: A policy backed by Crystal, Blockaid or similar.
+    quarter: backlog
+    status: planned
+    priority: P2
+    modules: [wdk]
