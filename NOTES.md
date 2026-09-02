@@ -57,7 +57,7 @@ dependencies are, and whether it is in the worklet bundle.
 |---|---|---|
 | pricing-provider, coingecko, bitfinex | app | starter `src/wdk/pricing.ts` builds the client inside a React hook |
 | indexer-http | app | starter `src/wdk/indexer.ts`, called from `useWalletData.ts` |
-| asset-registry | app | "no RPC or blockchain interaction"; deps zod, fast-equals |
+| asset-registry | anywhere | Pure in-memory: two classes over a `Map`, zod + fast-equals, no I/O. Runs wherever it is imported. Only consumer in the org is `wdk-cli` (Node); the RN starter declares its own asset list. Moved to *Foundation* 2026-09-02 on the package's stated intent ("the type system and interfaces for standardized asset identification across all WDK modules"), not on usage |
 | backup-cloud | app | starter `CloudBackupContext.tsx` |
 | secret-manager | **engine** | the seed is generated and encrypted inside the worklet (`pear-wrk-wdk/src/handlers/secrets.js`), called over RPC by rn-core; the app only ever receives the encrypted form. This package is the standalone version of that code; nothing in the shipped flow imports it yet |
 | failover-provider | engine (and app) | imported by `wdk-wallet-evm` and `-7702-gasless` (worklet), and by `wdk-pricing-provider` (app). Zero deps |

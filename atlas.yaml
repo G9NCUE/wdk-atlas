@@ -8,11 +8,6 @@
 # roadmap: pending work tacked onto the box (independent of package status).
 # progress: 0–100 fill-wash on WIP packages and WIP roadmap chips.
 
-title: WDK Atlas
-subtitle: |-
-  Mega visual map of the mega modular Wallet Development Kit by Tether.
-  🚧 HEAVILY WIP, NOT COMPLETE 🚧
-
 # northStars: hidden for now. Restore the column in app.js when these are real.
 # northStars:
 #   - id: one-seed
@@ -44,8 +39,15 @@ sections:
 
   - id: core
     label: The engine
-    blurb: A sealed room on the phone. Everything in this box runs inside it, so the keys never sit in the app
+    blurb: Plain JavaScript. It runs in Node as-is, and that is the quickest way to try it. On a phone the kit runs it inside a Bare worklet instead, and everything in this box lives there
     module: pear-wrk-wdk
+    why:
+      label: Why a Bare worklet, not plain Node?
+      points:
+        - Plain Node works and developers know it. Nothing in this box needs the worklet to function.
+        - One runtime, one SDK. The same bundle runs on iOS, Android and desktop, with no per-platform port.
+        - Its own thread. Signing and network calls never block the app's screen.
+        - A sealed room. Keys and seeds stay in the worklet; the app only ever sees the encrypted form.
     lanes:
       - id: kernel
         label: The assembler
@@ -72,11 +74,11 @@ sections:
         blurb: Engine-side pieces the app never calls directly
       - id: foundation
         label: Foundation
-        blurb: The blank forms every wallet and protocol fills in, so they all plug in the same way
+        blurb: The blank forms every wallet and protocol fills in, and the reference data they all read
 
   - id: dev
     page: dev
-    label: Developer tools
+    label: Developer resources
     blurb: For building with WDK. Not part of a shipped wallet
     lanes:
       - id: reference
@@ -643,7 +645,7 @@ modules:
     section: core
     status: shipped
     publisher: tetherto
-    summary: Pear / Bare runtime worker for WDK.
+    summary: Pear / Bare runtime worker for WDK. The recommended host on phones; the same packages also run in plain Node.
     repo: https://github.com/tetherto/pear-wrk-wdk
 
   - id: wdk-react-native-core
@@ -785,11 +787,14 @@ modules:
   - id: wdk-asset-registry
     name: wdk-asset-registry
     title: Known tokens list
-    section: platform
-    band: services
+    section: core
+    band: foundation
     status: shipped
     publisher: tetherto
-    summary: Asset metadata registry.
+    summary: Shared asset schema plus a bundled list of common tokens. Pure in-memory, no RPC. Meant as the one asset identity model for every module; today only the CLI uses it.
+    notes:
+      - Runtime-agnostic. Plain ESM with zod and fast-equals; runs in Node, the worklet or the app equally
+      - Only consumer in the org is wdk-cli (checked 2026-09-02). No wallet, protocol, starter or worklet imports it
     repo: https://github.com/tetherto/wdk-asset-registry
 
   - id: wdk-failover-provider
