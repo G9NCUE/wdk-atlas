@@ -48,6 +48,24 @@ One commit on top of `31e88fc`. In the order the decisions were made:
 Renderer changes are small: `renderColumns`, `relationsOf`, the drawer, `page`, `title`,
 `lane.blurb`, `section.module`. No build step; `python3 -m http.server 4173` from the repo.
 
+## 2b. The map redrawn (2026-09-02)
+
+Applied from the UX review: the stack as a cross-section, the engine as a grid.
+
+| Change | Why |
+|---|---|
+| One band per section, a rail step beside it (`path` on the section), the engine bordered in orange with `seal` | The four layers now fit in one or two screens; the sealed-room argument is drawn, not explained |
+| Wallets and protocols as a chain × capability grid (`matrix` on the section, `chains` at the root, `kind` on every wallet, `groups` on the wallets lane) | Chain and capability are the two questions people bring; a protocol sits in the column of the wallet it needs; an empty cell is a gap and reads as one. Cross-chain protocols repeat per column; Spark, RGB and Ark are Bitcoin rows because they require the Bitcoin wallet |
+| Chips instead of cards; live is the quiet neutral, amber for in progress, dashed for planned, a purple publisher name for third-party modules | 47 of 53 modules are live; colour now marks the exception |
+| A roadmap item touching half of a band of four or more is drawn once as a strip; each chip carries only a count | "Abstract signers" was stamped under twelve wallets |
+| Selecting a module fades everything unrelated; details open in a popover under the chip, relations listed by title | Twelve orange rings across two screens were a hunt; the drawer shifted the whole map |
+| Column headers filter the grid to one chain | The chain filter the map lacked |
+| `short` on a module: a title for the grid when the row and column already say the rest | "Swap & bridge via Symbiosis" in the Swap & bridge row is "Symbiosis" |
+| The rail follows the reader: the active layer is the one holding the open module, else the one clicked, else the band nearest the top of the viewport; its step and band light up and the line is orange down to it | A static rail read as a caption, and the engine's permanent orange border made it the centre of everything |
+
+Dropped: the dashed "compatible" guess from shared chain labels. The grid shows it by position.
+The developer page keeps the card renderer with the same encoding.
+
 ## 3. Where each "helper" really runs
 
 Method: who imports it (starter source, Moor's `node_modules`, org code search), what its own
