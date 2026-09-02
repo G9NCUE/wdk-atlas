@@ -98,6 +98,46 @@ function chainsOf(module) {
   return (Array.isArray(raw) ? raw : [raw]).map(String).filter(Boolean);
 }
 
+// ---- Roadmap: one list at the root of atlas.yaml; everything per module is derived from it.
+function roadmapItems() {
+  return atlas.roadmap || [];
+}
+
+function moduleRef(item, moduleId) {
+  for (const ref of item.modules || []) {
+    if (ref === moduleId) return { id: moduleId };
+    if (ref && ref.id === moduleId) return ref;
+  }
+  return null;
+}
+
+// Roadmap entries touching a module, with the module-specific status/progress when given.
+function roadmapFor(moduleId) {
+  const out = [];
+  for (const item of roadmapItems()) {
+    const ref = moduleRef(item, moduleId);
+    if (!ref) continue;
+    out.push({
+      id: item.id,
+      label: item.label,
+      parent: item.parent || null,
+      status: ref.status || item.status || "planned",
+      progress: ref.progress ?? item.progress,
+    });
+  }
+  return out.sort((x, y) => Number(Boolean(x.parent)) - Number(Boolean(y.parent)));
+}
+
+function quarterLabel(q) {
+  if (!q || q === "backlog") return "Backlog";
+  const m = /^(\d{4})Q([1-4])$/.exec(q);
+  return m ? `Q${m[2]} ${m[1]}` : q;
+}
+
+function quarterOrder(q) {
+  return !q || q === "backlog" ? "9999" : q;
+}
+
 function progressOf(item) {
   const n = Number(item.progress);
   if (Number.isFinite(n)) return Math.max(0, Math.min(100, Math.round(n)));
@@ -122,10 +162,7 @@ function renderModule(module) {
       depth ? el("span", { class: "child-mark", "aria-hidden": "true" }, "\u21B3 ") : null,
       item.label || item
     );
-  const chips = (module.roadmap || []).flatMap((item) => [
-    chip(item, 0),
-    ...(item.children || []).map((child) => chip(child, 1)),
-  ]);
+  const chips = roadmapFor(module.id).map((item) => chip(item, item.parent ? 1 : 0));
   const status = module.status || "planned";
   const classes = [
     "module",
@@ -306,11 +343,98 @@ function renderSection(section, { collapsible = true } = {}) {
   return details;
 }
 
+function isPending(status) {
+  return status === "wip" || status === "planned";
+}
+
+function moduleChip(ref) {
+  const id = typeof ref === "string" ? ref : ref.id;
+  const module = itemById(id);
+  if (!module) return el("span", { class: "roadmap-module missing", title: "not in the atlas" }, id);
+  const status = (typeof ref === "string" ? null : ref.status) || null;
+  return el(
+    "button",
+    { class: `roadmap-module${status ? " " + status : ""}`, type: "button", "data-id": id, "data-node": id, "aria-expanded": "false" },
+    module.title || module.name || id
+  );
+}
+
+function renderRoadmapItem(item, children) {
+  const percent = progressOf(item);
+  return el(
+    "article",
+    { class: `roadmap-card ${item.status || "planned"}`, id: item.id, "data-roadmap": item.id, style: progressStyle(percent) },
+    el(
+      "div",
+      { class: "roadmap-card-head" },
+      item.priority && el("span", { class: `priority ${String(item.priority).toLowerCase()}` }, item.priority),
+      el("h3", { class: "roadmap-card-title" }, item.label),
+      el("span", { class: "roadmap-card-status" }, item.status === "wip" ? "in progress" : item.status || "planned"),
+      percent != null && item.status === "wip" && el("span", { class: "roadmap-card-progress" }, `${percent}%`)
+    ),
+    item.summary && el("p", { class: "roadmap-card-summary" }, item.summary),
+    (item.modules || []).length > 0 && el("div", { class: "roadmap-modules" }, (item.modules || []).map(moduleChip)),
+    children.length > 0 && el("div", { class: "roadmap-children" }, children)
+  );
+}
+
+// Roadmap page: the root list grouped by quarter; umbrella items nest the items that name them as parent.
+function renderRoadmap() {
+  const items = roadmapItems();
+  const counts = { wip: 0, planned: 0, done: 0 };
+  for (const item of items) counts[item.status || "planned"] = (counts[item.status || "planned"] || 0) + 1;
+  const touched = new Set(items.flatMap((i) => (i.modules || []).map((r) => (typeof r === "string" ? r : r.id))));
+  const summary = el(
+    "ul",
+    { class: "roadmap-summary" },
+    el("li", null, el("strong", null, String(counts.wip)), "in progress"),
+    el("li", null, el("strong", null, String(counts.planned)), "planned"),
+    el("li", null, el("strong", null, String(counts.done)), "done"),
+    el("li", null, el("strong", null, String(touched.size)), "modules touched")
+  );
+
+  const byParent = new Map();
+  for (const item of items) {
+    if (!item.parent || !items.some((i) => i.id === item.parent)) continue;
+    if (!byParent.has(item.parent)) byParent.set(item.parent, []);
+    byParent.get(item.parent).push(item);
+  }
+  const roots = items.filter((item) => !item.parent || !items.some((i) => i.id === item.parent));
+  const quarters = [...new Set(roots.map((item) => item.quarter || "backlog"))].sort((x, y) =>
+    quarterOrder(x).localeCompare(quarterOrder(y))
+  );
+  const rank = (item) => `${item.priority || "P9"}${item.status === "wip" ? 0 : 1}`;
+
+  const groups = quarters.map((quarter) => {
+    const inQuarter = roots
+      .filter((item) => (item.quarter || "backlog") === quarter)
+      .sort((x, y) => rank(x).localeCompare(rank(y)));
+    return el(
+      "section",
+      { class: "section roadmap-quarter", "data-quarter": quarter },
+      el("h2", { class: "section-title" }, quarterLabel(quarter)),
+      el(
+        "div",
+        { class: "roadmap-cards" },
+        inQuarter.map((item) =>
+          renderRoadmapItem(item, (byParent.get(item.id) || []).map((child) => renderRoadmapItem(child, [])))
+        )
+      )
+    );
+  });
+  if (!items.length) groups.push(el("p", { class: "meta" }, "No roadmap entries in atlas.yaml yet."));
+  return el("div", { class: "roadmap-page" }, summary, groups);
+}
+
 const pageHeadings = {
   main: { title: "WDK Atlas", subtitle: "", hidden: true },   // the logo carries the brand; keep an h1 for assistive tech
   dev: {
     title: "Developer Resources",
     subtitle: "Docs, examples and tools for building with WDK. Not part of a shipped wallet.",
+  },
+  roadmap: {
+    title: "Roadmap",
+    subtitle: "What is in progress and what is planned, by quarter, from the same atlas.yaml as the map.",
   },
 };
 
@@ -324,6 +448,12 @@ function renderPoster() {
 
   for (const link of document.querySelectorAll(".nav a")) {
     link.toggleAttribute("aria-current", link.getAttribute("data-page") === page);
+  }
+
+  if (page === "roadmap") {
+    poster.replaceChildren(el("div", { class: "atlas" }, renderRoadmap()));
+    poster.hidden = false;
+    return;
   }
 
   const onPage = atlas.sections.filter((section) => (section.page || "main") === page);
@@ -369,15 +499,20 @@ function drawerContent(item) {
         .join(" · ");
 
   const notes = (item.notes || []).map((note) => el("li", null, note));
-  const roadmap = (item.roadmap || []).map((entry) =>
-    el(
-      "li",
-      null,
-      `${entry.label} (${entry.status || "planned"})`,
-      entry.children?.length > 0 &&
-        el("ul", null, entry.children.map((child) => el("li", null, `${child.label} (${child.status || "planned"})`)))
-    )
-  );
+  const pending = isStar ? [] : roadmapFor(item.id);
+  const state = (entry) => `${entry.status}${entry.progress != null && entry.status === "wip" ? `, ${progressOf(entry)}%` : ""}`;
+  const roadmap = pending
+    .filter((entry) => !entry.parent || !pending.some((p) => p.id === entry.parent))
+    .map((entry) => {
+      const children = pending.filter((child) => child.parent === entry.id);
+      return el(
+        "li",
+        null,
+        el("a", { href: `./?page=roadmap#${entry.id}` }, entry.label),
+        ` (${state(entry)})`,
+        children.length > 0 && el("ul", null, children.map((child) => el("li", null, `${child.label} (${state(child)})`)))
+      );
+    });
 
   const rel = isStar ? { requires: [], requiredBy: [] } : relationsOf(item.id);
   const relList = (entries) =>
