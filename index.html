@@ -11,7 +11,7 @@
       rel="stylesheet"
     />
     <link rel="icon" type="image/svg+xml" href="assets/wdk-logo.svg" />
-    <link rel="stylesheet" href="styles.css?v=3" />
+    <link rel="stylesheet" href="styles.css?v=4" />
   </head>
   <body>
     <header class="topbar" id="topbar">
@@ -36,18 +36,18 @@
       <div class="header-main">
         <h1 id="title">WDK Atlas</h1>
         <p id="subtitle" class="subtitle"></p>
+      </div>
+      <div class="header-side">
         <label class="pending-toggle">
           <input type="checkbox" id="toggle-pending" checked />
           <span class="pending-toggle-switch" aria-hidden="true"></span>
           Include planned &amp; in progress features
         </label>
-      </div>
-      <div class="header-side">
         <ul class="legend" aria-label="Status legend">
-          <li><span class="swatch shipped"></span> live</li>
-          <li><span class="swatch wip"></span> wip</li>
+          <li><span class="swatch live"></span> live</li>
+          <li><span class="swatch wip"></span> in progress</li>
           <li><span class="swatch planned"></span> planned</li>
-          <li><span class="swatch ecosystem"></span> ecosystem</li>
+          <li><span class="swatch ecosystem">Name</span> third party</li>
         </ul>
       </div>
     </header>
@@ -60,6 +60,6 @@
 
     <script src="vendor/js-yaml.min.js"></script>
     <script src="vendor/marked.min.js"></script>
-    <script src="app.js?v=3"></script>
+    <script src="app.js?v=4"></script>
   </body>
 </html>
