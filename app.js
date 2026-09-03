@@ -173,11 +173,12 @@ function renderModule(module) {
   );
 }
 
-// A module that requires another one in the same list goes under it, as a column.
+// A module drawn `under` (or implementing) another one in the same list goes under it, as a column.
+const PLACEMENT_TYPES = new Set(["under", "implements"]);
 function renderColumns(modules) {
   const ids = new Set(modules.map((module) => module.id));
   const baseOf = (module) =>
-    (module.relations || []).find((rel) => ids.has(rel.target) && rel.target !== module.id)?.target;
+    (module.relations || []).find((rel) => PLACEMENT_TYPES.has(rel.type) && ids.has(rel.target) && rel.target !== module.id)?.target;
   const roots = modules.filter((module) => !baseOf(module));
   const columns = roots.map((root) => {
     const children = modules.filter((module) => baseOf(module) === root.id);
