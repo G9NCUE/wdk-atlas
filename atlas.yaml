@@ -39,32 +39,36 @@ audit:
   # Backend workers, apps and infrastructure: never modules, never reported.
   ignorePattern: "(-wrk$|-wrk-|-app-node$|-e2e-tests$|^wdk-faucet-|^wdk-indexer-docs$|^wdk-indexer-webhook)"
 
-# North stars: the three destinations every roadmap initiative serves (roadmap items carry `northStar: <id>`).
-# `objectives` are the measurable key results behind each star; kept here, not rendered on the page.
+# North stars: the three objectives every roadmap initiative serves (roadmap items carry `northStar: <id>`).
+# `keyResults` are the measurable results behind each star, shown on the roadmap rows and on the Key results page.
+#   id, label; optional: target, current, unit, progress (0-100), source (how it is measured), note.
+#   Without `progress` (or `target` and `current`) a key result shows as "not measured".
+# Inherited from the Q3 2026 OKR sheet with light editing; a starting point pending review, not a commitment.
 northStars:
   - id: kit
-    title: A production-grade kit on every platform
+    title: WDK is a production-grade kit for every platform
     summary: Secure, audited, out of beta, with the same SDK on iOS, Android, desktop and Node.
-    objectives:
-      - Complete the first quarterly security audit and take the packages out of beta
-      - One signer interface on every wallet package
-      - Swift and Kotlin cores on par with React Native
-      - Function coverage above 95% and testnet transactions in CI
+    keyResults:
+      - { id: audit, label: "Complete the first quarterly security audit and take the packages out of beta" }
+      - { id: signer-interface, label: "One signer interface on every wallet package" }
+      - { id: native-parity, label: "Swift and Kotlin cores on par with React Native" }
+      - { id: coverage-ci, label: "Function coverage above 95% and testnet transactions in CI" }
   - id: dx
-    title: The best developer experience
+    title: Best in class Developer Experience
     summary: From zero to a first transaction in minutes, for humans and for agents.
-    objectives:
-      - Six new recipes and examples across the docs, the CLI and the agent toolkits
-      - Developer experience score above 70
-      - Open issues answered within a week
+    keyResults:
+      - { id: recipes, label: "Six new recipes and examples across the docs, the CLI and the agent toolkits" }
+      - { id: des, label: "Developer experience score above 70" }
+      - { id: issue-response, label: "Open issues answered within a week" }
   - id: ecosystem
     title: A thriving ecosystem
     summary: Modules, chains and integrations built by others on top of WDK.
-    objectives:
-      - Twelve or more WDK-compatible modules or integrations published
-      - External pull requests merged up by 50% in the quarter
-      - Five live community projects on WDK; five funded through bounties
-      - Monthly update call with the ecosystem teams
+    keyResults:
+      - { id: modules, label: "Twelve or more WDK-compatible modules or integrations published" }
+      - { id: external-prs, label: "External pull requests merged up by 50% in the quarter" }
+      - { id: community-projects, label: "Five live community projects on WDK; five funded through bounties" }
+      - { id: ecosystem-call, label: "Monthly update call with the ecosystem teams" }
+      - { id: transparency, label: "Roadmap, contribution guidelines and module review process public and current" }
 
 # Columns of the chain × capability grid inside the engine, in display order.
 # A module lands in every column named in its `chains`; `also` folds extra labels into a column
@@ -816,7 +820,7 @@ modules:
     band: apps
     status: shipped
     publisher: tetherto
-    summary: 'A complete reference wallet in React Native, built to teach how to integrate the kit end to end, every decision documented. Alpha, not for real funds.'
+    summary: 'A complete reference wallet in React Native, built to teach how to integrate the kit end to end, every decision documented. The source is public; the built app is for internal use only, distributed through TestFlight and the Play internal track, never the stores.'
     repo: https://github.com/tetherto/wdk-starter-react-native
     relations:
       - { type: requires, target: wdk-react-native-core }
@@ -1374,7 +1378,7 @@ roadmap:
   - id: rn-starter
     northStar: dx
     label: React Native starter wallet
-    summary: 'A complete reference wallet in React Native, built to teach how to integrate the kit end to end.'
+    summary: 'A complete reference wallet in React Native, built to teach how to integrate the kit end to end. Internal use only: distributed to the org through TestFlight, not published to the stores.'
     quarter: 2026Q3
     status: done
     modules: [wdk-starter-react-native]
@@ -1437,3 +1441,25 @@ roadmap:
     status: planned
     priority: P2
     modules: [wdk]
+  # ---- Transparency: the conditions for others to build on WDK (ecosystem star).
+  - id: public-roadmap
+    northStar: ecosystem
+    label: Public roadmap
+    summary: This roadmap, published and kept current, so anyone building on WDK can see what is coming and what shipped. The atlas is the first version.
+    quarter: 2026Q3
+    status: wip
+    priority: P1
+  - id: contribution-guidelines
+    northStar: ecosystem
+    label: Contribution guidelines, public
+    summary: One clear, public page on how to propose, build and get a module reviewed, replacing guidelines that exist but point nowhere. Owner not yet defined.
+    quarter: 2026Q4
+    status: planned
+    priority: P1
+  - id: changelog-cadence
+    northStar: ecosystem
+    label: Changelog and release notes on a cadence
+    summary: A regular, readable account of what changed across the packages, so users and contributors do not have to read commit logs. Owner not yet defined.
+    quarter: 2026Q4
+    status: planned
+    priority: P2
