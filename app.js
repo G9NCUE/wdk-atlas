@@ -4,7 +4,8 @@ const errorEl = document.querySelector("#error");
 
 let atlas = null;
 let openId = null;
-const page = new URLSearchParams(location.search).get("page") || "main";
+// The roadmap is the front page; the map lives at ?page=map ("main" kept as an alias for old links).
+const page = (() => { const p = new URLSearchParams(location.search).get("page") || "roadmap"; return p === "main" ? "map" : p; })();
 
 function showError(message) {
   errorEl.hidden = false;
@@ -735,6 +736,37 @@ function renderTimelineHead(quarters, now) {
   );
 }
 
+// Key results: strings or objects; progress only from numbers someone set.
+function keyResultsOf(star) {
+  return (star.keyResults || []).map((kr, i) => {
+    const o = typeof kr === "string" ? { label: kr } : kr;
+    let progress = Number.isFinite(Number(o.progress)) ? Number(o.progress) : null;
+    if (progress == null && Number.isFinite(Number(o.target)) && Number.isFinite(Number(o.current)) && Number(o.target) > 0) {
+      progress = (100 * Number(o.current)) / Number(o.target);
+    }
+    return { id: o.id || `${star.id}-kr-${i + 1}`, label: o.label || String(kr), target: o.target, current: o.current, unit: o.unit, source: o.source, note: o.note,
+      progress: progress == null ? null : Math.max(0, Math.min(100, Math.round(progress))) };
+  });
+}
+
+function renderKrChip(kr, starId) {
+  const measured = kr.progress != null;
+  return el(
+    "a",
+    { class: `kr${measured ? "" : " unmeasured"}`, href: `./?page=results#${starId}`, title: kr.label },
+    el("span", { class: "kr-label" }, kr.label),
+    measured
+      ? el("span", { class: "kr-meter", "aria-label": `${kr.progress}%` }, el("span", { class: "kr-bar" }, el("span", { style: `width:${kr.progress}%` })), el("span", { class: "kr-pct" }, `${kr.progress}%`))
+      : el("span", { class: "kr-none" }, "not measured")
+  );
+}
+
+function renderKrStrip(star) {
+  const krs = keyResultsOf(star);
+  if (!krs.length) return null;
+  return el("div", { class: "kr-strip", "aria-label": "Key results" }, krs.map((kr) => renderKrChip(kr, star.id)));
+}
+
 function renderStarRow(star, items, byParent, quarters, now, index, mode = "timeline") {
   const counts = { done: 0, wip: 0, planned: 0 };
   for (const item of items) counts[item.status || "planned"] += 1;
@@ -770,11 +802,13 @@ function renderStarRow(star, items, byParent, quarters, now, index, mode = "time
       "summary",
       { class: "star-head" },
       el("span", { class: "star-index" }, String(index + 1).padStart(2, "0")),
-      el("div", { class: "star-text" }, el("h2", { class: "star-title" }, star.title), star.summary && el("p", { class: "star-summary" }, star.summary)),
+      el("div", { class: "star-text" }, el("h2", { class: "star-title" }, star.title), star.summary && el("p", { class: "star-summary" }, star.summary), renderKrStrip(star)),
       tally
     ),
     body
   );
+  // Clicking a key result goes to its page; it must not toggle the fold.
+  details.querySelector(".kr-strip")?.addEventListener("click", (event) => event.stopPropagation());
   details.addEventListener("toggle", () => {
     if (!details.dataset.searching) details.dataset.userOpen = details.open ? "1" : "";
   });
@@ -910,6 +944,57 @@ function renderRoadmap() {
   return el("div", { class: "roadmap-page" }, intro, headWrap, scroller);
 }
 
+// Key results page: one block per north star, a table of its key results. Scaffold: measures come later.
+function renderResults() {
+  const stars = atlas.northStars || [];
+  const items = roadmapItems();
+  const fmt = (v, unit) => (v == null ? "" : `${v}${unit ? " " + unit : ""}`);
+  const blocks = stars.map((star, index) => {
+    const krs = keyResultsOf(star);
+    const linked = items.filter((item) => item.northStar === star.id);
+    const counts = { done: 0, wip: 0, planned: 0 };
+    for (const item of linked) counts[item.status || "planned"] += 1;
+    const measured = krs.filter((kr) => kr.progress != null).length;
+    const rows = krs.map((kr) =>
+      el(
+        "tr",
+        { id: kr.id },
+        el("td", { class: "kr-cell-label" }, kr.label, kr.note && el("div", { class: "kr-note" }, kr.note)),
+        el("td", null, fmt(kr.target, kr.unit)),
+        el("td", null, fmt(kr.current, kr.unit)),
+        el("td", { class: "kr-cell-progress" }, kr.progress != null
+          ? el("span", { class: "kr-meter" }, el("span", { class: "kr-bar" }, el("span", { style: `width:${kr.progress}%` })), el("span", { class: "kr-pct" }, `${kr.progress}%`))
+          : el("span", { class: "kr-none" }, "not measured")),
+        el("td", { class: "kr-cell-source" }, kr.source || el("span", { class: "kr-none" }, "to define"))
+      )
+    );
+    return el(
+      "section",
+      { class: "results-star", id: star.id },
+      el(
+        "header",
+        { class: "star-head static" },
+        el("span", { class: "star-index" }, String(index + 1).padStart(2, "0")),
+        el("div", { class: "star-text" }, el("h2", { class: "star-title plain" }, star.title), star.summary && el("p", { class: "star-summary" }, star.summary)),
+        el("ul", { class: "star-tally" },
+          el("li", null, el("strong", null, `${measured}/${krs.length}`), " measured"),
+          el("li", null, el("a", { href: `./?page=roadmap#star-${star.id}` }, el("strong", null, String(linked.length)), " initiatives")),
+          counts.done > 0 && el("li", { class: "done" }, el("strong", null, String(counts.done)), " done"),
+          counts.wip > 0 && el("li", { class: "wip" }, el("strong", null, String(counts.wip)), " in progress"))
+      ),
+      el(
+        "div",
+        { class: "table-scroll" },
+        el("table", { class: "kr-table" },
+          el("thead", null, el("tr", null, el("th", null, "Key result"), el("th", null, "Target"), el("th", null, "Current"), el("th", null, "Progress"), el("th", null, "How it is measured"))),
+          el("tbody", null, rows))
+      )
+    );
+  });
+  const note = el("p", { class: "results-note" }, "Key results are inherited from the Q3 2026 OKR sheet and are a starting point pending review. A result shows a bar only when a number has been set in atlas.yaml; everything else reads \"not measured\" on purpose.");
+  return el("div", { class: "results-page" }, note, blocks);
+}
+
 const pageHeadings = {
   main: { title: "WDK Atlas", subtitle: "", hidden: true },   // the logo carries the brand; keep an h1 for assistive tech
   dev: {
@@ -917,6 +1002,10 @@ const pageHeadings = {
     subtitle: "Docs, examples and tools for building with WDK. Not part of a shipped wallet.",
   },
   roadmap: { title: "", subtitle: "" },
+  results: {
+    title: "Key results",
+    subtitle: "What each north star is measured by. Scaffold: targets, current values and sources are still to be defined.",
+  },
   questions: {
     title: "Questions",
     subtitle: "Open questions for Jonathan and the team. Read from the questions section of NOTES.md.",
@@ -996,6 +1085,12 @@ function renderPoster() {
     return;
   }
 
+  if (page === "results") {
+    poster.replaceChildren(el("div", { class: "atlas" }, renderResults()));
+    poster.hidden = false;
+    return;
+  }
+
   if (page === "questions") {
     revealQuestions();
     renderQuestions()
@@ -1007,8 +1102,8 @@ function renderPoster() {
     return;
   }
 
-  const onPage = atlas.sections.filter((section) => (section.page || "main") === page);
-  if (page === "main") {
+  const onPage = atlas.sections.filter((section) => (section.page || "map") === page);
+  if (page === "map") {
     poster.replaceChildren(el("div", { class: "atlas" }, renderCrossSection(onPage)));
     poster.hidden = false;
     return;
