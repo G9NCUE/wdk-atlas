@@ -1,11 +1,13 @@
-# WDK Atlas — source of truth.
-# Official modules: every repo in wdk-repos.txt.
+# WDK Atlas — source of truth for the map.
+# Official modules: the tetherto repos. bin/check-atlas.mjs (weekly GitHub Action, see .github/workflows)
+# compares this file with GitHub and npm and keeps the "Atlas drift" issue up to date; `audit:` below tunes it.
 # Ecosystem modules: documented outside-org packages from docs.wallet.tether.io.
 #
 # The main page draws the sections as a cross-section, one band per section, with the rail step
 # from `path`. A section with `matrix: [lane ids]` draws those lanes as a chain × capability grid
 # (columns from `chains` below, rows from the lanes' `groups`, a module's row from its `kind`).
-# relations: requires / implements between modules; selecting a module fades everything unrelated.
+# relations: `requires` = a package.json dependency (checked by bin/check-atlas.mjs); `under` = drawn as a
+#   column under that box; `on` = a protocol runs on that wallet's account; `implements` = fills that form.
 # chains: chain labels (EVM, BTC, TON, …); they place a module in the columns of the engine grid.
 # short: optional shorter title for the grid, where the row and column already say the rest.
 # roadmap: one list at the root (below). Each item names the modules it touches; the chips
@@ -16,6 +18,26 @@
 # progress: 0–100 fill-wash on WIP packages and WIP roadmap chips.
 
 mission: Open-source, self-custodial wallet infrastructure for anyone.
+
+# Settings for bin/check-atlas.mjs.
+audit:
+  org: tetherto
+  repoPattern: "^(wdk-|pear-wrk-wdk$|create-wdk-module$)"
+  # Org repos that are not modules; not reported as missing from the atlas.
+  ignoreRepos:
+    - wdk-docs
+    - wdk-docs-migration
+    - wdk-site
+    - wdk-dev-website
+    - wdk-dev-website-app-node
+    - wdk-devops
+    - wdk-devops-open
+    - wdk-ansible-playbooks
+    - wdk-module-templates
+  # Dependencies never drawn as `requires`. Foundation modules are implicit already.
+  implicitRequires: []
+  # Backend workers, apps and infrastructure: never modules, never reported.
+  ignorePattern: "(-wrk$|-wrk-|-app-node$|-e2e-tests$|^wdk-faucet-|^wdk-indexer-docs$|^wdk-indexer-webhook)"
 
 # North stars: the three destinations every roadmap initiative serves (roadmap items carry `northStar: <id>`).
 # `objectives` are the measurable key results behind each star; kept here, not rendered on the page.
@@ -155,7 +177,7 @@ modules:
     band: kernel
     status: shipped
     publisher: tetherto
-    summary: Orchestrator. registerWallet / registerProtocol.
+    summary: 'The conductor. One object your app talks to: it creates each wallet, hands every protocol the account it works on, and applies transaction rules. Everything else in the kit plugs into it.'
     notes:
       - Phase 1 of the policy engine already ships inside this package (src/policy, since 1.0.0-beta.16). The wdk-policies repo is an empty README
     repo: https://github.com/tetherto/wdk
@@ -166,7 +188,7 @@ modules:
     section: foundation
     status: shipped
     publisher: tetherto
-    summary: Shared wallet interfaces that chain modules implement.
+    summary: 'The rulebook every wallet and protocol package follows. It fixes the shape of a wallet, an account and each kind of protocol, so all modules plug in the same way. Apps never use it directly.'
     notes:
       - Protocol forms in src/protocols (checked 2026-09-02): bridge, fiat, lending, sda, swap, swidge
       - ISigner, the signer form. wdk-wallet-evm ships seed and private-key signers; btc has none yet
@@ -179,7 +201,7 @@ modules:
     band: kernel
     status: planned
     publisher: tetherto
-    summary: Transaction policy engine for wallet and protocol writes.
+    summary: 'A home for rules about transactions: limits, allow-lists, checks before a transfer leaves. The first version of the rules engine lives inside the conductor today; shared rule libraries would go here.'
     repo: https://github.com/tetherto/wdk-policies
 
   - id: wdk-wallet-btc
@@ -191,8 +213,10 @@ modules:
     status: shipped
     publisher: tetherto
     chains: [BTC]
-    summary: Bitcoin SegWit wallet.
+    summary: 'Creates and manages Bitcoin wallets from a seed phrase: addresses, balances, sending and signing. The base that every other Bitcoin-related module builds on.'
     repo: https://github.com/tetherto/wdk-wallet-btc
+    relations:
+      - { type: requires, target: wdk-failover-provider }
 
   - id: wdk-wallet-evm
     name: wdk-wallet-evm
@@ -203,7 +227,7 @@ modules:
     status: shipped
     publisher: tetherto
     chains: [EVM]
-    summary: Ethereum and EVM-compatible chains.
+    summary: 'Creates and manages wallets for Ethereum and every chain that works like it, from a seed phrase: addresses, balances, sending and signing.'
     repo: https://github.com/tetherto/wdk-wallet-evm
     relations:
       - { type: requires, target: wdk-failover-provider }
@@ -218,10 +242,12 @@ modules:
     status: shipped
     publisher: tetherto
     chains: [EVM]
-    summary: ERC-4337 account abstraction for EVM chains.
+    summary: 'Ethereum wallets as smart accounts: the account is a contract, so fees can be sponsored, actions batched and rules enforced on chain. Same seed phrase and commands as the plain Ethereum wallet.'
     repo: https://github.com/tetherto/wdk-wallet-evm-erc-4337
     relations:
+      - { type: under, target: wdk-wallet-evm }
       - { type: requires, target: wdk-wallet-evm }
+      - { type: requires, target: wdk-failover-provider }
 
   - id: wdk-wallet-evm-7702-gasless
     name: wdk-wallet-evm-7702-gasless
@@ -233,9 +259,10 @@ modules:
     status: shipped
     publisher: tetherto
     chains: [EVM]
-    summary: EIP-7702 gasless transactions on EVM.
+    summary: 'Ethereum wallets where the user never needs the chain''s own coin for fees: a sponsor pays them, in USD₮. One transfer call hides all the machinery.'
     repo: https://github.com/tetherto/wdk-wallet-evm-7702-gasless
     relations:
+      - { type: under, target: wdk-wallet-evm }
       - { type: requires, target: wdk-wallet-evm }
       - { type: requires, target: wdk-failover-provider }
 
@@ -248,8 +275,10 @@ modules:
     status: shipped
     publisher: tetherto
     chains: [SOL]
-    summary: Solana wallet module.
+    summary: 'Creates and manages Solana wallets from a seed phrase: addresses, balances, sending and signing.'
     repo: https://github.com/tetherto/wdk-wallet-solana
+    relations:
+      - { type: requires, target: wdk-failover-provider }
 
   - id: wdk-wallet-solana-gasless
     name: wdk-wallet-solana-gasless
@@ -260,10 +289,12 @@ modules:
     status: shipped
     publisher: tetherto
     chains: [SOL]
-    summary: Gasless Solana via a Kora-compatible paymaster.
+    summary: 'Solana wallets where fees are sponsored, so a user holding only USD₮ can still send. Same commands as the plain Solana wallet.'
     repo: https://github.com/tetherto/wdk-wallet-solana-gasless
     relations:
+      - { type: under, target: wdk-wallet-solana }
       - { type: requires, target: wdk-wallet-solana }
+      - { type: requires, target: wdk-failover-provider }
 
   - id: wdk-wallet-ton
     name: wdk-wallet-ton
@@ -274,8 +305,10 @@ modules:
     status: shipped
     publisher: tetherto
     chains: [TON]
-    summary: TON wallet module.
+    summary: 'Creates and manages TON wallets from a seed phrase: addresses, balances, sending and signing.'
     repo: https://github.com/tetherto/wdk-wallet-ton
+    relations:
+      - { type: requires, target: wdk-failover-provider }
 
   - id: wdk-wallet-ton-gasless
     name: wdk-wallet-ton-gasless
@@ -286,10 +319,12 @@ modules:
     status: shipped
     publisher: tetherto
     chains: [TON]
-    summary: Gasless transactions on TON.
+    summary: 'TON wallets where token transfers are sponsored, so a user holding only USD₮ can still send.'
     repo: https://github.com/tetherto/wdk-wallet-ton-gasless
     relations:
+      - { type: under, target: wdk-wallet-ton }
       - { type: requires, target: wdk-wallet-ton }
+      - { type: requires, target: wdk-failover-provider }
 
   - id: wdk-wallet-tron
     name: wdk-wallet-tron
@@ -300,8 +335,10 @@ modules:
     status: shipped
     publisher: tetherto
     chains: [TRON]
-    summary: TRON wallet module.
+    summary: 'Creates and manages TRON wallets from a seed phrase: addresses, balances, sending and signing.'
     repo: https://github.com/tetherto/wdk-wallet-tron
+    relations:
+      - { type: requires, target: wdk-failover-provider }
 
   - id: wdk-wallet-tron-gasfree
     name: wdk-wallet-tron-gasfree
@@ -312,9 +349,10 @@ modules:
     status: shipped
     publisher: tetherto
     chains: [TRON]
-    summary: Gas-free transactions on TRON.
+    summary: 'TRON wallets where USD₮ transfers cost no TRX: a service provider covers the fee. Same commands as the plain TRON wallet.'
     repo: https://github.com/tetherto/wdk-wallet-tron-gasfree
     relations:
+      - { type: under, target: wdk-wallet-tron }
       - { type: requires, target: wdk-wallet-tron }
 
   - id: wdk-wallet-spark
@@ -327,10 +365,10 @@ modules:
     status: shipped
     publisher: tetherto
     chains: [SPARK]
-    summary: Spark / Lightning Bitcoin L2 wallet.
+    summary: 'Wallets on Spark, a Bitcoin layer for instant, cheap payments, with Lightning built in. Same seed phrase and commands as the Bitcoin wallet.'
     repo: https://github.com/tetherto/wdk-wallet-spark
     relations:
-      - { type: requires, target: wdk-wallet-btc }
+      - { type: under, target: wdk-wallet-btc }
 
   - id: wdk-wallet-aptos
     name: wdk-wallet-aptos
@@ -341,8 +379,10 @@ modules:
     status: shipped
     publisher: tetherto
     chains: [APTOS]
-    summary: Aptos wallet module.
+    summary: 'Creates and manages Aptos wallets from a seed phrase: addresses, balances, sending and signing. Contributed by an external team and merged in Q3.'
     repo: https://github.com/tetherto/wdk-wallet-aptos
+    relations:
+      - { type: requires, target: wdk-failover-provider }
 
   - id: wdk-wallet-rgb
     name: wdk-wallet-rgb
@@ -354,10 +394,12 @@ modules:
     status: shipped
     publisher: UTEXO
     chains: [BTC]
-    summary: RGB wallet for on-chain Bitcoin assets.
+    summary: 'Bitcoin wallets that can also hold and move RGB assets, tokens issued on Bitcoin. Built by UTEXO on the kit''s wallet rulebook; keys stay inside the kit.'
     notes:
       - Not maintained by Tether
     repo: https://github.com/UTEXO-Protocol/wdk-wallet-rgb
+    relations:
+      - { type: under, target: wdk-wallet-btc }
 
   - id: wdk-rgb-lightning
     name: wdk-rgb-lightning
@@ -368,7 +410,7 @@ modules:
     status: shipped
     publisher: UTEXO
     chains: [BTC]
-    summary: RGB-over-Lightning wallet (LDK + rgb-lib).
+    summary: 'A full Lightning node inside the kit that pays and receives both Bitcoin and RGB assets over Lightning, with channels and invoices. Built by UTEXO; the seed never leaves the kit.'
     notes:
       - Not maintained by Tether
       - Separate identity from wdk-wallet-rgb
@@ -383,7 +425,7 @@ modules:
     status: shipped
     publisher: SwapDK
     chains: [COSMOS]
-    summary: Cosmos SDK wallet.
+    summary: 'Wallets for Cosmos chains, built by SwapDK, who extend the kit''s wallets with what their bridges need. One package of a small family.'
     notes:
       - Not maintained by Tether
     repo: https://github.com/Swap-DK/wdk-wallets-swapdk
@@ -398,12 +440,12 @@ modules:
     status: shipped
     publisher: Arkade
     chains: [BTC]
-    summary: Arkade / Ark wallet module.
+    summary: 'Bitcoin wallets on Ark, a layer for fast, low-cost payments, with optional Lightning. Built by Arkade on the kit''s wallet rulebook.'
     notes:
       - Not maintained by Tether
     repo: https://github.com/arkade-os/arkade-wdk
     relations:
-      - { type: requires, target: wdk-wallet-btc }
+      - { type: under, target: wdk-wallet-btc }
 
   - id: wdk-protocol-swap-velora-evm
     name: wdk-protocol-swap-velora-evm
@@ -414,9 +456,11 @@ modules:
     status: shipped
     publisher: tetherto
     chains: [EVM]
-    summary: EVM swaps via Velora.
+    summary: 'Swap one token for another on the same Ethereum-like chain, with Velora finding the best price. Works with plain and smart-account wallets.'
     repo: https://github.com/tetherto/wdk-protocol-swap-velora-evm
     relations:
+      - { type: on, target: wdk-wallet-evm }
+      - { type: requires, target: wdk-wallet-evm-erc-4337 }
       - { type: requires, target: wdk-wallet-evm }
 
   - id: wdk-protocol-bridge-usdt0-evm
@@ -429,9 +473,11 @@ modules:
     status: shipped
     publisher: tetherto
     chains: [EVM]
-    summary: USDT0 bridging from EVM source chains.
+    summary: 'Move USD₮0 from one Ethereum-like chain to another. Works with plain and smart-account wallets.'
     repo: https://github.com/tetherto/wdk-protocol-bridge-usdt0-evm
     relations:
+      - { type: on, target: wdk-wallet-evm }
+      - { type: requires, target: wdk-wallet-evm-erc-4337 }
       - { type: requires, target: wdk-wallet-evm }
 
   - id: wdk-protocol-swidge-orchestra
@@ -443,13 +489,13 @@ modules:
     status: shipped
     publisher: Flashnet
     chains: [BTC, SPARK]
-    summary: BTC and stablecoin routes via Flashnet Orchestra.
+    summary: 'Move between Bitcoin, on chain or on Spark, and USD₮ on ten other chains through Flashnet''s Orchestra routes, Lightning included. The kit signs; Orchestra routes and settles.'
     notes:
       - Not maintained by Tether
     repo: https://github.com/flashnetxyz/wdk-protocol-swidge-orchestra
     relations:
-      - { type: requires, target: wdk-wallet-btc }
-      - { type: requires, target: wdk-wallet-spark }
+      - { type: on, target: wdk-wallet-btc }
+      - { type: on, target: wdk-wallet-spark }
 
   - id: wdk-protocol-swidge-rhinofi
     name: wdk-protocol-swidge-rhinofi
@@ -460,11 +506,14 @@ modules:
     status: shipped
     publisher: Rhino.fi
     chains: [EVM, TRON]
-    summary: Cross-chain routes via Rhino.fi.
+    summary: 'Swap and move tokens across chains through Rhino.fi.'
     notes:
       - Not maintained by Tether
     repo: https://github.com/rhinofi/wdk-protocol-swidge-rhinofi
     relations:
+      - { type: on, target: wdk-wallet-evm }
+      - { type: requires, target: wdk-wallet-evm-erc-4337 }
+      - { type: requires, target: wdk-wallet-tron }
       - { type: requires, target: wdk-wallet-evm }
 
   - id: wdk-protocol-swidge-symbiosis
@@ -476,12 +525,12 @@ modules:
     status: shipped
     publisher: Symbiosis
     chains: [EVM, BTC, TON, TRON, SOL]
-    summary: Same-chain and cross-chain routes via Symbiosis.
+    summary: 'Swap and move tokens between fifty-plus chains, including Ethereum-like chains, TON, Bitcoin, TRON and Solana, through Symbiosis.'
     notes:
       - Not maintained by Tether
     repo: https://github.com/symbiosis-finance/wdk-protocol-swidge-symbiosis
     relations:
-      - { type: requires, target: wdk-wallet-evm }
+      - { type: on, target: wdk-wallet-evm }
 
   - id: wdk-protocol-swidge-lifi
     name: wdk-protocol-swidge-lifi
@@ -492,11 +541,13 @@ modules:
     status: shipped
     publisher: LI.FI
     chains: [EVM]
-    summary: Swap, bridge, and combined routes via LI.FI.
+    summary: 'Swap and move tokens across chains through LI.FI. One module covers every route LI.FI supports.'
     notes:
       - Not maintained by Tether
     repo: https://github.com/lifinance/wdk-lifi-swidge-protocol
     relations:
+      - { type: on, target: wdk-wallet-evm }
+      - { type: requires, target: wdk-wallet-evm-erc-4337 }
       - { type: requires, target: wdk-wallet-evm }
 
   - id: wdk-protocol-swidge-0x
@@ -508,12 +559,12 @@ modules:
     status: shipped
     publisher: 0x
     chains: [EVM]
-    summary: Same-chain EVM swaps via 0x.
+    summary: 'Swap tokens on the same Ethereum-like chain through 0x''s pooled liquidity, with approvals and status tracking handled for you. No cross-chain moves yet.'
     notes:
       - Not maintained by Tether
     repo: https://github.com/0xProject/wdk-protocol-swidge-0x
     relations:
-      - { type: requires, target: wdk-wallet-evm }
+      - { type: on, target: wdk-wallet-evm }
 
   - id: wdk-protocol-lending-aave-evm
     name: wdk-protocol-lending-aave-evm
@@ -524,9 +575,11 @@ modules:
     status: shipped
     publisher: tetherto
     chains: [EVM]
-    summary: Aave lending on EVM.
+    summary: 'Lend tokens to earn interest, or borrow against them, on Aave: deposit, withdraw, borrow, repay, read your position. Plain and smart-account wallets.'
     repo: https://github.com/tetherto/wdk-protocol-lending-aave-evm
     relations:
+      - { type: on, target: wdk-wallet-evm }
+      - { type: requires, target: wdk-wallet-evm-erc-4337 }
       - { type: requires, target: wdk-wallet-evm }
 
   - id: wdk-protocol-fiat-moonpay
@@ -537,7 +590,7 @@ modules:
     kind: fiat
     status: shipped
     publisher: tetherto
-    summary: Fiat on-ramp via MoonPay.
+    summary: 'Let users buy crypto with a card or bank, or sell it back, through MoonPay''s widget. Builds the widget links and quotes; works in apps and on servers.'
     repo: https://github.com/tetherto/wdk-protocol-fiat-moonpay
 
   - id: wdk-protocol-fiat-transak
@@ -548,7 +601,7 @@ modules:
     kind: fiat
     status: shipped
     publisher: Transak
-    summary: Fiat on-ramp and off-ramp via Transak.
+    summary: 'Let users buy crypto with a card or bank, or sell it back, through Transak. Builds the widget links and quotes; works in apps and on servers.'
     notes:
       - Not maintained by Tether
     repo: https://github.com/Transak/wdk-protocol-fiat-transak
@@ -563,9 +616,10 @@ modules:
     publisher: tetherto
     chains: [EVM]
     progress: 80
-    summary: Safe (Gnosis) multisig on EVM.
+    summary: 'Shared wallets on Ethereum-like chains where several people must approve each transaction, built on Safe as a smart account.'
     repo: https://github.com/tetherto/wdk-protocol-multisig-safe
     relations:
+      - { type: on, target: wdk-wallet-evm }
       - { type: requires, target: wdk-wallet-evm }
 
   - id: wdk-protocol-multisig-squads
@@ -578,10 +632,10 @@ modules:
     publisher: tetherto
     chains: [SOL]
     progress: 80
-    summary: Squads multisig on Solana.
+    summary: 'Shared wallets on Solana where several people must approve each transaction, built on Squads. In progress.'
     repo: https://github.com/tetherto/wdk-protocol-multisig-squads
     relations:
-      - { type: requires, target: wdk-wallet-solana }
+      - { type: on, target: wdk-wallet-solana }
 
   - id: wdk-protocol-multisig-psbt
     name: wdk-protocol-multisig-psbt
@@ -593,9 +647,9 @@ modules:
     status: planned
     publisher: tetherto
     chains: [BTC]
-    summary: PSBT multisig on Bitcoin.
+    summary: 'Shared wallets on Bitcoin where several people must sign each transaction, passing a partly signed transaction between them. Planned.'
     relations:
-      - { type: requires, target: wdk-wallet-btc }
+      - { type: on, target: wdk-wallet-btc }
 
   - id: wdk-protocol-sda-coming-soon
     name: implementations coming soon
@@ -618,9 +672,11 @@ modules:
     status: shipped
     publisher: Morpho
     chains: [EVM]
-    summary: Morpho lending module.
+    summary: 'Lend tokens to earn interest, or borrow, on Morpho''s vaults and markets. Same shape as the Aave module.'
     repo: https://github.com/morpho-org/wdk-protocol-lending-morpho-evm
     relations:
+      - { type: on, target: wdk-wallet-evm }
+      - { type: requires, target: wdk-wallet-evm-erc-4337 }
       - { type: requires, target: wdk-wallet-evm }
 
   - id: wdk-pricing-provider
@@ -630,7 +686,7 @@ modules:
     band: services
     status: shipped
     publisher: tetherto
-    summary: Interface for fiat pricing providers.
+    summary: 'The template for price lookups: plug in a price source and it adds caching and one common way to ask for current and past prices. Used by apps and the UI kit.'
     repo: https://github.com/tetherto/wdk-pricing-provider
     relations:
       - { type: requires, target: wdk-failover-provider }
@@ -642,10 +698,12 @@ modules:
     band: services
     status: shipped
     publisher: tetherto
-    summary: Bitfinex HTTP pricing provider.
+    summary: 'Current and past prices from Bitfinex, plugged into the price template.'
     repo: https://github.com/tetherto/wdk-pricing-bitfinex-http
     relations:
+      - { type: under, target: wdk-pricing-provider }
       - { type: implements, target: wdk-pricing-provider }
+      - { type: requires, target: wdk-pricing-provider }
 
   - id: wdk-pricing-coingecko-http
     name: wdk-pricing-coingecko-http
@@ -654,10 +712,12 @@ modules:
     band: services
     status: shipped
     publisher: tetherto
-    summary: CoinGecko HTTP pricing provider.
+    summary: 'Current and past prices from CoinGecko, plugged into the price template. The fallback when Bitfinex is unavailable.'
     repo: https://github.com/tetherto/wdk-pricing-coingecko-http
     relations:
+      - { type: under, target: wdk-pricing-provider }
       - { type: implements, target: wdk-pricing-provider }
+      - { type: requires, target: wdk-pricing-provider }
 
   - id: wdk-indexer-http
     name: wdk-indexer-http
@@ -666,7 +726,7 @@ modules:
     band: services
     status: shipped
     publisher: tetherto
-    summary: HTTP indexer for balances and history.
+    summary: 'Asks Tether''s indexer for balances and token transfer history across many chains, so an app does not have to read each chain itself.'
     repo: https://github.com/tetherto/wdk-indexer-http
 
 
@@ -678,7 +738,7 @@ modules:
     band: tools
     status: shipped
     publisher: tetherto
-    summary: Bundler for WDK worklets.
+    summary: 'A command-line tool that packs the wallet and protocol packages you choose into one file the worklet can run. That file is the bundle the phone cores load.'
     repo: https://github.com/tetherto/wdk-worklet-bundler
 
   - id: pear-wrk-wdk
@@ -687,7 +747,7 @@ modules:
     section: core
     status: shipped
     publisher: tetherto
-    summary: Pear / Bare runtime worker for WDK. The recommended host on phones; the same packages also run in plain Node.
+    summary: 'The room the kit runs in on a phone: a separate thread that loads the bundle, keeps the seed inside, and answers the app over a small message channel. The same packages also run in plain Node.'
     repo: https://github.com/tetherto/pear-wrk-wdk
 
   - id: wdk-react-native-core
@@ -697,8 +757,11 @@ modules:
     band: native
     status: shipped
     publisher: tetherto
-    summary: React Native core bindings for WDK.
+    summary: 'The React Native side of the kit: hooks and helpers that start the worklet, create wallets, fetch balances, and pass every request across to it.'
     repo: https://github.com/tetherto/wdk-react-native-core
+    relations:
+      - { type: requires, target: pear-wrk-wdk }
+      - { type: requires, target: wdk-react-native-secure-storage }
 
   - id: wdk-react-native-secure-storage
     name: wdk-react-native-secure-storage
@@ -707,10 +770,10 @@ modules:
     band: native
     status: shipped
     publisher: tetherto
-    summary: Secure storage for React Native.
+    summary: 'Keeps encrypted seeds and keys in the phone''s own secure store, behind the platform keychain.'
     repo: https://github.com/tetherto/wdk-react-native-secure-storage
     relations:
-      - { type: requires, target: wdk-react-native-core }
+      - { type: under, target: wdk-react-native-core }
 
   - id: wdk-uikit-react-native
     name: wdk-uikit-react-native
@@ -719,10 +782,10 @@ modules:
     band: native
     status: shipped
     publisher: tetherto
-    summary: React Native UI kit.
+    summary: 'Ready-made screens and components for wallet apps in React Native: balances, send, receive and more. Stateless, so any app can use them.'
     repo: https://github.com/tetherto/wdk-uikit-react-native
     relations:
-      - { type: requires, target: wdk-react-native-core }
+      - { type: under, target: wdk-react-native-core }
 
   - id: wdk-core-kotlin
     name: wdk-core-kotlin
@@ -731,7 +794,7 @@ modules:
     band: native
     status: shipped
     publisher: tetherto
-    summary: Kotlin core for Android / JVM.
+    summary: 'The Android side of the kit: a Kotlin library that starts the worklet and exposes wallet operations to an Android app.'
     repo: https://github.com/tetherto/wdk-core-kotlin
 
   - id: wdk-core-swift
@@ -741,7 +804,7 @@ modules:
     band: native
     status: shipped
     publisher: tetherto
-    summary: Swift core for Apple platforms.
+    summary: 'The iOS and macOS side of the kit: a Swift package that starts the worklet and exposes wallet operations to an Apple app. Private today.'
     repo: https://github.com/tetherto/wdk-core-swift
 
 
@@ -753,7 +816,7 @@ modules:
     band: apps
     status: shipped
     publisher: tetherto
-    summary: React Native starter wallet app.
+    summary: 'A complete reference wallet in React Native, built to teach how to integrate the kit end to end, every decision documented. Alpha, not for real funds.'
     repo: https://github.com/tetherto/wdk-starter-react-native
     relations:
       - { type: requires, target: wdk-react-native-core }
@@ -766,7 +829,7 @@ modules:
     band: apps
     status: shipped
     publisher: tetherto
-    summary: Kotlin starter app.
+    summary: 'A sample Android wallet showing how to use the Kotlin core in a modern Android app, on the Ethereum and Bitcoin test networks.'
     repo: https://github.com/tetherto/wdk-starter-kotlin
     relations:
       - { type: requires, target: wdk-core-kotlin }
@@ -778,20 +841,25 @@ modules:
     band: apps
     status: shipped
     publisher: tetherto
-    summary: Swift starter app.
+    summary: 'A sample iOS wallet showing how to use the Swift core. Private today.'
     repo: https://github.com/tetherto/wdk-starter-swift
     relations:
       - { type: requires, target: wdk-core-swift }
 
   - id: wdk-doctor-app
-    name: WDK Doctor App
-    title: Setup checker
+    name: wdk-doctor-app
+    title: Worklet console
     section: dev
     band: tools
     status: wip
     publisher: tetherto
-    progress: 20
-    summary: Diagnostic app for inspecting and troubleshooting a WDK setup.
+    summary: Plug any bundle of packages into the worklet and poke at whatever is in it. Worklet controls plus JSON consoles for callMethod and callModule, so a package can be dogfooded and debugged without a throwaway app.
+    notes:
+      - Modelled on Holepunch's bare-mobile-doctor, with one difference that matters, one worklet and many packages in a single bundle
+      - Not the showcase wallet. The React Native starter is a useful Expo host, but its screens are hardcoded to one bundle and the worklet lifecycle is hidden
+      - Intended flow, clone, install, fill wdk.config.js (what to pack) and a runtime JSON keyed by the same names (RPC URLs, chain ids, storagePath), run wdk-worklet-bundler generate, run on a simulator, init a throwaway or imported seed, iterate. Native addons need a native rebuild
+      - Ships with a default fixture bundle, one wallet package, so clone, install, generate, run already does something
+      - Repo created 2026-08-24 and still an empty README; the work is in progress elsewhere
     repo: https://github.com/tetherto/wdk-doctor-app
 
   - id: wdk-examples
@@ -801,7 +869,7 @@ modules:
     band: reference
     status: shipped
     publisher: tetherto
-    summary: Example apps and snippets.
+    summary: 'Small runnable examples, one folder per package or integration.'
     repo: https://github.com/tetherto/wdk-examples
 
   - id: wdk-playground
@@ -811,7 +879,7 @@ modules:
     band: reference
     status: shipped
     publisher: tetherto
-    summary: Interactive playground.
+    summary: 'An app to try every kit module interactively with one shared configuration. Private today.'
     repo: https://github.com/tetherto/wdk-playground
 
 
@@ -823,7 +891,7 @@ modules:
     band: tools
     status: shipped
     publisher: tetherto
-    summary: Shared utilities used across WDK packages.
+    summary: 'Small shared helpers: checking addresses, reading payment links, protecting a seed with a passphrase, splitting a seed into shares.'
     repo: https://github.com/tetherto/wdk-utils
 
   - id: wdk-asset-registry
@@ -832,7 +900,7 @@ modules:
     section: foundation
     status: shipped
     publisher: tetherto
-    summary: Shared asset schema plus a bundled list of common tokens. Pure in-memory, no RPC. Meant as the one asset identity model for every module; today only the CLI uses it.
+    summary: 'A shared list of known tokens, with their names, decimals and addresses on each chain, and one common way to describe an asset. No network calls. Meant for every module; today only the command line uses it.'
     notes:
       - Runtime-agnostic. Plain ESM with zod and fast-equals; runs in Node, the worklet or the app equally
       - Only consumer in the org is wdk-cli (checked 2026-09-02). No wallet, protocol, starter or worklet imports it
@@ -845,7 +913,7 @@ modules:
     band: internals
     status: shipped
     publisher: tetherto
-    summary: Tries the next network connection when one fails. Used by the EVM wallets inside the worklet, and by the price feed in the app.
+    summary: 'When a network connection or a price source stops answering, this switches to the next one on the list. Used by the wallets inside the worklet and by the price feed in the app.'
     repo: https://github.com/tetherto/wdk-failover-provider
 
   - id: wdk-secret-manager
@@ -880,7 +948,7 @@ modules:
     band: tools
     status: shipped
     publisher: tetherto
-    summary: Command-line interface for WDK.
+    summary: 'A wallet you drive from the command line, made for AI agents such as Claude or ChatGPT but usable by people. Sends, swaps and checks balances across chains.'
     repo: https://github.com/tetherto/wdk-cli
 
   - id: wdk-mcp-toolkit
@@ -890,7 +958,7 @@ modules:
     band: tools
     status: shipped
     publisher: tetherto
-    summary: MCP tools for agents.
+    summary: 'Lets AI agents use wallets through the Model Context Protocol, the standard way agents call tools. Build a server, and an agent can act across chains.'
     repo: https://github.com/tetherto/wdk-mcp-toolkit
 
   - id: wdk-agent-skills
@@ -900,7 +968,7 @@ modules:
     band: tools
     status: shipped
     publisher: tetherto
-    summary: Agent skills for working with WDK.
+    summary: 'Ready-made instructions that teach AI coding agents how to use the kit''s packages correctly.'
     repo: https://github.com/tetherto/wdk-agent-skills
 
   - id: create-wdk-module
@@ -910,7 +978,7 @@ modules:
     band: tools
     status: shipped
     publisher: tetherto
-    summary: Scaffold a new WDK module.
+    summary: 'One command that creates the skeleton of a new module, tests included, so contributors start from a working shape.'
     repo: https://github.com/tetherto/create-wdk-module
 
   - id: wdk-backup-cloud
@@ -920,7 +988,7 @@ modules:
     band: services
     status: shipped
     publisher: tetherto
-    summary: Cloud backup.
+    summary: 'Backs up an encrypted copy of the wallet''s master key to the user''s own Google Drive or iCloud, so they can recover on a new phone.'
     repo: https://github.com/tetherto/wdk-backup-cloud
 
   - id: wdk-p2p-address-book
@@ -932,6 +1000,8 @@ modules:
     publisher: tetherto
     summary: Contacts kept in sync between your devices over the peer-to-peer network, no server. Runs as a module inside the worklet; the app only sees its API.
     repo: https://github.com/tetherto/wdk-p2p-address-book
+    relations:
+      - { type: requires, target: wdk-utils }
 
 roadmap:
   - id: signers
@@ -1020,6 +1090,7 @@ roadmap:
   - id: multisig-safe
     northStar: kit
     label: Safe multisig on EVM
+    summary: 'Shared wallets on Ethereum-like chains where several people approve each transaction, built on Safe.'
     quarter: 2026Q3
     status: wip
     priority: P1
@@ -1027,6 +1098,7 @@ roadmap:
   - id: multisig-squads
     northStar: kit
     label: Squads multisig on Solana
+    summary: 'Shared wallets on Solana where several people approve each transaction, built on Squads.'
     quarter: 2026Q3
     status: wip
     priority: P1
@@ -1034,6 +1106,7 @@ roadmap:
   - id: multisig-psbt
     northStar: kit
     label: PSBT multisig on Bitcoin
+    summary: 'Shared wallets on Bitcoin where several people sign each transaction.'
     quarter: backlog
     status: planned
     priority: P2
@@ -1048,8 +1121,8 @@ roadmap:
     modules: [wdk-utils]
   - id: doctor-wallet
     northStar: dx
-    label: WDK doctor wallet
-    summary: Bundle any set of packages, build the showcase app around it, drive the worklet lifecycle by hand. Dogfooding for core and contributor modules.
+    label: WDK doctor app, a worklet console
+    summary: Plug a bundle into the worklet and poke at whatever is in it, so the team and contributor teams can dogfood and debug any package without a throwaway app per package.
     quarter: 2026Q3
     status: wip
     priority: P1
@@ -1097,6 +1170,7 @@ roadmap:
   - id: unified-usdt-balance
     northStar: kit
     label: Unified USDT balance
+    summary: 'Scope undefined: a title in the previous roadmap, no description anywhere. See the open questions.'
     quarter: backlog
     status: planned
     priority: P2
@@ -1135,6 +1209,7 @@ roadmap:
   - id: eip-7702
     northStar: kit
     label: EIP-7702 support and gasless module
+    summary: 'Ethereum wallets that pay fees in USD₮ through a sponsor, so users never need ETH. Support in the plain wallet plus a dedicated module.'
     quarter: 2026Q1
     status: done
     modules: [wdk-wallet-evm, wdk-wallet-evm-7702-gasless]
@@ -1159,6 +1234,7 @@ roadmap:
   - id: module-scaffold-cli
     northStar: dx
     label: CLI to scaffold a module
+    summary: 'One command that creates the skeleton of a new module, tests included, so contributors start from a working shape.'
     quarter: 2026Q1
     status: done
     modules: [create-wdk-module]
@@ -1172,6 +1248,7 @@ roadmap:
   - id: openclaw-mcp
     northStar: dx
     label: OpenClaw support in the MCP toolkit
+    summary: 'The agent toolkit can now be driven from OpenClaw, one more agent host that can hold a wallet.'
     quarter: 2026Q1
     status: done
     modules: [wdk-mcp-toolkit]
@@ -1197,12 +1274,14 @@ roadmap:
   - id: abstractionkit
     northStar: kit
     label: EVM modules moved from RelayKit to AbstractionKit
+    summary: 'Smart-account wallets switched their underlying library from RelayKit to AbstractionKit, removing a dependency on a single vendor.'
     quarter: 2026Q2
     status: done
     modules: [wdk-wallet-evm-erc-4337]
   - id: failover
     northStar: kit
     label: Failover provider for RPCs and pricing
+    summary: 'When a chain node or price source stops answering, the kit switches to the next one on its own instead of failing.'
     quarter: 2026Q2
     status: done
     modules: [wdk-failover-provider]
@@ -1216,6 +1295,7 @@ roadmap:
   - id: lightning-decoding
     northStar: kit
     label: BOLT11 and LNURL decoding
+    summary: 'The kit can read Lightning invoices and LNURL links, so apps can show what a payment request asks for before paying.'
     quarter: 2026Q2
     status: done
     modules: [wdk-utils]
@@ -1229,6 +1309,7 @@ roadmap:
   - id: solana-gasless
     northStar: kit
     label: Solana gasless module
+    summary: 'Solana wallets where fees are sponsored, so a user holding only USD₮ can still send.'
     quarter: 2026Q2
     status: done
     modules: [wdk-wallet-solana-gasless]
@@ -1242,6 +1323,7 @@ roadmap:
   - id: social-recovery
     northStar: kit
     label: Social login and recovery
+    summary: 'Scope undefined: in progress in the previous roadmap, with no description anywhere. See the open questions.'
     quarter: 2026Q2
     status: wip
     priority: P1
@@ -1267,11 +1349,13 @@ roadmap:
   - id: walletconnect-examples
     northStar: dx
     label: WalletConnect examples
+    summary: 'Examples showing how a wallet built on the kit connects to websites and apps through WalletConnect.'
     quarter: 2026Q2
     status: done
   - id: langchain
     northStar: ecosystem
     label: LangChain support
+    summary: 'The kit''s wallets can be used as tools inside LangChain, a common framework for building AI agents.'
     quarter: 2026Q2
     status: done
   - id: contributor-reviews
@@ -1290,12 +1374,14 @@ roadmap:
   - id: rn-starter
     northStar: dx
     label: React Native starter wallet
+    summary: 'A complete reference wallet in React Native, built to teach how to integrate the kit end to end.'
     quarter: 2026Q3
     status: done
     modules: [wdk-starter-react-native]
   - id: aptos-module
     northStar: ecosystem
     label: Aptos wallet, contributed and merged
+    summary: 'A wallet package for the Aptos chain, contributed by an external team, reviewed and merged.'
     quarter: 2026Q3
     status: done
     modules: [wdk-wallet-aptos]
@@ -1325,6 +1411,7 @@ roadmap:
   - id: browser-extension
     northStar: kit
     label: Browser extension
+    summary: 'Scope undefined: a title in the previous roadmap, no description anywhere. See the open questions.'
     quarter: 2026Q3
     status: planned
     priority: P1

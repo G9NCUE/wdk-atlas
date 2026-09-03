@@ -112,15 +112,19 @@ atlas fixes (RGB relation, wdk-wallet interface list, pricing/indexer placement)
    should Bare / BareKit appear in the atlas as the foundation the engine stands on?
 4. **No Flutter host binding.** Kotlin and Swift cores exist; none of the 155 visible org repos is
    Flutter. Moor's `wdk_core_flutter` POC sits on the Kotlin core. Planned, or community?
-5. **Four repo links still 404** (rechecked 2026-09-02): `tetherto/wdk-playground`,
-   `tetherto/wdk-core-swift`, `tetherto/wdk-starter-swift`, `arkade-os/wdk`;
-   `claudiovb/wdk-core-swift` too. The docs mention neither a playground nor a Swift core. Private,
-   or not created yet? The atlas shows three cards nobody can open.
+5. **Three private repos on the map.** `tetherto/wdk-core-swift`, `tetherto/wdk-starter-swift` and
+   `tetherto/wdk-playground` exist but are private (seen with an org token on 2026-09-02); `arkade-os/wdk`
+   and `claudiovb/wdk-core-swift` do not exist. The docs mention neither a playground nor a Swift core.
+   Will the three be published, and when? Until then the atlas shows cards nobody outside can open.
 6. **`wdk-policies` and `wdk-doctor-app` are empty repos** (initial commit, README only). Phase 1 of
    the policy engine already ships inside `wdk` (`src/policy`, since beta.16). Is `wdk-policies`
    meant to extract that engine or to hold the phase 2 rule libraries? What is the doctor app's scope?
    Also: `tetherto/wdk-safe-core-sdk` (fork of Safe{Core}, July 2026) is not in the atlas; a
    dependency fork for the Safe multisig protocol, or a module?
+7. **Three roadmap items with no definition.** `unified-usdt-balance`, `social-recovery` and
+   `browser-extension` are titles in the previous roadmap sheet with no description anywhere else
+   (checked the sheet, the org repos and the docs, 2026-09-03). The roadmap shows them with a
+   "scope undefined" blurb on purpose. Who owns each, and what is the one-paragraph scope?
 
 ## 6. Not done
 

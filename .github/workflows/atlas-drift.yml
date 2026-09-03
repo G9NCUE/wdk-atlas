@@ -1,0 +1,68 @@
+# Atlas drift: compares atlas.yaml with GitHub and npm, keeps one rolling issue up to date.
+# Weekly, on demand, and on every push that touches atlas.yaml or the checker (report only on push).
+name: Atlas drift
+
+on:
+  schedule:
+    - cron: "0 7 * * 1" # Mondays 07:00 UTC
+  workflow_dispatch:
+  push:
+    paths: [atlas.yaml, bin/check-atlas.mjs, .github/workflows/atlas-drift.yml]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      # ATLAS_TOKEN (optional secret): a read-only token that can see the org's private repos.
+      # Without it the check runs with the workflow token and private repos look absent.
+      ATLAS_TOKEN: ${{ secrets.ATLAS_TOKEN }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check the atlas
+        run: |
+          node bin/check-atlas.mjs > report.md
+          node bin/check-atlas.mjs --json > report.json
+          echo "total=$(node -p 'require("./report.json").total')" >> "$GITHUB_OUTPUT"
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+        id: check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: atlas-drift-${{ github.run_number }}
+          path: |
+            report.md
+            report.json
+      - name: Update the rolling issue
+        if: github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TOTAL: ${{ steps.check.outputs.total }}
+        run: |
+          set -euo pipefail
+          gh label create atlas-drift --description "Kept up to date by the Atlas drift workflow" --color FF4E00 --force >/dev/null
+          number=$(gh issue list --label atlas-drift --state open --json number --jq '.[0].number // empty')
+          {
+            echo "Findings from \`bin/check-atlas.mjs\`, rewritten on every run. Tick a box by fixing atlas.yaml or by adding the repo to \`audit.ignoreRepos\`; the next run drops it."
+            echo
+            cat report.md
+            echo
+            echo "_Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}_"
+          } > body.md
+          if [ "$TOTAL" = "0" ]; then
+            if [ -n "$number" ]; then
+              gh issue close "$number" --comment "No findings on $(date -u +%F). Closing; the workflow reopens a new issue if drift comes back."
+            fi
+            exit 0
+          fi
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --title "Atlas drift: $TOTAL findings" --body-file body.md
+          else
+            gh issue create --title "Atlas drift: $TOTAL findings" --label atlas-drift --body-file body.md
+          fi
