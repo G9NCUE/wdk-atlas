@@ -857,13 +857,14 @@ modules:
     band: tools
     status: wip
     publisher: tetherto
-    summary: Plug any bundle of packages into the worklet and poke at whatever is in it. Worklet controls plus JSON consoles for callMethod and callModule, so a package can be dogfooded and debugged without a throwaway app.
+    summary: 'A worklet console: plug any bundle of packages into the worklet and poke at whatever is in it, with worklet controls and JSON consoles for each call. For the team and for contributor teams, so a package can be tested in the real stack without a throwaway app.'
     notes:
       - Modelled on Holepunch's bare-mobile-doctor, with one difference that matters, one worklet and many packages in a single bundle
       - Not the showcase wallet. The React Native starter is a useful Expo host, but its screens are hardcoded to one bundle and the worklet lifecycle is hidden
       - Intended flow, clone, install, fill wdk.config.js (what to pack) and a runtime JSON keyed by the same names (RPC URLs, chain ids, storagePath), run wdk-worklet-bundler generate, run on a simulator, init a throwaway or imported seed, iterate. Native addons need a native rebuild
       - Ships with a default fixture bundle, one wallet package, so clone, install, generate, run already does something
-      - Repo created 2026-08-24 and still an empty README; the work is in progress elsewhere
+      - Sits beside the starter, not below it, a minimal host app for the same worklet, with no product screens and the lifecycle exposed on purpose
+      - Public repo, created 2026-08-24; the code is not in it yet. README proposed in tetherto/wdk-doctor-app#1
     repo: https://github.com/tetherto/wdk-doctor-app
 
   - id: wdk-examples

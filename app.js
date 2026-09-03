@@ -1,3 +1,7 @@
+// Asset version from this script's own URL (app.js?v=N); data fetches carry it so a bump refreshes everything.
+const ASSET_V = (() => { try { return new URL(document.currentScript.src, location.href).searchParams.get("v") || ""; } catch { return ""; } })();
+const versioned = (path) => (ASSET_V ? `${path}?v=${ASSET_V}` : path);
+
 const poster = document.querySelector("#poster");
 const drawer = document.querySelector("#drawer");
 const errorEl = document.querySelector("#error");
@@ -1058,7 +1062,7 @@ function questionsSection(markdown) {
 }
 
 async function renderQuestions() {
-  const response = await fetch("NOTES.md");
+  const response = await fetch(versioned("NOTES.md"));
   if (!response.ok) throw new Error(`Could not load NOTES.md (${response.status}).`);
   const section = questionsSection(await response.text());
   if (!section) throw new Error("NOTES.md has no '## … Questions' section.");
@@ -1280,7 +1284,7 @@ function onDrawerClick(event) {
 }
 
 async function loadAtlas() {
-  const response = await fetch("atlas.yaml");
+  const response = await fetch(versioned("atlas.yaml"));
   if (!response.ok) {
     throw new Error(`Could not load atlas.yaml (${response.status}).`);
   }
