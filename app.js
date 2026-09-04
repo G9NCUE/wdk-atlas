@@ -1709,6 +1709,10 @@ async function main() {
     search.classList.add("map-search");
     side.prepend(search);
   }
+  // On GitHub Pages the source lives at github.com/<owner>/<repo>; derive it so forks link to themselves.
+  const gh = document.querySelector(".gh-link");
+  const pagesHost = /^([^.]+)\.github\.io$/.exec(location.hostname);
+  if (gh && pagesHost) gh.href = `https://github.com/${pagesHost[1]}/${location.pathname.split("/").filter(Boolean)[0] || ""}`;
   if (questionsUnlocked()) revealQuestions();
   wireLogoTaps();
 
