@@ -1292,9 +1292,9 @@ function buildDashboard(file, selected) {
   const tiles = el("div", { class: "tiles" },
     statTile(`npm downloads, last full ${unit}`, fmtNum(dlLast.now), deltaPill(dlLast.now, dlLast.prev), dlLast.key ? `${dlLast.key} · ${selected.filter((r) => file.repos[r].package).length} packages` : "no download data for this selection"),
     statTile("GitHub stars", fmtNum(sum(latest.stars)), deltaPill(starsLast.now, starsLast.prev), `${selected.length} repos · ${fmtNum(sum(latest.forks))} forks`),
-    statTile(`External pull requests merged, last ${unit}`, String(lastTwo(xM).now ?? 0), deltaPill(lastTwo(xM).now ?? 0, lastTwo(xM).prev), `${lastTwo(xO).now ?? 0} opened`, { id: "external-prs", label: "external pull requests" }),
+    statTile(`External pull requests merged, last ${unit}`, String(lastTwo(xM).now ?? 0), deltaPill(lastTwo(xM).now ?? 0, lastTwo(xM).prev), `${lastTwo(xO).now ?? 0} opened`),
     statTile("Contributors", String(uniq(latest.contributors)), deltaPill(lastTwo(contribSeries).now, lastTwo(contribSeries).prev), "people with commits, bots excluded, unique across the selection"),
-    statTile("Open issues", String(sum(latest.openIssues)), deltaPill(lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), `${lastTwo(isO).now ?? 0} opened · ${lastTwo(isC).now ?? 0} closed · last ${unit}`, { id: "issue-response", label: "issues answered within a week" }),
+    statTile("Open issues", String(sum(latest.openIssues)), deltaPill(lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), `${lastTwo(isO).now ?? 0} opened · ${lastTwo(isC).now ?? 0} closed · last ${unit}`),
     statTile("Modules published", String(published), el("span", { class: "delta none" }, `of ${withPkg} packages`), `${(atlas.modules || []).filter((m) => m.publisher && m.publisher !== file.org && m.status === "shipped").length} more by third parties, not in this count`)
   );
 
@@ -1307,12 +1307,16 @@ function buildDashboard(file, selected) {
     chartCard("Stars by repository", fmtNum(sum(latest.stars)), null, hBars(byStars, { color: SERIES[2] }), "Top eight of the selection."),
     chartCard(`Stars over time`, null, null, starsSeries.length > 1 ? lineChart(starsSeries, { color: SERIES[2] }) : el("p", { class: "chart-foot" }, "Needs at least two daily snapshots; the first was taken " + (snapDays[0] || "today") + "."), "Total at the end of each period, from daily snapshots."),
   ]);
+  // External contributors over the same complete periods the pull request charts show.
+  const windowKeys = new Set([...prsO, ...prsM].map((p) => p.key));
   const authors = {};
-  for (const r of selected) for (const [login, a] of Object.entries((latest.externalAuthors || {})[r] || {})) { authors[login] = authors[login] || { opened: 0, merged: 0, association: a.association }; authors[login].opened += a.opened; authors[login].merged += a.merged; }
-  const topAuthors = Object.entries(authors).sort((a, b) => b[1].opened + b[1].merged - a[1].opened - a[1].merged).slice(0, 5)
-    .map(([login, a]) => ({ label: login, hint: `${a.association.toLowerCase().replace(/_/g, " ")} · ${a.merged} merged`, value: a.opened }));
+  const addAuthors = (series, field) => { for (const r of selected) for (const [d, logins] of Object.entries((series || {})[r] || {})) { if (!windowKeys.has(bucketKey(d))) continue; for (const [login, n] of Object.entries(logins)) { authors[login] = authors[login] || { opened: 0, merged: 0 }; authors[login][field] += n; } } };
+  addAuthors(D.externalAuthorsOpened, "opened"); addAuthors(D.externalAuthorsMerged, "merged");
+  const topAuthors = Object.entries(authors).sort((a, b) => b[1].opened - a[1].opened || b[1].merged - a[1].merged).slice(0, 5)
+    .map(([login, a]) => ({ label: login, hint: `${((file.authors || {})[login] || "").toLowerCase().replace(/_/g, " ")} · ${a.merged} merged`, value: a.opened }));
+  const windowLabel = windowKeys.size ? `last ${windowKeys.size} ${unit}${windowKeys.size === 1 ? "" : "s"}` : "no complete period yet";
   const community = dashSection("Community & engagement", [
-    chartCard("External contributors, last 30 days", String(Object.keys(authors).length), null, topAuthors.length ? hBars(topAuthors, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, "No external pull requests in the window."), "Top five by pull requests opened; hover for GitHub's label and merges. A teammate or a bot showing up here means the internal list needs a fix."),
+    chartCard(`External contributors, ${windowLabel}`, String(Object.keys(authors).length), null, topAuthors.length ? hBars(topAuthors, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, "No external pull requests in the window."), "Top five by pull requests opened over the periods shown; hover for GitHub's label and merges. A teammate or a bot showing up here means the internal list needs a fix."),
     chartCard(`Pull requests per ${unit}`, String(lastTwo(prsO).now ?? 0), null, groupedBars(pr.cats, [{ label: "Opened", values: pr.a }, { label: "Merged", values: pr.b }]), "Complete periods only."),
     chartCard(`External pull requests per ${unit}`, String(lastTwo(xO).now ?? 0), null, groupedBars(xpr.cats, [{ label: "Opened", values: xpr.a }, { label: "Merged", values: xpr.b }]), "Authors who are not members or collaborators of the org."),
     chartCard("Contributors over time", String(uniq(latest.contributors)), null, contribSeries.length > 1 ? lineChart(contribSeries, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, "Needs at least two daily snapshots."), "Unique people across the selection, at the end of each period."),

@@ -13,8 +13,9 @@
 //   daily:     { downloads | prsOpened | prsMerged | externalPrsOpened | externalPrsMerged | issuesOpened | issuesClosed:
 //                { repo: { "YYYY-MM-DD": n } } }         rewritten for the last 30 days on every run, older days kept
 //              issueResponse: { repo: { "YYYY-MM-DD": [hours to first response, -1 if none yet] } }
-//   snapshots: { "YYYY-MM-DD": { stars, forks, openIssues, openPrs, contributors: { repo: … }, published: [repo…],
-//                externalAuthors: { repo: { login: { opened, merged, association } } } } }   last 30 days
+//              externalAuthorsOpened | externalAuthorsMerged: { repo: { "YYYY-MM-DD": { login: n } } }
+//   authors:   { login: association label last seen }
+//   snapshots: { "YYYY-MM-DD": { stars, forks, openIssues, openPrs, contributors: { repo: … }, published: [repo…] } }
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { createContext, runInContext } from "node:vm";
 import { dirname, join } from "node:path";
@@ -117,8 +118,7 @@ try {
   const external = (item) => !["MEMBER", "OWNER", "COLLABORATOR"].includes(item.author_association) && !(item.user && item.user.login.endsWith("[bot]"));
   const search = async (q) => (await ghAll(`/search/issues?q=${encodeURIComponent(`org:${ORG} ${q}`)}`)).filter(inScope);
   for (const i of await search("is:issue is:open")) snap.openIssues[repoOf(i)] = (snap.openIssues[repoOf(i)] || 0) + 1;
-  // External pull request authors of the last 30 days, per repo: who they are, how many opened and merged.
-  snap.externalAuthors = {};
+
   for (const i of await search("is:pr is:open")) snap.openPrs[repoOf(i)] = (snap.openPrs[repoOf(i)] || 0) + 1;
 
   // ---------------------------------------------------------------- GitHub daily series: last 30 days of PRs and issues, per repo
@@ -126,8 +126,19 @@ try {
   const prsMerged30 = await search(`is:pr is:merged merged:>=${since30}`);
   const issuesOpened30 = await search(`is:issue created:>=${since30}`);
   const issuesClosed30 = await search(`is:issue closed:>=${since30}`);
-  for (const i of prsOpened30) if (external(i)) { const r = repoOf(i), l = i.user.login; snap.externalAuthors[r] = snap.externalAuthors[r] || {}; snap.externalAuthors[r][l] = snap.externalAuthors[r][l] || { opened: 0, merged: 0, association: i.author_association }; snap.externalAuthors[r][l].opened += 1; }
-  for (const i of prsMerged30) if (external(i)) { const r = repoOf(i), l = i.user.login; snap.externalAuthors[r] = snap.externalAuthors[r] || {}; snap.externalAuthors[r][l] = snap.externalAuthors[r][l] || { opened: 0, merged: 0, association: i.author_association }; snap.externalAuthors[r][l].merged += 1; }
+  // External authors per repo per day: { repo: { day: { login: count } } }, for opened and for merged.
+  const byAuthor = (items, key) => {
+    const out = {};
+    for (const i of items) {
+      if (!external(i)) continue;
+      const d = day(key(i)); if (d < since30) continue;
+      const r = repoOf(i), l = i.user.login;
+      out[r] = out[r] || {}; out[r][d] = out[r][d] || {}; out[r][d][l] = (out[r][d][l] || 0) + 1;
+    }
+    return out;
+  };
+  const authorLabel = {};
+  for (const i of [...prsOpened30, ...prsMerged30]) if (external(i)) authorLabel[i.user.login] = i.author_association;
   const bucket = (items, key, filter = () => true) => {
     const out = {};
     for (const i of items) {
@@ -153,6 +164,8 @@ try {
   const daily = {
     downloads,
     issueResponse,
+    externalAuthorsOpened: byAuthor(prsOpened30, (i) => i.created_at),
+    externalAuthorsMerged: byAuthor(prsMerged30, (i) => i.pull_request && i.pull_request.merged_at),
     prsOpened: bucket(prsOpened30, (i) => i.created_at),
     prsMerged: bucket(prsMerged30, (i) => i.pull_request && i.pull_request.merged_at),
     externalPrsOpened: bucket(prsOpened30, (i) => i.created_at, external),
@@ -168,7 +181,7 @@ try {
   for (const [name, perRepo] of Object.entries(daily)) {
     file.daily[name] = file.daily[name] || {};
     const allRepos = new Set([...Object.keys(file.daily[name]), ...Object.keys(perRepo)]);
-    if (name === "issueResponse") { for (const repo of allRepos) { const merged = { ...(file.daily[name][repo] || {}) }; for (const d of Object.keys(merged)) if (d >= since30) delete merged[d]; Object.assign(merged, perRepo[repo] || {}); if (Object.keys(merged).length) file.daily[name][repo] = merged; } continue; }
+    if (name === "issueResponse" || name.startsWith("externalAuthors")) { for (const repo of allRepos) { const merged = { ...(file.daily[name][repo] || {}) }; for (const d of Object.keys(merged)) if (d >= since30) delete merged[d]; Object.assign(merged, perRepo[repo] || {}); if (Object.keys(merged).length) file.daily[name][repo] = merged; } continue; }
     for (const repo of allRepos) {
       const merged = { ...(file.daily[name][repo] || {}) };
       for (const d of Object.keys(merged)) if (d >= since30) delete merged[d];        // the window is rewritten
@@ -177,6 +190,7 @@ try {
     }
   }
   file.snapshots[today] = snap;
+  file.authors = { ...(file.authors || {}), ...authorLabel }; // login -> GitHub's association label, last seen
   file.updated = new Date().toISOString();
   if (DRY) console.log(JSON.stringify({ repos: Object.keys(repos).length, snapshot: snap }, null, 2));
   else {
