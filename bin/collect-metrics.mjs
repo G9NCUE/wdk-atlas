@@ -15,7 +15,9 @@
 //              issueResponse: { repo: { "YYYY-MM-DD": [hours to first response, -1 if none yet] } }
 //              externalAuthorsOpened | externalAuthorsMerged: { repo: { "YYYY-MM-DD": { login: n } } }
 //   authors:   { login: association label last seen }
-//   snapshots: { "YYYY-MM-DD": { stars, forks, openIssues, openPrs, contributors: { repo: … }, published: [repo…] } }
+//   snapshots: { "YYYY-MM-DD": { stars, forks, openIssues, openPrs, contributors: { repo: count }, published: [repo…] } }
+//   contributors: { repo: [login…] }   current, kept once
+//   since: first day the event series cover
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { createContext, runInContext } from "node:vm";
 import { dirname, join } from "node:path";
@@ -32,6 +34,7 @@ runInContext(readFileSync(join(ROOT, "vendor/js-yaml.min.js"), "utf8"), ctx);
 const atlas = ctx.jsyaml.load(readFileSync(join(ROOT, "atlas.yaml"), "utf8"));
 const ORG = (atlas.audit && atlas.audit.org) || "tetherto";
 const REPO_PATTERN = new RegExp((atlas.audit && atlas.audit.repoPattern) || "^(wdk$|wdk-|pear-wrk-wdk$|create-wdk-module$)");
+const isBot = (login) => !login || login.endsWith("[bot]");
 
 const gh = async (path) => {
   const res = await fetch(`https://api.github.com${path}`, {
@@ -107,15 +110,17 @@ try {
 
   // ---------------------------------------------------------------- GitHub snapshot: stars, forks, contributors, open counts
   const snap = { stars: {}, forks: {}, openIssues: {}, openPrs: {}, contributors: {}, published };
+  const contributorsByRepo = {}; // logins, kept once (current), not per snapshot
   for (const r of wdkRepos) {
     snap.stars[r.name] = r.stargazers_count;
     snap.forks[r.name] = r.forks_count;
-    snap.contributors[r.name] = (await ghAll(`/repos/${ORG}/${r.name}/contributors?anon=0`)).map((u) => u.login).filter((l) => l && !l.endsWith("[bot]"));
+    contributorsByRepo[r.name] = (await ghAll(`/repos/${ORG}/${r.name}/contributors?anon=0`)).map((u) => u.login).filter((l) => !isBot(l));
+    snap.contributors[r.name] = contributorsByRepo[r.name].length;
   }
   const repoSet = new Set(wdkRepos.map((r) => r.name));
   const repoOf = (item) => (item.repository_url || "").split("/").pop();
   const inScope = (item) => repoSet.has(repoOf(item));
-  const external = (item) => !["MEMBER", "OWNER", "COLLABORATOR"].includes(item.author_association) && !(item.user && item.user.login.endsWith("[bot]"));
+  const external = (item) => Boolean(item.user && item.user.login) && !isBot(item.user.login) && !["MEMBER", "OWNER", "COLLABORATOR"].includes(item.author_association);
   const search = async (q) => (await ghAll(`/search/issues?q=${encodeURIComponent(`org:${ORG} ${q}`)}`)).filter(inScope);
   for (const i of await search("is:issue is:open")) snap.openIssues[repoOf(i)] = (snap.openIssues[repoOf(i)] || 0) + 1;
 
@@ -181,7 +186,6 @@ try {
   for (const [name, perRepo] of Object.entries(daily)) {
     file.daily[name] = file.daily[name] || {};
     const allRepos = new Set([...Object.keys(file.daily[name]), ...Object.keys(perRepo)]);
-    if (name === "issueResponse" || name.startsWith("externalAuthors")) { for (const repo of allRepos) { const merged = { ...(file.daily[name][repo] || {}) }; for (const d of Object.keys(merged)) if (d >= since30) delete merged[d]; Object.assign(merged, perRepo[repo] || {}); if (Object.keys(merged).length) file.daily[name][repo] = merged; } continue; }
     for (const repo of allRepos) {
       const merged = { ...(file.daily[name][repo] || {}) };
       for (const d of Object.keys(merged)) if (d >= since30) delete merged[d];        // the window is rewritten
@@ -190,6 +194,8 @@ try {
     }
   }
   file.snapshots[today] = snap;
+  file.contributors = contributorsByRepo;
+  file.since = file.since || since30; // first day the event series cover
   file.authors = { ...(file.authors || {}), ...authorLabel }; // login -> GitHub's association label, last seen
   file.updated = new Date().toISOString();
   if (DRY) console.log(JSON.stringify({ repos: Object.keys(repos).length, snapshot: snap }, null, 2));
@@ -197,7 +203,7 @@ try {
     mkdirSync(dirname(OUT), { recursive: true });
     writeFileSync(OUT, JSON.stringify(file) + "\n");
     const stars = Object.values(snap.stars).reduce((a, b) => a + b, 0);
-    const people = new Set(Object.values(snap.contributors).flat()).size;
+    const people = new Set(Object.values(contributorsByRepo).flat()).size;
     console.log(`wrote data/metrics.json: ${today}, ${Object.keys(repos).length} repos, ${published.length} published packages, ${stars} stars, ${people} contributors, ${Object.keys(file.snapshots).length} snapshot(s)`);
   }
 } catch (error) {

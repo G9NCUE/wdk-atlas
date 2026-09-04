@@ -9,7 +9,8 @@ const errorEl = document.querySelector("#error");
 let atlas = null;
 let openId = null;
 // The roadmap is the front page; the map lives at ?page=map ("main" kept as an alias for old links).
-const page = (() => { const p = new URLSearchParams(location.search).get("page") || "roadmap"; return p === "main" ? "map" : p; })();
+const PAGES = new Set(["roadmap", "results", "dashboard", "map", "dev", "questions"]);
+const page = (() => { const p = new URLSearchParams(location.search).get("page") || "roadmap"; const q = p === "main" ? "map" : p; return PAGES.has(q) ? q : "roadmap"; })();
 
 function showError(message) {
   errorEl.hidden = false;
@@ -64,8 +65,11 @@ function applyRelated(id) {
   }
 }
 
+const orgName = () => (atlas && atlas.audit && atlas.audit.org) || "tetherto";
+const unscoped = (pkg) => (pkg || "").replace(new RegExp(`^@${orgName()}/`), "");
+
 function isEcosystem(module) {
-  return Boolean(module.publisher && module.publisher !== "tetherto");
+  return Boolean(module.publisher && module.publisher !== orgName());
 }
 
 function chainsOf(module) {
@@ -114,11 +118,10 @@ function quarterOrder(q) {
   return !q || q === "backlog" ? "9999" : q;
 }
 
+// Progress only from a number someone set; an in-progress item without one shows no fill.
 function progressOf(item) {
   const n = Number(item.progress);
-  if (Number.isFinite(n)) return Math.max(0, Math.min(100, Math.round(n)));
-  if ((item.status || "") === "wip") return 40;
-  return null;
+  return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : null;
 }
 
 function progressStyle(percent) {
@@ -184,13 +187,14 @@ function renderColumns(modules) {
   const ids = new Set(modules.map((module) => module.id));
   const baseOf = (module) =>
     (module.relations || []).find((rel) => PLACEMENT_TYPES.has(rel.type) && ids.has(rel.target) && rel.target !== module.id)?.target;
-  const roots = modules.filter((module) => !baseOf(module));
-  const columns = roots.map((root) => {
-    const children = modules.filter((module) => baseOf(module) === root.id);
-    return children.length
-      ? el("div", { class: "module-column" }, renderModule(root), children.map(renderModule))
-      : renderModule(root);
-  });
+  const drawn = new Set();
+  const column = (module) => {
+    drawn.add(module.id);
+    const children = modules.filter((child) => baseOf(child) === module.id && !drawn.has(child.id));
+    return children.length ? el("div", { class: "module-column" }, renderModule(module), children.map(column)) : renderModule(module);
+  };
+  const columns = modules.filter((module) => !baseOf(module)).map(column);
+  for (const module of modules) if (!drawn.has(module.id)) columns.push(column(module)); // a cycle: draw it as a root
   return el("div", { class: "band-modules" }, columns);
 }
 
@@ -667,10 +671,6 @@ function toggleColumn(th) {
   for (const cell of grid.querySelectorAll("[data-col]")) cell.classList.toggle("is-off", on && cell.getAttribute("data-col") !== col);
 }
 
-function isPending(status) {
-  return status === "wip" || status === "planned";
-}
-
 function moduleChip(ref) {
   const id = typeof ref === "string" ? ref : ref.id;
   const module = itemById(id);
@@ -684,7 +684,7 @@ function moduleChip(ref) {
 }
 
 const QUARTERS = ["2026Q1", "2026Q2", "2026Q3", "2026Q4", "2027Q1", "2027Q2"];
-const view = new URLSearchParams(location.search).get("view") === "backlog" ? "backlog" : "timeline";
+let view = new URLSearchParams(location.search).get("view") === "backlog" ? "backlog" : "timeline";
 
 function currentQuarter(date = new Date()) {
   return `${date.getFullYear()}Q${Math.floor(date.getMonth() / 3) + 1}`;
@@ -784,15 +784,14 @@ function evaluateMetric(kr) {
   const m = kr.metric; if (!m) return null;
   const out = { source: "Dashboard", link: "./?page=dashboard", note: null, current: null, target: null, progress: null, unit: "" };
   if (m.kind === "count" && m.source === "thirdPartyModules") {
-    const n = (atlas.modules || []).filter((x) => x.publisher && x.publisher !== "tetherto" && x.status === "shipped").length;
+    const n = (atlas.modules || []).filter((x) => x.publisher && x.publisher !== orgName() && x.status === "shipped").length;
     Object.assign(out, { current: n, target: m.target, progress: m.target ? Math.min(100, Math.round((100 * n) / m.target)) : null, link: "./?page=map", source: "Map, third-party modules" });
     return out;
   }
   if (!METRICS || !METRICS.daily) { out.note = "Dashboard data not loaded."; return out; }
   const D = METRICS.daily;
   if (m.kind === "quarterGrowth") {
-    const days = Object.values(D[m.series] || {}).flatMap((x) => Object.keys(x)).sort();
-    const first = days[0] || null, today = new Date().toISOString().slice(0, 10);
+    const first = METRICS.since || Object.values(D[m.series] || {}).flatMap((x) => Object.keys(x)).sort()[0] || null, today = new Date().toISOString().slice(0, 10);
     const q = quarterOf(today), [qFrom, qTo] = quarterBounds(q);
     const prevQ = `${qFrom.slice(0, 4) - (q.endsWith("Q1") ? 1 : 0)}Q${q.endsWith("Q1") ? 4 : Number(q.slice(5)) - 1}`, [pFrom, pTo] = quarterBounds(prevQ);
     const cur = sumSeries(D[m.series], qFrom, qTo);
@@ -809,16 +808,20 @@ function evaluateMetric(kr) {
   }
   if (m.kind === "issueResponse") {
     const within = m.withinHours || 168, now = Date.now();
+    const windowDays = 30, from = new Date(now - windowDays * 864e5).toISOString().slice(0, 10);
     let answered = 0, missed = 0, pending = 0;
-    for (const perDay of Object.values(D.issueResponse || {})) for (const [d, list] of Object.entries(perDay)) for (const h of list) {
-      if (h >= 0 && h <= within) answered += 1;
-      else if (h >= 0) missed += 1;
-      else if (now - new Date(d + "T00:00:00Z") > within * 36e5) missed += 1;
-      else pending += 1;
+    for (const perDay of Object.values(D.issueResponse || {})) for (const [d, list] of Object.entries(perDay)) {
+      if (d < from) continue; // the collector only refreshes this window; older days are stale
+      for (const h of list) {
+        if (h >= 0 && h <= within) answered += 1;
+        else if (h >= 0) missed += 1;
+        else if (now - new Date(d + "T23:59:59Z") > within * 36e5) missed += 1;
+        else pending += 1;
+      }
     }
-    const total = answered + missed;
+    const total = answered + missed, days = Math.round(within / 24);
     const pct = total ? Math.round((100 * answered) / total) : null;
-    Object.assign(out, { current: pct == null ? null : `${pct}%`, target: `${m.target}%`, progress: pct == null ? null : Math.min(100, Math.round((100 * pct) / m.target)), unit: `${answered} of ${total} issues, last 30 days${pending ? `, ${pending} still within the week` : ""}`, link: "./?page=dashboard&range=weekly", note: total ? null : "No issues opened in the window yet." });
+    Object.assign(out, { current: pct == null ? null : `${pct}%`, target: `${m.target}%`, progress: pct == null ? null : Math.min(100, Math.round((100 * pct) / m.target)), unit: `${answered} of ${total} issues, last ${windowDays} days${pending ? `, ${pending} still within ${days} days` : ""}`, link: "./?page=dashboard&range=weekly", note: total ? null : "No issues opened in the window yet." });
     return out;
   }
   out.note = `Unknown metric kind ${m.kind}.`; return out;
@@ -921,8 +924,8 @@ function spotlightTarget() {
 }
 
 // Search: filters initiative cards by title, summary, id and module names; stars with a match open.
-function renderSearch(apply = applySearch) {
-  const input = el("input", { class: "search-input", type: "search", placeholder: "Search initiatives…", "aria-label": "Search initiatives", autocomplete: "off" });
+function renderSearch(apply = applySearch, what = "initiatives") {
+  const input = el("input", { class: "search-input", type: "search", placeholder: `Search ${what}…`, "aria-label": `Search ${what}`, autocomplete: "off" });
   const count = el("span", { class: "search-count", "aria-live": "polite" });
   const wrap = el("label", { class: "search" }, input, count);
   input.addEventListener("input", () => apply(input.value, count));
@@ -983,6 +986,8 @@ function renderRoadmap() {
   const stars = atlas.northStars || [];
   const now = currentQuarter();
   const isBacklog = (item) => (item.quarter || "backlog") === "backlog";
+  const wanted = location.hash.replace(/^#/, "");
+  if (view === "timeline" && wanted && items.some((item) => item.id === wanted && isBacklog(item))) view = "backlog";
   const used = new Set(items.filter((item) => !isBacklog(item)).map((item) => item.quarter));
   const quarters = [...new Set([...QUARTERS, ...used])].sort((x, y) => quarterOrder(x).localeCompare(quarterOrder(y)));
 
@@ -1199,11 +1204,27 @@ const bucketLabel = (key) => {
 const MAX_BUCKETS = { daily: 30, weekly: 12, monthly: 12 };
 
 // Sum a per-repo daily series over the selected repos into complete buckets of the current grain.
-function seriesBuckets(perRepo, selected, { includeCurrent = false } = {}) {
+// First and last day a bucket key covers, so a bucket counts only when the data covers all of it.
+function bucketRange(key) {
+  if (grain === "daily") return [key, key];
+  if (grain === "monthly") { const [y, m] = key.split("-").map(Number); const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); return [`${key}-01`, last]; }
+  const [y, w] = key.split("-W").map(Number); const jan4 = new Date(Date.UTC(y, 0, 4)); const monday = new Date(jan4); monday.setUTCDate(jan4.getUTCDate() - ((jan4.getUTCDay() || 7) - 1) + (w - 1) * 7);
+  const sunday = new Date(monday); sunday.setUTCDate(monday.getUTCDate() + 6);
+  return [monday.toISOString().slice(0, 10), sunday.toISOString().slice(0, 10)];
+}
+// Days the data covers: downloads from their own first and last day; event series from the collector's window start to yesterday.
+function coverageOf(perRepo, file, event) {
+  const days = Object.values(perRepo || {}).flatMap((x) => Object.keys(x)).sort();
+  const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+  if (event) return [file.since || days[0] || yesterday, yesterday];
+  return [days[0] || yesterday, days[days.length - 1] || yesterday];
+}
+function seriesBuckets(perRepo, selected, { coverage = null } = {}) {
   const sums = new Map();
   for (const repo of selected) for (const [d, n] of Object.entries((perRepo || {})[repo] || {})) sums.set(bucketKey(d), (sums.get(bucketKey(d)) || 0) + n);
   const now = todayKey();
-  return [...sums].filter(([k]) => includeCurrent || k < now).sort().slice(-MAX_BUCKETS[grain]).map(([k, y]) => ({ key: k, label: bucketLabel(k), y }));
+  const complete = (k) => { if (k >= now) return false; if (!coverage) return true; const [a, b] = bucketRange(k); return a >= coverage[0] && b <= coverage[1]; };
+  return [...sums].filter(([k]) => complete(k)).sort().slice(-MAX_BUCKETS[grain]).map(([k, y]) => ({ key: k, label: bucketLabel(k), y }));
 }
 const lastTwo = (pts) => ({ now: pts.length ? pts[pts.length - 1].y : null, prev: pts.length > 1 ? pts[pts.length - 2].y : null, key: pts.length ? pts[pts.length - 1].key : null });
 
@@ -1255,7 +1276,7 @@ function renderRepoPanel(file, selected, onChange) {
       box.addEventListener("change", apply);
       boxes.set(n, box);
       const r = file.repos[n];
-      const pkgLabel = r.package ? r.package.replace(/^@tetherto\//, "") : "";
+      const pkgLabel = unscoped(r.package);
       return el("label", { class: "repo-row", title: n }, box, el("span", { class: "repo-title" }, r.title), pkgLabel && pkgLabel !== r.title && el("span", { class: "repo-pkg" }, pkgLabel));
     }))));
   const tools = el("div", { class: "repo-tools" },
@@ -1274,14 +1295,17 @@ function buildDashboard(file, selected) {
   const latest = snaps[snapDays[snapDays.length - 1]] || {};
   const sum = (obj) => selected.reduce((n, r) => n + ((obj || {})[r] || 0), 0);
   const uniq = (obj) => new Set(selected.flatMap((r) => (obj || {})[r] || [])).size;
+  const people = uniq(file.contributors || latest.contributors);
   const D = file.daily || {};
-  const dl = seriesBuckets(D.downloads, selected);
-  const prsO = seriesBuckets(D.prsOpened, selected), prsM = seriesBuckets(D.prsMerged, selected);
-  const xO = seriesBuckets(D.externalPrsOpened, selected), xM = seriesBuckets(D.externalPrsMerged, selected);
-  const isO = seriesBuckets(D.issuesOpened, selected), isC = seriesBuckets(D.issuesClosed, selected);
+  const dlCov = coverageOf(D.downloads, file, false), evCov = coverageOf(D.prsOpened, file, true);
+  const dl = seriesBuckets(D.downloads, selected, { coverage: dlCov });
+  const ev = (series) => seriesBuckets(series, selected, { coverage: evCov });
+  const prsO = ev(D.prsOpened), prsM = ev(D.prsMerged);
+  const xO = ev(D.externalPrsOpened), xM = ev(D.externalPrsMerged);
+  const isO = ev(D.issuesOpened), isC = ev(D.issuesClosed);
   const starsSeries = snapshotSeries(snaps, "stars", selected);
   const backlogSeries = snapshotSeries(snaps, "openIssues", selected);
-  const contribSeries = snapshotSeries(snaps, "contributors", selected, (lists) => new Set(lists.flat()).size);
+  const contribSeries = snapshotSeries(snaps, "contributors", selected, (vals) => vals.reduce((n, v) => n + (Array.isArray(v) ? v.length : v), 0));
   const dlLast = lastTwo(dl), starsLast = lastTwo(starsSeries);
   const unit = { daily: "day", weekly: "week", monthly: "month" }[grain];
   const align = (a, b) => { const keys = [...new Set([...a, ...b].map((p) => p.key))].sort(); const at = (s, k) => (s.find((p) => p.key === k) || {}).y || 0; return { cats: keys.map(bucketLabel), a: keys.map((k) => at(a, k)), b: keys.map((k) => at(b, k)) }; };
@@ -1293,12 +1317,12 @@ function buildDashboard(file, selected) {
     statTile(`npm downloads, last full ${unit}`, fmtNum(dlLast.now), deltaPill(dlLast.now, dlLast.prev), dlLast.key ? `${dlLast.key} · ${selected.filter((r) => file.repos[r].package).length} packages` : "no download data for this selection"),
     statTile("GitHub stars", fmtNum(sum(latest.stars)), deltaPill(starsLast.now, starsLast.prev), `${selected.length} repos · ${fmtNum(sum(latest.forks))} forks`),
     statTile(`External pull requests merged, last ${unit}`, String(lastTwo(xM).now ?? 0), deltaPill(lastTwo(xM).now ?? 0, lastTwo(xM).prev), `${lastTwo(xO).now ?? 0} opened`),
-    statTile("Contributors", String(uniq(latest.contributors)), deltaPill(lastTwo(contribSeries).now, lastTwo(contribSeries).prev), "people with commits, bots excluded, unique across the selection"),
+    statTile("Contributors", String(people), deltaPill(lastTwo(contribSeries).now, lastTwo(contribSeries).prev), "people with commits, bots excluded, unique across the selection"),
     statTile("Open issues", String(sum(latest.openIssues)), deltaPill(lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), `${lastTwo(isO).now ?? 0} opened · ${lastTwo(isC).now ?? 0} closed · last ${unit}`),
     statTile("Modules published", String(published), el("span", { class: "delta none" }, `of ${withPkg} packages`), `${(atlas.modules || []).filter((m) => m.publisher && m.publisher !== file.org && m.status === "shipped").length} more by third parties, not in this count`)
   );
 
-  const byPackage = selected.filter((r) => file.repos[r].package).map((r) => { const pts = seriesBuckets({ [r]: (D.downloads || {})[r] }, [r]); return { label: file.repos[r].package.replace(/^@tetherto\//, ""), hint: file.repos[r].title !== r ? file.repos[r].title : "", value: lastTwo(pts).now || 0 }; }).sort((a, b) => b.value - a.value).slice(0, 8);
+  const byPackage = selected.filter((r) => file.repos[r].package).map((r) => { const pts = seriesBuckets({ [r]: (D.downloads || {})[r] }, [r], { coverage: dlCov }); return { label: unscoped(file.repos[r].package), hint: file.repos[r].title !== r ? file.repos[r].title : "", value: lastTwo(pts).now || 0 }; }).sort((a, b) => b.value - a.value).slice(0, 8);
   const byStars = selected.map((r) => ({ label: r, hint: file.repos[r].title !== r ? file.repos[r].title : "", value: (latest.stars || {})[r] || 0 })).sort((a, b) => b.value - a.value).slice(0, 8);
 
   const adoption = dashSection("Adoption & growth", [
@@ -1319,7 +1343,7 @@ function buildDashboard(file, selected) {
     chartCard(`External contributors, ${windowLabel}`, String(Object.keys(authors).length), null, topAuthors.length ? hBars(topAuthors, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, "No external pull requests in the window."), "Top five by pull requests opened over the periods shown; hover for GitHub's label and merges. A teammate or a bot showing up here means the internal list needs a fix."),
     chartCard(`Pull requests per ${unit}`, String(lastTwo(prsO).now ?? 0), null, groupedBars(pr.cats, [{ label: "Opened", values: pr.a }, { label: "Merged", values: pr.b }]), "Complete periods only."),
     chartCard(`External pull requests per ${unit}`, String(lastTwo(xO).now ?? 0), null, groupedBars(xpr.cats, [{ label: "Opened", values: xpr.a }, { label: "Merged", values: xpr.b }]), "Authors who are not members or collaborators of the org."),
-    chartCard("Contributors over time", String(uniq(latest.contributors)), null, contribSeries.length > 1 ? lineChart(contribSeries, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, "Needs at least two daily snapshots."), "Unique people across the selection, at the end of each period."),
+    chartCard("Contributors over time", String(people), null, contribSeries.length > 1 ? lineChart(contribSeries, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, "Needs at least two daily snapshots."), "Summed over the selected repos at the end of each period; a person active in two repos counts twice here, once in the headline."),
   ]);
   const support = dashSection("Support & responsiveness", [
     chartCard(`Issues opened and closed per ${unit}`, String(sum(latest.openIssues)), deltaPill(lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), groupedBars(iss.cats, [{ label: "Opened", values: iss.a }, { label: "Closed", values: iss.b }]), "Headline is the open backlog today."),
@@ -1380,6 +1404,7 @@ function wireLogoTaps() {
   let taps = 0;
   let timer = null;
   brand.addEventListener("click", (event) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     clearTimeout(timer);
     taps += 1;
@@ -1500,7 +1525,7 @@ function closeDrawer() {
     node.setAttribute("aria-expanded", "false");
   }
   applyRelated(null);
-  if (location.hash) history.replaceState(null, "", location.pathname);
+  if (location.hash) history.replaceState(null, "", location.pathname + location.search);
 }
 
 function sectionMeta(item) {
@@ -1634,7 +1659,10 @@ function onDrawerClick(event) {
   if (anchor) {
     openDrawer(id, anchor);
     anchor.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    return;
   }
+  const target = itemById(id);
+  if (target) location.href = `./?page=${target.section === "dev" ? "dev" : "map"}#${id}`;
 }
 
 async function loadAtlas() {
@@ -1677,7 +1705,7 @@ async function main() {
 
   if (page === "map" || page === "dev") {
     const side = document.querySelector(".header-side");
-    const search = renderSearch(applyMapSearch);
+    const search = renderSearch(applyMapSearch, "packages");
     search.classList.add("map-search");
     side.prepend(search);
   }
@@ -1696,10 +1724,10 @@ async function main() {
   drawer.addEventListener("click", onDrawerClick);
   window.addEventListener("resize", placeDrawer);
   document.addEventListener("click", (event) => {
-    if (openId && !event.target.closest("[data-id], #drawer")) closeDrawer();
+    if (openId && !event.target.closest("[data-id], #drawer, .mx-th")) closeDrawer();
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeDrawer();
+    if (event.key === "Escape" && openId) closeDrawer();
   });
 
   const initial = location.hash.replace(/^#/, "");
