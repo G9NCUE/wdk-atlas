@@ -2206,9 +2206,8 @@ summary .module-stack {
 .results-star {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
+  gap: 12px;
+  padding-top: 8px;
 }
 
 .star-head.static {
@@ -2230,52 +2229,6 @@ summary .module-stack {
 
 .star-tally a:hover strong {
   color: var(--accent);
-}
-
-.table-scroll {
-  overflow-x: auto;
-}
-
-.kr-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-  line-height: 20px;
-}
-
-.kr-table th,
-.kr-table td {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line);
-  text-align: left;
-  vertical-align: top;
-}
-
-.kr-table th {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.kr-cell-label {
-  max-width: 48ch;
-  color: var(--ink);
-}
-
-.kr-note {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--secondary);
-}
-
-.kr-cell-source {
-  color: var(--secondary);
-}
-
-.kr-table .kr-bar {
-  width: 120px;
 }
 
 /* Map search: sits with the toggle and legend; filtered chips vanish, emptied cells dim. */
@@ -2387,7 +2340,7 @@ body.page-dashboard .atlas { max-width: none; }
 
 .kr-line { display: grid; grid-template-columns: minmax(0, 1fr) 150px 190px 200px 130px; align-items: center; gap: 16px; padding: 12px 12px; border-bottom: 1px solid var(--line); }
 .kr-line:last-child { border-bottom: 0; }
-.kr-line.kr-head { position: sticky; top: 76px; z-index: 2; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--bg); font-size: 11px; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase; color: var(--muted); }
+.kr-line.kr-head { position: sticky; top: 76px; z-index: 2; margin-bottom: 4px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--bg); font-size: 11px; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase; color: var(--muted); }
 .kr-lines { border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); overflow: hidden; }
 .kr-line.undefined .kr-title { color: var(--secondary); }
 .kr-main { min-width: 0; }
@@ -2407,5 +2360,3 @@ body.page-dashboard .atlas { max-width: none; }
 .status-pill.measured { color: var(--success); background: color-mix(in srgb, var(--success) 14%, var(--card)); }
 .status-pill.pending { color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, var(--card)); }
 .status-pill.undefined { color: var(--muted); background: var(--surface); }
-.results-star { gap: 12px; border-top: 0; padding-top: 8px; }
-.kr-line.kr-head { margin-bottom: 4px; }

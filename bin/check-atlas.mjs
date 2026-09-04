@@ -3,6 +3,7 @@
 //
 //   node bin/check-atlas.mjs            Markdown on stdout
 //   node bin/check-atlas.mjs --json     JSON instead
+//   node bin/check-atlas.mjs --render report.json   Markdown from a saved JSON result, no network
 //
 // Checks: repo links resolve; status agrees with npm; `requires` agrees with package.json both ways;
 // WDK repos in the org that the atlas does not mention; roadmap items name modules that exist.
@@ -17,6 +18,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const TOKEN = process.env.ATLAS_TOKEN || process.env.GITHUB_TOKEN || "";
 const JSON_OUT = process.argv.includes("--json");
+const RENDER = process.argv.indexOf("--render") >= 0 ? process.argv[process.argv.indexOf("--render") + 1] : null; // render a saved --json result, no fetches
 
 // ---------------------------------------------------------------- load
 const ctx = {};
@@ -25,7 +27,7 @@ runInContext(readFileSync(join(ROOT, "vendor/js-yaml.min.js"), "utf8"), ctx);
 const atlas = ctx.jsyaml.load(readFileSync(join(ROOT, "atlas.yaml"), "utf8"));
 const audit = atlas.audit || {};
 const ORG = audit.org || "tetherto";
-const REPO_PATTERN = new RegExp(audit.repoPattern || "^(wdk-|pear-wrk-wdk$|create-wdk-module$)");
+const REPO_PATTERN = new RegExp(audit.repoPattern || "^(wdk$|wdk-|pear-wrk-wdk$|create-wdk-module$)");
 const IGNORE = new Set(audit.ignoreRepos || []);
 const IGNORE_PATTERN = audit.ignorePattern ? new RegExp(audit.ignorePattern) : null;
 const modules = atlas.modules || [];
@@ -58,6 +60,28 @@ const repoOf = (url) => {
   const m = /github\.com\/([^/]+)\/([^/#?]+)/.exec(url || "");
   return m ? { owner: m[1], name: m[2].replace(/\.git$/, "") } : null;
 };
+
+// ---------------------------------------------------------------- report
+const SECTIONS = [
+  ["Repo links", "links", "Links that no longer resolve, or repos that were archived."],
+  ["Status", "status", "The atlas status against what npm and the repo say."],
+  ["Dependencies", "relations", "`requires` in the atlas against `dependencies` in each package.json, both ways."],
+  ["Coverage", "coverage", `Repos in the ${ORG} org matching \`${REPO_PATTERN.source}\` that the atlas does not mention (archived and forks skipped; add to \`audit.ignoreRepos\` to silence).`],
+  ["Roadmap references", "roadmap", "Roadmap items that name a module id missing from the atlas."],
+];
+function emit(result) {
+  if (JSON_OUT) { console.log(JSON.stringify(result, null, 2)); return; }
+  const lines = [`_Checked ${result.date} against GitHub and npm · ${result.modules} modules · ${result.roadmap} roadmap items · ${result.total} finding${result.total === 1 ? "" : "s"}${result.token ? "" : " · no token, private repos invisible"}_`, ""];
+  for (const [title, key, blurb] of SECTIONS) {
+    const list = result.findings[key] || [];
+    lines.push(`## ${title} (${list.length})`, "", blurb, "");
+    if (!list.length) { lines.push("Nothing to report.", ""); continue; }
+    for (const f of list) lines.push(`- [ ] **${f.id}** — ${f.evidence}`);
+    lines.push("");
+  }
+  console.log(lines.join("\n"));
+}
+if (RENDER) { emit(JSON.parse(readFileSync(RENDER, "utf8"))); process.exit(0); }
 
 // ---------------------------------------------------------------- collect
 try {
@@ -143,29 +167,7 @@ for (const item of roadmap) {
   }
 }
 
-// ---------------------------------------------------------------- report
-const total = Object.values(findings).reduce((n, list) => n + list.length, 0);
-const date = new Date().toISOString().slice(0, 10);
-const sections = [
-  ["Repo links", findings.links, "Links that no longer resolve, or repos that were archived."],
-  ["Status", findings.status, "The atlas status against what npm and the repo say."],
-  ["Dependencies", findings.relations, "`requires` in the atlas against `dependencies` in each package.json, both ways."],
-  ["Coverage", findings.coverage, `Repos in the ${ORG} org matching \`${REPO_PATTERN.source}\` that the atlas does not mention (archived and forks skipped; add to \`audit.ignoreRepos\` to silence).`],
-  ["Roadmap references", findings.roadmap, "Roadmap items that name a module id missing from the atlas."],
-];
-if (JSON_OUT) {
-  console.log(JSON.stringify({ date, total, findings, modules: modules.length, roadmap: roadmap.length, token: Boolean(TOKEN) }, null, 2));
-} else {
-  const lines = [];
-  lines.push(`_Checked ${date} against GitHub and npm · ${modules.length} modules · ${roadmap.length} roadmap items · ${total} finding${total === 1 ? "" : "s"}${TOKEN ? "" : " · no token, private repos invisible"}_`, "");
-  for (const [title, list, blurb] of sections) {
-    lines.push(`## ${title} (${list.length})`, "", blurb, "");
-    if (!list.length) { lines.push("Nothing to report.", ""); continue; }
-    for (const f of list) lines.push(`- [ ] **${f.id}** — ${f.evidence}`);
-    lines.push("");
-  }
-  console.log(lines.join("\n"));
-}
+  emit({ date: new Date().toISOString().slice(0, 10), total: Object.values(findings).reduce((n, list) => n + list.length, 0), findings, modules: modules.length, roadmap: roadmap.length, token: Boolean(TOKEN) });
 } catch (error) {
   console.error(`check-atlas: ${error && error.message ? error.message : error}`);
   process.exit(1);

@@ -36,6 +36,8 @@ audit:
     - wdk-module-templates
   # Dependencies never drawn as `requires`. Foundation modules are implicit already.
   implicitRequires: []
+  # Sections whose modules consume many packages (apps, developer tools): only their stale `requires` are reported.
+  consumerSections: [app, dev]
   # Backend workers, apps and infrastructure: never modules, never reported.
   ignorePattern: "(-wrk$|-wrk-|-app-node$|-e2e-tests$|^wdk-faucet-|^wdk-indexer-docs$|^wdk-indexer-webhook)"
 
@@ -740,6 +742,9 @@ modules:
     status: shipped
     publisher: tetherto
     summary: 'Asks Tether''s indexer for balances and token transfer history across many chains, so an app does not have to read each chain itself.'
+    notes:
+      - The indexing service behind this client stays closed source; its API is open and documented
+      - Marked live on the map but never published to npm; open question
     repo: https://github.com/tetherto/wdk-indexer-http
 
 
