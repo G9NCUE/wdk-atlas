@@ -2275,3 +2275,43 @@ summary .module-stack {
 .kr-table .kr-bar {
   width: 120px;
 }
+
+/* Map search: sits with the toggle and legend; filtered chips vanish, emptied cells dim. */
+.header-side .map-search {
+  align-self: flex-end;
+}
+
+.header-side .map-search .search-input {
+  width: 300px;
+}
+
+.is-filtered {
+  display: none !important;
+}
+
+.search-dim {
+  opacity: 0.3;
+}
+
+/* GitHub link, top right of the bar. */
+.gh-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin-left: auto;
+  border-radius: var(--radius-btn);
+  color: var(--secondary);
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.gh-link:hover {
+  color: var(--ink);
+  background: var(--white-5);
+}
+
+.gh-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
