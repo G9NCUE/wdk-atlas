@@ -153,7 +153,7 @@ function renderModule(module) {
 
   return el(
     "div",
-    { class: "module-stack", "data-id": module.id },
+    { class: "module-stack", "data-id": module.id, "data-search": searchTextOf(module) },
     el(
       "button",
       {
@@ -355,6 +355,30 @@ function shortTitle(module, context) {
   return title.charAt(0).toUpperCase() + title.slice(1);
 }
 
+// What the map search matches on: titles, package name, id, chains, kind, publisher, status, summary.
+function searchTextOf(module) {
+  return [module.title, module.short, module.name, module.id, ...chainsOf(module), module.kind, module.publisher, module.status === "shipped" ? "live" : module.status, module.summary]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+// Map search: hides chips that do not match, dims the cells and lanes left empty, keeps the geometry.
+function applyMapSearch(query, count) {
+  const q = query.trim().toLowerCase();
+  let total = 0;
+  for (const node of poster.querySelectorAll("[data-search][data-id]")) {
+    const hit = !q || (node.dataset.search || "").includes(q);
+    node.classList.toggle("is-filtered", !hit);
+    if (q && hit) total += 1;
+  }
+  for (const box of poster.querySelectorAll(".mx-cell, .chips, .band-modules, .lane, .lane-row, .band-group")) {
+    const any = box.querySelector("[data-search][data-id]:not(.is-filtered)");
+    box.classList.toggle("search-dim", Boolean(q) && !any);
+  }
+  count.textContent = q ? `${total} ${total === 1 ? "match" : "matches"}` : "";
+}
+
 // The compact module: status dot, plain title, publisher for ecosystem modules, pending count.
 function renderChip(module, context) {
   const ecosystem = isEcosystem(module);
@@ -364,7 +388,7 @@ function renderChip(module, context) {
     .join(" ");
   return el(
     "button",
-    { class: classes, type: "button", "data-id": module.id, "data-node": module.id, "aria-expanded": "false", title: module.name || module.id },
+    { class: classes, type: "button", "data-id": module.id, "data-node": module.id, "aria-expanded": "false", title: module.name || module.id, "data-search": searchTextOf(module) },
     el("i", { class: "dot", "aria-hidden": "true" }),
     el("span", { class: "mod-title" }, shortTitle(module, context)),
     ecosystem && el("span", { class: "pub" }, module.publisher),
@@ -834,16 +858,16 @@ function spotlightTarget() {
 }
 
 // Search: filters initiative cards by title, summary, id and module names; stars with a match open.
-function renderSearch() {
+function renderSearch(apply = applySearch) {
   const input = el("input", { class: "search-input", type: "search", placeholder: "Search initiatives…", "aria-label": "Search initiatives", autocomplete: "off" });
   const count = el("span", { class: "search-count", "aria-live": "polite" });
   const wrap = el("label", { class: "search" }, input, count);
-  input.addEventListener("input", () => applySearch(input.value, count));
+  input.addEventListener("input", () => apply(input.value, count));
   // ?q= prefills the search, so a filtered view can be shared as a link.
   const initial = new URLSearchParams(location.search).get("q") || "";
   if (initial) {
     input.value = initial;
-    requestAnimationFrame(() => applySearch(initial, count));
+    requestAnimationFrame(() => apply(initial, count));
   }
   document.addEventListener("keydown", (event) => {
     if (event.key === "/" && document.activeElement !== input && !event.metaKey && !event.ctrlKey) {
@@ -1320,6 +1344,12 @@ async function main() {
   }
   togglePending.addEventListener("change", applyToggles);
 
+  if (page === "map" || page === "dev") {
+    const side = document.querySelector(".header-side");
+    const search = renderSearch(applyMapSearch);
+    search.classList.add("map-search");
+    side.prepend(search);
+  }
   if (questionsUnlocked()) revealQuestions();
   wireLogoTaps();
 
