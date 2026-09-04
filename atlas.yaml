@@ -22,7 +22,7 @@ mission: Open-source, self-custodial wallet infrastructure for anyone.
 # Settings for bin/check-atlas.mjs.
 audit:
   org: tetherto
-  repoPattern: "^(wdk-|pear-wrk-wdk$|create-wdk-module$)"
+  repoPattern: "^(wdk$|wdk-|pear-wrk-wdk$|create-wdk-module$)"
   # Org repos that are not modules; not reported as missing from the atlas.
   ignoreRepos:
     - wdk-docs
@@ -43,6 +43,8 @@ audit:
 # `keyResults` are the measurable results behind each star, shown on the roadmap rows and on the Key results page.
 #   id, label; optional: target, current, unit, progress (0-100), source (how it is measured), note.
 #   Without `progress` (or `target` and `current`) a key result shows as "not measured".
+#   `metric` reads the Dashboard data instead (data/metrics.json): kind count (source: thirdPartyModules, target),
+#   quarterGrowth (series, targetPct: growth vs the previous calendar quarter), issueResponse (withinHours, target %).
 # Inherited from the Q3 2026 OKR sheet with light editing; a starting point pending review, not a commitment.
 northStars:
   - id: kit
@@ -59,13 +61,20 @@ northStars:
     keyResults:
       - { id: recipes, label: "Six new recipes and examples across the docs, the CLI and the agent toolkits" }
       - { id: des, label: "Developer experience score above 70" }
-      - { id: issue-response, label: "Open issues answered within a week" }
+      - id: issue-response
+        label: "Open issues answered within a week"
+        metric: { kind: issueResponse, withinHours: 168, target: 100 }
   - id: ecosystem
     title: A thriving ecosystem
     summary: Modules, chains and integrations built by others on top of WDK.
     keyResults:
-      - { id: modules, label: "Twelve or more WDK-compatible modules or integrations published" }
-      - { id: external-prs, label: "External pull requests merged up by 50% in the quarter" }
+      - id: modules
+        label: "Twelve or more WDK-compatible modules or integrations published"
+        metric: { kind: count, source: thirdPartyModules, target: 12 }
+        note: Counted as third-party modules on the map, live status. First-party packages are on the dashboard.
+      - id: external-prs
+        label: "External pull requests merged up by 50% in the quarter"
+        metric: { kind: quarterGrowth, series: externalPrsMerged, targetPct: 50 }
       - { id: community-projects, label: "Five live community projects on WDK; five funded through bounties" }
       - { id: ecosystem-call, label: "Monthly update call with the ecosystem teams" }
       - { id: transparency, label: "Roadmap, contribution guidelines and module review process public and current" }
