@@ -764,15 +764,78 @@ function renderTimelineHead(quarters, now) {
   );
 }
 
-// Key results: strings or objects; progress only from numbers someone set.
+// Dashboard data, loaded once for the pages that read key results from it.
+let METRICS = null;
+async function loadMetrics() {
+  if (METRICS) return METRICS;
+  try {
+    const res = await fetch(`data/metrics.json?v=${ASSET_V || "0"}-${new Date().toISOString().slice(0, 10)}`);
+    METRICS = res.ok ? await res.json() : null;
+  } catch { METRICS = null; }
+  return METRICS;
+}
+const quarterOf = (dayStr) => `${dayStr.slice(0, 4)}Q${Math.floor((Number(dayStr.slice(5, 7)) - 1) / 3) + 1}`;
+const sumSeries = (perRepo, from, to) => { let n = 0; for (const days of Object.values(perRepo || {})) for (const [d, v] of Object.entries(days)) if (d >= from && d < to) n += v; return n; };
+const nextQuarter = (q) => (q.endsWith("Q4") ? `${Number(q.slice(0, 4)) + 1}Q1` : `${q.slice(0, 4)}Q${Number(q.slice(5)) + 1}`);
+const quarterBounds = (q) => { const y = Number(q.slice(0, 4)), i = Number(q.slice(5)); const m = (i - 1) * 3; const from = `${y}-${String(m + 1).padStart(2, "0")}-01`; const to = m + 3 > 11 ? `${y + 1}-01-01` : `${y}-${String(m + 4).padStart(2, "0")}-01`; return [from, to]; };
+
+// A key result with `metric` reads its current value and progress from the Dashboard data.
+function evaluateMetric(kr) {
+  const m = kr.metric; if (!m) return null;
+  const out = { source: "Dashboard", link: "./?page=dashboard", note: null, current: null, target: null, progress: null, unit: "" };
+  if (m.kind === "count" && m.source === "thirdPartyModules") {
+    const n = (atlas.modules || []).filter((x) => x.publisher && x.publisher !== "tetherto" && x.status === "shipped").length;
+    Object.assign(out, { current: n, target: m.target, progress: m.target ? Math.min(100, Math.round((100 * n) / m.target)) : null, link: "./?page=map", source: "Map, third-party modules" });
+    return out;
+  }
+  if (!METRICS || !METRICS.daily) { out.note = "Dashboard data not loaded."; return out; }
+  const D = METRICS.daily;
+  if (m.kind === "quarterGrowth") {
+    const days = Object.values(D[m.series] || {}).flatMap((x) => Object.keys(x)).sort();
+    const first = days[0] || null, today = new Date().toISOString().slice(0, 10);
+    const q = quarterOf(today), [qFrom, qTo] = quarterBounds(q);
+    const prevQ = `${qFrom.slice(0, 4) - (q.endsWith("Q1") ? 1 : 0)}Q${q.endsWith("Q1") ? 4 : Number(q.slice(5)) - 1}`, [pFrom, pTo] = quarterBounds(prevQ);
+    const cur = sumSeries(D[m.series], qFrom, qTo);
+    out.current = cur; out.unit = `so far in ${q}`; out.link = "./?page=dashboard&range=monthly";
+    if (!first || first > pFrom) {
+      const firstFull = first && first === quarterBounds(quarterOf(first))[0] ? quarterOf(first) : nextQuarter(quarterOf(first || today));
+      out.note = `Needs a full previous quarter of data. Data starts ${first || "today"}; the first full quarter is ${firstFull}, so the comparison becomes possible in ${nextQuarter(firstFull)}.`;
+      out.target = `+${m.targetPct}% vs ${prevQ}`; return out;
+    }
+    const prev = sumSeries(D[m.series], pFrom, pTo);
+    const goal = Math.ceil(prev * (1 + m.targetPct / 100));
+    Object.assign(out, { target: `${goal} (+${m.targetPct}% vs ${prev} in ${prevQ})`, progress: goal ? Math.min(100, Math.round((100 * cur) / goal)) : null });
+    return out;
+  }
+  if (m.kind === "issueResponse") {
+    const within = m.withinHours || 168, now = Date.now();
+    let answered = 0, missed = 0, pending = 0;
+    for (const perDay of Object.values(D.issueResponse || {})) for (const [d, list] of Object.entries(perDay)) for (const h of list) {
+      if (h >= 0 && h <= within) answered += 1;
+      else if (h >= 0) missed += 1;
+      else if (now - new Date(d + "T00:00:00Z") > within * 36e5) missed += 1;
+      else pending += 1;
+    }
+    const total = answered + missed;
+    const pct = total ? Math.round((100 * answered) / total) : null;
+    Object.assign(out, { current: pct == null ? null : `${pct}%`, target: `${m.target}%`, progress: pct == null ? null : Math.min(100, Math.round((100 * pct) / m.target)), unit: `${answered} of ${total} issues, last 30 days${pending ? `, ${pending} still within the week` : ""}`, link: "./?page=dashboard&range=weekly", note: total ? null : "No issues opened in the window yet." });
+    return out;
+  }
+  out.note = `Unknown metric kind ${m.kind}.`; return out;
+}
+
+// Key results: strings or objects; progress from numbers someone set, or from the Dashboard when `metric` is set.
 function keyResultsOf(star) {
   return (star.keyResults || []).map((kr, i) => {
     const o = typeof kr === "string" ? { label: kr } : kr;
+    const ev = evaluateMetric(o);
     let progress = Number.isFinite(Number(o.progress)) ? Number(o.progress) : null;
     if (progress == null && Number.isFinite(Number(o.target)) && Number.isFinite(Number(o.current)) && Number(o.target) > 0) {
       progress = (100 * Number(o.current)) / Number(o.target);
     }
-    return { id: o.id || `${star.id}-kr-${i + 1}`, label: o.label || String(kr), target: o.target, current: o.current, unit: o.unit, source: o.source, note: o.note,
+    if (ev && ev.progress != null) progress = ev.progress;
+    return { id: o.id || `${star.id}-kr-${i + 1}`, label: o.label || String(kr), target: ev ? ev.target : o.target, current: ev ? ev.current : o.current, unit: ev ? ev.unit : o.unit,
+      source: ev ? ev.source : o.source, sourceLink: ev ? ev.link : null, note: [o.note, ev && ev.note].filter(Boolean).join(" "), fromDashboard: Boolean(ev),
       progress: progress == null ? null : Math.max(0, Math.min(100, Math.round(progress))) };
   });
 }
@@ -972,55 +1035,307 @@ function renderRoadmap() {
   return el("div", { class: "roadmap-page" }, intro, headWrap, scroller);
 }
 
-// Key results page: one block per north star, a table of its key results. Scaffold: measures come later.
+// Key results page: one grid for the whole page so columns line up across stars; one status language.
+function krStatus(kr) {
+  if (kr.progress != null) return { key: "measured", label: "Measured" };
+  if (kr.fromDashboard || kr.source) return { key: "pending", label: "Not measured yet" };
+  return { key: "undefined", label: "To define" };
+}
+
+function krValue(kr) {
+  if (kr.current == null && kr.target == null) return el("span", { class: "kr-none" }, "—");
+  const cur = kr.current == null ? "—" : String(kr.current);
+  const tgt = kr.target == null ? null : String(kr.target);
+  const plain = tgt && /^[\d.,]+%?$/.test(tgt); // "12", "100%": read as "of"; anything else is a rule, shown as "target …"
+  return el("span", { class: "kr-value" }, el("b", null, cur), tgt && el("span", { class: "kr-target" }, plain ? ` of ${tgt}` : ` · target ${tgt}`));
+}
+
+function krRow(kr) {
+  const st = krStatus(kr);
+  return el(
+    "div",
+    { class: `kr-line ${st.key}`, id: kr.id },
+    el("div", { class: "kr-main" }, el("div", { class: "kr-title" }, kr.label), (kr.unit || kr.note) && el("div", { class: "kr-sub" }, [kr.unit, kr.note].filter(Boolean).join(" · "))),
+    el("div", { class: "kr-col kr-col-status" }, el("span", { class: `status-pill ${st.key}` }, st.label)),
+    el("div", { class: "kr-col kr-col-value" }, krValue(kr)),
+    el("div", { class: "kr-col kr-col-progress" }, el("span", { class: "kr-bar" }, el("span", { style: `width:${kr.progress ?? 0}%` })), el("span", { class: "kr-pct" }, kr.progress == null ? "—" : `${kr.progress}%`)),
+    el("div", { class: "kr-col kr-col-source" }, kr.sourceLink ? el("a", { href: kr.sourceLink }, kr.source.split(",")[0]) : kr.source ? el("span", null, kr.source) : el("span", { class: "kr-none" }, "to define"))
+  );
+}
+
 function renderResults() {
   const stars = atlas.northStars || [];
   const items = roadmapItems();
-  const fmt = (v, unit) => (v == null ? "" : `${v}${unit ? " " + unit : ""}`);
+  const all = stars.flatMap((star) => keyResultsOf(star));
+  const measured = all.filter((kr) => kr.progress != null).length;
+
+  const strip = el("ul", { class: "kr-strip-summary" },
+    el("li", null, el("strong", null, `${measured} of ${all.length}`), " measured"),
+    stars.map((star, i) => { const krs = keyResultsOf(star); const m = krs.filter((kr) => kr.progress != null).length; return el("li", null, el("a", { href: `#${star.id}`, title: star.title }, el("strong", null, `${m}/${krs.length}`), ` star ${String(i + 1).padStart(2, "0")}`)); }));
+
+  const head = el("div", { class: "kr-line kr-head" },
+    el("div", { class: "kr-main" }, "Key result"), el("div", { class: "kr-col" }, "Status"), el("div", { class: "kr-col" }, "Current · target"), el("div", { class: "kr-col" }, "Progress"), el("div", { class: "kr-col" }, "Source"));
+
   const blocks = stars.map((star, index) => {
     const krs = keyResultsOf(star);
     const linked = items.filter((item) => item.northStar === star.id);
     const counts = { done: 0, wip: 0, planned: 0 };
     for (const item of linked) counts[item.status || "planned"] += 1;
-    const measured = krs.filter((kr) => kr.progress != null).length;
-    const rows = krs.map((kr) =>
-      el(
-        "tr",
-        { id: kr.id },
-        el("td", { class: "kr-cell-label" }, kr.label, kr.note && el("div", { class: "kr-note" }, kr.note)),
-        el("td", null, fmt(kr.target, kr.unit)),
-        el("td", null, fmt(kr.current, kr.unit)),
-        el("td", { class: "kr-cell-progress" }, kr.progress != null
-          ? el("span", { class: "kr-meter" }, el("span", { class: "kr-bar" }, el("span", { style: `width:${kr.progress}%` })), el("span", { class: "kr-pct" }, `${kr.progress}%`))
-          : el("span", { class: "kr-none" }, "not measured")),
-        el("td", { class: "kr-cell-source" }, kr.source || el("span", { class: "kr-none" }, "to define"))
-      )
-    );
     return el(
       "section",
       { class: "results-star", id: star.id },
-      el(
-        "header",
-        { class: "star-head static" },
+      el("header", { class: "star-head static" },
         el("span", { class: "star-index" }, String(index + 1).padStart(2, "0")),
         el("div", { class: "star-text" }, el("h2", { class: "star-title plain" }, star.title), star.summary && el("p", { class: "star-summary" }, star.summary)),
         el("ul", { class: "star-tally" },
-          el("li", null, el("strong", null, `${measured}/${krs.length}`), " measured"),
           el("li", null, el("a", { href: `./?page=roadmap#star-${star.id}` }, el("strong", null, String(linked.length)), " initiatives")),
           counts.done > 0 && el("li", { class: "done" }, el("strong", null, String(counts.done)), " done"),
-          counts.wip > 0 && el("li", { class: "wip" }, el("strong", null, String(counts.wip)), " in progress"))
-      ),
-      el(
-        "div",
-        { class: "table-scroll" },
-        el("table", { class: "kr-table" },
-          el("thead", null, el("tr", null, el("th", null, "Key result"), el("th", null, "Target"), el("th", null, "Current"), el("th", null, "Progress"), el("th", null, "How it is measured"))),
-          el("tbody", null, rows))
-      )
+          counts.wip > 0 && el("li", { class: "wip" }, el("strong", null, String(counts.wip)), " in progress"))),
+      el("div", { class: "kr-lines" }, krs.map(krRow))
     );
   });
-  const note = el("p", { class: "results-note" }, "Key results are inherited from the Q3 2026 OKR sheet and are a starting point pending review. A result shows a bar only when a number has been set in atlas.yaml; everything else reads \"not measured\" on purpose.");
-  return el("div", { class: "results-page" }, note, blocks);
+  const note = el("p", { class: "results-note" }, "Draft, pending review. Measured means a real number exists; nothing is estimated.");
+  return el("div", { class: "results-page" }, strip, note, head, blocks);
+}
+
+// ---- Dashboard: public metrics from data/metrics.json (one row per ISO week, collected by the Metrics action).
+const SERIES = ["#3987e5", "#199e70", "#c98500"]; // categorical, fixed order, validated for the dark surface
+const fmtNum = (n) => (n == null ? "—" : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${Math.round(n / 1e3)}K` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(n));
+
+function deltaPill(now, before, { invert = false } = {}) {
+  if (before == null || now == null) return el("span", { class: "delta none" }, "no prior data");
+  const diff = now - before;
+  const pct = before ? Math.round((1000 * diff) / before) / 10 : null;
+  const dir = diff > 0 ? "up" : diff < 0 ? "down" : "flat";
+  const good = invert ? dir === "down" : dir === "up";
+  const arrow = dir === "up" ? "↑" : dir === "down" ? "↓" : "→";
+  const sign = diff > 0 ? "+" : diff < 0 ? "−" : "";
+  return el("span", { class: `delta ${dir === "flat" ? "flat" : good ? "good" : "bad"}` }, `${arrow} ${sign}${fmtNum(Math.abs(diff))}${pct == null ? "" : ` (${sign}${Math.abs(pct)}%)`}`);
+}
+
+function statTile(label, value, delta, hint, feeds) {
+  return el("div", { class: "tile" }, el("div", { class: "tile-label" }, label), el("div", { class: "tile-value" }, value), delta, hint && el("div", { class: "tile-hint" }, hint),
+    feeds && el("a", { class: "tile-feeds", href: `./?page=results#${feeds.id}` }, `feeds key result: ${feeds.label}`));
+}
+
+// Axis labels thin out when there are many buckets: every point up to 12, then every nth, always the last.
+const labelEvery = (n, i) => n <= 12 || i === n - 1 || i % Math.ceil(n / 8) === 0;
+
+// Inline SVG line chart, one series, hover titles on points, selective direct labels (first and last).
+function lineChart(points, { color = SERIES[0], height = 160, unit = "" } = {}) {
+  const W = 520, H = height, px = 28, py = 16;
+  const ys = points.map((p) => p.y);
+  const max = Math.max(...ys, 1), min = 0;
+  const x = (i) => px + (i * (W - 2 * px)) / Math.max(points.length - 1, 1);
+  const y = (v) => H - py - ((v - min) * (H - 2 * py)) / (max - min || 1);
+  const d = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.y).toFixed(1)}`).join(" ");
+  const svg = `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="line chart">
+    ${[0, 0.5, 1].map((t) => `<line class="grid" x1="${px}" x2="${W - px}" y1="${y(max * t).toFixed(1)}" y2="${y(max * t).toFixed(1)}"/><text class="axis" x="${px - 6}" y="${(y(max * t) + 4).toFixed(1)}" text-anchor="end">${fmtNum(Math.round(max * t))}</text>`).join("")}
+    <path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
+    ${points.map((p, i) => `<g><circle cx="${x(i).toFixed(1)}" cy="${y(p.y).toFixed(1)}" r="4.5" fill="${color}" stroke="var(--card)" stroke-width="2"/><title>${p.label}: ${p.y.toLocaleString()}${unit}</title></g>`).join("")}
+    ${points.map((p, i) => (i === 0 || i === points.length - 1 ? `<text class="dlabel" x="${x(i).toFixed(1)}" y="${(y(p.y) - 10).toFixed(1)}" text-anchor="middle">${fmtNum(p.y)}</text>` : "")).join("")}
+    ${points.map((p, i) => (labelEvery(points.length, i) ? `<text class="axis" x="${x(i).toFixed(1)}" y="${H - 2}" text-anchor="middle">${p.label}</text>` : "")).join("")}
+  </svg>`;
+  const box = el("div", { class: "chart-box" }); box.innerHTML = svg; return box;
+}
+
+// Grouped bars: categories on x, up to three series, 2px gaps, hover titles, legend below.
+function groupedBars(categories, series, { height = 160 } = {}) {
+  const W = 520, H = height, px = 28, py = 14;
+  const max = Math.max(1, ...series.flatMap((s) => s.values));
+  const gw = (W - 2 * px) / Math.max(categories.length, 1);
+  const bw = Math.min(28, (gw * 0.7) / series.length);
+  const y = (v) => H - py - (v * (H - 2 * py)) / max;
+  const svg = `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="bar chart">
+    ${[0, 0.5, 1].map((t) => `<line class="grid" x1="${px}" x2="${W - px}" y1="${y(max * t).toFixed(1)}" y2="${y(max * t).toFixed(1)}"/><text class="axis" x="${px - 6}" y="${(y(max * t) + 4).toFixed(1)}" text-anchor="end">${fmtNum(Math.round(max * t))}</text>`).join("")}
+    ${categories.map((c, ci) => series.map((s, si) => { const v = s.values[ci] || 0; const bx = px + ci * gw + (gw - bw * series.length - 2 * (series.length - 1)) / 2 + si * (bw + 2); return `<g><rect x="${bx.toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, H - py - y(v)).toFixed(1)}" rx="3" fill="${SERIES[si]}"/><title>${c} · ${s.label}: ${v}</title></g>`; }).join("")).join("")}
+    ${categories.map((c, ci) => (labelEvery(categories.length, ci) ? `<text class="axis" x="${(px + ci * gw + gw / 2).toFixed(1)}" y="${H - 2}" text-anchor="middle">${c}</text>` : "")).join("")}
+  </svg>`;
+  const box = el("div", { class: "chart-box" }); box.innerHTML = svg;
+  if (series.length > 1) box.append(el("ul", { class: "legend-row" }, series.map((s, i) => el("li", null, el("i", { style: `background:${SERIES[i]}` }), s.label))));
+  return box;
+}
+
+// Horizontal bars, one series, direct value labels.
+function hBars(rows, { color = SERIES[0] } = {}) {
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  return el("div", { class: "hbars" }, rows.map((r) => el("div", { class: "hbar", title: `${r.hint ? r.hint + " · " : ""}${r.label}: ${r.value.toLocaleString()}` },
+    el("span", { class: "hbar-label" }, r.label),
+    el("span", { class: "hbar-track" }, el("span", { class: "hbar-fill", style: `width:${(100 * r.value) / max}%;background:${color}` })),
+    el("span", { class: "hbar-value" }, fmtNum(r.value)))));
+}
+
+function chartCard(title, value, delta, body, foot) {
+  return el("article", { class: "chart-card" },
+    el("header", { class: "chart-head" }, el("h3", null, title), value != null && el("span", { class: "chart-value" }, value), delta),
+    body, foot && el("p", { class: "chart-foot" }, foot));
+}
+
+function dashSection(title, cards, open = true) {
+  return el("details", { class: "dash-section", open }, el("summary", { class: "section-head" }, el("span", { class: "section-text" }, el("span", { class: "section-title-row" }, el("h2", { class: "section-title" }, title)))), el("div", { class: "chart-grid" }, cards));
+}
+
+// ---- Dashboard data model (schema 3): per-repo daily series + daily snapshots; the page sums the selected repos.
+const GRAINS = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" };
+const params = new URLSearchParams(location.search);
+const grain = GRAINS[params.get("range")] ? params.get("range") : "weekly";
+const SEL_KEY = "atlas:dash:repos";
+
+function isoWeekOf(dayStr) {
+  const d = new Date(dayStr + "T00:00:00Z");
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const wd = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - wd);
+  const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return `${t.getUTCFullYear()}-W${String(Math.ceil(((t - y0) / 864e5 + 1) / 7)).padStart(2, "0")}`;
+}
+const bucketKey = (dayStr) => (grain === "daily" ? dayStr : grain === "weekly" ? isoWeekOf(dayStr) : dayStr.slice(0, 7));
+const todayKey = () => bucketKey(new Date().toISOString().slice(0, 10));
+const bucketLabel = (key) => {
+  if (grain === "daily") { const d = new Date(key + "T00:00:00Z"); return d.toLocaleDateString("en", { month: "short", day: "numeric", timeZone: "UTC" }); }
+  if (grain === "weekly") return key.replace(/^\d{4}-/, "");
+  const d = new Date(key + "-01T00:00:00Z"); return d.toLocaleDateString("en", { month: "short", year: "2-digit", timeZone: "UTC" });
+};
+const MAX_BUCKETS = { daily: 30, weekly: 12, monthly: 12 };
+
+// Sum a per-repo daily series over the selected repos into complete buckets of the current grain.
+function seriesBuckets(perRepo, selected, { includeCurrent = false } = {}) {
+  const sums = new Map();
+  for (const repo of selected) for (const [d, n] of Object.entries((perRepo || {})[repo] || {})) sums.set(bucketKey(d), (sums.get(bucketKey(d)) || 0) + n);
+  const now = todayKey();
+  return [...sums].filter(([k]) => includeCurrent || k < now).sort().slice(-MAX_BUCKETS[grain]).map(([k, y]) => ({ key: k, label: bucketLabel(k), y }));
+}
+const lastTwo = (pts) => ({ now: pts.length ? pts[pts.length - 1].y : null, prev: pts.length > 1 ? pts[pts.length - 2].y : null, key: pts.length ? pts[pts.length - 1].key : null });
+
+// Snapshot totals for the selection, per snapshot day; then bucketed as end-of-bucket values.
+function snapshotSeries(snapshots, field, selected, reduce = (vals) => vals.reduce((a, b) => a + b, 0)) {
+  const days = Object.keys(snapshots).sort();
+  const perDay = days.map((d) => ({ d, v: reduce(selected.map((r) => (snapshots[d][field] || {})[r]).filter((v) => v != null)) }));
+  const byBucket = new Map();
+  for (const { d, v } of perDay) byBucket.set(bucketKey(d), v); // last snapshot in the bucket wins
+  return [...byBucket].sort().slice(-MAX_BUCKETS[grain]).map(([k, y]) => ({ key: k, label: bucketLabel(k), y }));
+}
+
+function readSelection(all) {
+  const fromUrl = params.get("repos");
+  if (fromUrl) { const set = new Set(fromUrl.split(",")); return all.filter((r) => set.has(r)); }
+  try { const saved = JSON.parse(localStorage.getItem(SEL_KEY) || "null"); if (Array.isArray(saved) && saved.length) return all.filter((r) => saved.includes(r)); } catch {}
+  return all;
+}
+function saveSelection(selected, all) {
+  try { selected.length === all.length ? localStorage.removeItem(SEL_KEY) : localStorage.setItem(SEL_KEY, JSON.stringify(selected)); } catch {}
+}
+
+function renderGrainSwitch() {
+  const link = (id) => { const u = new URLSearchParams(location.search); u.set("page", "dashboard"); u.set("range", id); return el("a", { href: `./?${u}`, "aria-current": grain === id ? "page" : null }, GRAINS[id]); };
+  return el("nav", { class: "view-toggle", "aria-label": "Granularity" }, Object.keys(GRAINS).map(link));
+}
+
+// The selection panel: one checkbox per repo, grouped by atlas section; changes re-render the numbers in place.
+function renderRepoPanel(file, selected, onChange) {
+  const all = Object.keys(file.repos).sort();
+  const sections = (atlas.sections || []).map((sec) => sec.id);
+  const groupOf = (name) => file.repos[name].section || "other";
+  const labelOf = (id) => ((atlas.sections || []).find((sec) => sec.id === id) || {}).label || "Not on the map";
+  const groups = [...new Set([...sections, "other"])].map((id) => [id, all.filter((n) => groupOf(n) === id)]).filter(([, names]) => names.length);
+  const panel = el("details", { class: "repo-panel" });
+  const count = el("span", { class: "view-count" }, `${selected.length}/${all.length}`);
+  const summary = el("summary", { class: "repo-panel-summary" }, "Tracked repos ", count);
+  const boxes = new Map();
+  const apply = () => {
+    const chosen = all.filter((n) => boxes.get(n).checked);
+    count.textContent = `${chosen.length}/${all.length}`;
+    saveSelection(chosen, all);
+    onChange(chosen);
+  };
+  const list = el("div", { class: "repo-groups" }, groups.map(([id, names]) =>
+    el("fieldset", { class: "repo-group" }, el("legend", null, labelOf(id)), names.map((n) => {
+      const box = el("input", { type: "checkbox", value: n });
+      box.checked = selected.includes(n);
+      box.addEventListener("change", apply);
+      boxes.set(n, box);
+      const r = file.repos[n];
+      const pkgLabel = r.package ? r.package.replace(/^@tetherto\//, "") : "";
+      return el("label", { class: "repo-row", title: n }, box, el("span", { class: "repo-title" }, r.title), pkgLabel && pkgLabel !== r.title && el("span", { class: "repo-pkg" }, pkgLabel));
+    }))));
+  const tools = el("div", { class: "repo-tools" },
+    el("button", { type: "button", class: "linkish" }, "All"), el("button", { type: "button", class: "linkish" }, "None"), el("button", { type: "button", class: "linkish" }, "On the map only"));
+  const [allBtn, noneBtn, mapBtn] = tools.querySelectorAll("button");
+  allBtn.addEventListener("click", () => { for (const b of boxes.values()) b.checked = true; apply(); });
+  noneBtn.addEventListener("click", () => { for (const b of boxes.values()) b.checked = false; apply(); });
+  mapBtn.addEventListener("click", () => { for (const [n, b] of boxes) b.checked = Boolean(file.repos[n].module); apply(); });
+  panel.append(summary, el("div", { class: "repo-panel-body" }, tools, list));
+  return panel;
+}
+
+function buildDashboard(file, selected) {
+  const snaps = file.snapshots || {};
+  const snapDays = Object.keys(snaps).sort();
+  const latest = snaps[snapDays[snapDays.length - 1]] || {};
+  const sum = (obj) => selected.reduce((n, r) => n + ((obj || {})[r] || 0), 0);
+  const uniq = (obj) => new Set(selected.flatMap((r) => (obj || {})[r] || [])).size;
+  const D = file.daily || {};
+  const dl = seriesBuckets(D.downloads, selected);
+  const prsO = seriesBuckets(D.prsOpened, selected), prsM = seriesBuckets(D.prsMerged, selected);
+  const xO = seriesBuckets(D.externalPrsOpened, selected), xM = seriesBuckets(D.externalPrsMerged, selected);
+  const isO = seriesBuckets(D.issuesOpened, selected), isC = seriesBuckets(D.issuesClosed, selected);
+  const starsSeries = snapshotSeries(snaps, "stars", selected);
+  const backlogSeries = snapshotSeries(snaps, "openIssues", selected);
+  const contribSeries = snapshotSeries(snaps, "contributors", selected, (lists) => new Set(lists.flat()).size);
+  const dlLast = lastTwo(dl), starsLast = lastTwo(starsSeries);
+  const unit = { daily: "day", weekly: "week", monthly: "month" }[grain];
+  const align = (a, b) => { const keys = [...new Set([...a, ...b].map((p) => p.key))].sort(); const at = (s, k) => (s.find((p) => p.key === k) || {}).y || 0; return { cats: keys.map(bucketLabel), a: keys.map((k) => at(a, k)), b: keys.map((k) => at(b, k)) }; };
+  const pr = align(prsO, prsM), xpr = align(xO, xM), iss = align(isO, isC);
+  const published = (latest.published || []).filter((r) => selected.includes(r)).length;
+  const withPkg = selected.filter((r) => file.repos[r].package).length;
+
+  const tiles = el("div", { class: "tiles" },
+    statTile(`npm downloads, last full ${unit}`, fmtNum(dlLast.now), deltaPill(dlLast.now, dlLast.prev), dlLast.key ? `${dlLast.key} · ${selected.filter((r) => file.repos[r].package).length} packages` : "no download data for this selection"),
+    statTile("GitHub stars", fmtNum(sum(latest.stars)), deltaPill(starsLast.now, starsLast.prev), `${selected.length} repos · ${fmtNum(sum(latest.forks))} forks`),
+    statTile(`External pull requests merged, last ${unit}`, String(lastTwo(xM).now ?? 0), deltaPill(lastTwo(xM).now ?? 0, lastTwo(xM).prev), `${lastTwo(xO).now ?? 0} opened`, { id: "external-prs", label: "external pull requests" }),
+    statTile("Contributors", String(uniq(latest.contributors)), deltaPill(lastTwo(contribSeries).now, lastTwo(contribSeries).prev), "people with commits, bots excluded, unique across the selection"),
+    statTile("Open issues", String(sum(latest.openIssues)), deltaPill(lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), `${lastTwo(isO).now ?? 0} opened · ${lastTwo(isC).now ?? 0} closed · last ${unit}`, { id: "issue-response", label: "issues answered within a week" }),
+    statTile("Modules published", String(published), el("span", { class: "delta none" }, `of ${withPkg} packages`), `${(atlas.modules || []).filter((m) => m.publisher && m.publisher !== file.org && m.status === "shipped").length} more by third parties, not in this count`)
+  );
+
+  const byPackage = selected.filter((r) => file.repos[r].package).map((r) => { const pts = seriesBuckets({ [r]: (D.downloads || {})[r] }, [r]); return { label: file.repos[r].package.replace(/^@tetherto\//, ""), hint: file.repos[r].title !== r ? file.repos[r].title : "", value: lastTwo(pts).now || 0 }; }).sort((a, b) => b.value - a.value).slice(0, 8);
+  const byStars = selected.map((r) => ({ label: r, hint: file.repos[r].title !== r ? file.repos[r].title : "", value: (latest.stars || {})[r] || 0 })).sort((a, b) => b.value - a.value).slice(0, 8);
+
+  const adoption = dashSection("Adoption & growth", [
+    chartCard(`npm downloads per ${unit}`, fmtNum(dlLast.now), deltaPill(dlLast.now, dlLast.prev), dl.length ? lineChart(dl) : el("p", { class: "chart-foot" }, "No download data for this selection."), "Selected packages summed. npm reports a few days late, so the current period is left out."),
+    chartCard(`Downloads by package, last full ${unit}`, null, null, hBars(byPackage, { color: SERIES[1] }), "Top eight of the selection."),
+    chartCard("Stars by repository", fmtNum(sum(latest.stars)), null, hBars(byStars, { color: SERIES[2] }), "Top eight of the selection."),
+    chartCard(`Stars over time`, null, null, starsSeries.length > 1 ? lineChart(starsSeries, { color: SERIES[2] }) : el("p", { class: "chart-foot" }, "Needs at least two daily snapshots; the first was taken " + (snapDays[0] || "today") + "."), "Total at the end of each period, from daily snapshots."),
+  ]);
+  const authors = {};
+  for (const r of selected) for (const [login, a] of Object.entries((latest.externalAuthors || {})[r] || {})) { authors[login] = authors[login] || { opened: 0, merged: 0, association: a.association }; authors[login].opened += a.opened; authors[login].merged += a.merged; }
+  const topAuthors = Object.entries(authors).sort((a, b) => b[1].opened + b[1].merged - a[1].opened - a[1].merged).slice(0, 5)
+    .map(([login, a]) => ({ label: login, hint: `${a.association.toLowerCase().replace(/_/g, " ")} · ${a.merged} merged`, value: a.opened }));
+  const community = dashSection("Community & engagement", [
+    chartCard("External contributors, last 30 days", String(Object.keys(authors).length), null, topAuthors.length ? hBars(topAuthors, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, "No external pull requests in the window."), "Top five by pull requests opened; hover for GitHub's label and merges. A teammate or a bot showing up here means the internal list needs a fix."),
+    chartCard(`Pull requests per ${unit}`, String(lastTwo(prsO).now ?? 0), null, groupedBars(pr.cats, [{ label: "Opened", values: pr.a }, { label: "Merged", values: pr.b }]), "Complete periods only."),
+    chartCard(`External pull requests per ${unit}`, String(lastTwo(xO).now ?? 0), null, groupedBars(xpr.cats, [{ label: "Opened", values: xpr.a }, { label: "Merged", values: xpr.b }]), "Authors who are not members or collaborators of the org."),
+    chartCard("Contributors over time", String(uniq(latest.contributors)), null, contribSeries.length > 1 ? lineChart(contribSeries, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, "Needs at least two daily snapshots."), "Unique people across the selection, at the end of each period."),
+  ]);
+  const support = dashSection("Support & responsiveness", [
+    chartCard(`Issues opened and closed per ${unit}`, String(sum(latest.openIssues)), deltaPill(lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), groupedBars(iss.cats, [{ label: "Opened", values: iss.a }, { label: "Closed", values: iss.b }]), "Headline is the open backlog today."),
+    chartCard("Open backlog over time", null, null, backlogSeries.length > 1 ? lineChart(backlogSeries, { color: SERIES[0] }) : hBars([{ label: "Open issues", value: sum(latest.openIssues) }, { label: "Open pull requests", value: sum(latest.openPrs) }]), backlogSeries.length > 1 ? "Open issues at the end of each period." : "Today; a curve appears after the second snapshot."),
+  ]);
+  const note = el("p", { class: "dash-note" }, `Public sources only: the npm registry and the GitHub API. ${selected.length} of ${Object.keys(file.repos).length} public WDK repos selected. Daily series cover the last 30 days and grow by one day per run; stars, contributors and open counts are daily snapshots, the first taken ${snapDays[0]}. Last collected ${String(file.updated).slice(0, 10)}. Community, newsletter and website figures are not public and are not shown.`);
+  return [tiles, adoption, community, support, note];
+}
+
+async function renderDashboard() {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const response = await fetch(`data/metrics.json?v=${ASSET_V || "0"}-${stamp}`);
+  if (!response.ok) throw new Error("No data/metrics.json yet. Run bin/collect-metrics.mjs or the Metrics action.");
+  const file = await response.json();
+  if (file.schema !== 3) throw new Error("data/metrics.json is an older schema; run the collector again.");
+  const all = Object.keys(file.repos || {}).sort();
+  let selected = readSelection(all);
+  const body = el("div", { class: "dash-body" }, buildDashboard(file, selected));
+  const controls = el("div", { class: "dash-controls" }, renderGrainSwitch(), renderRepoPanel(file, selected, (chosen) => { selected = chosen; body.replaceChildren(...buildDashboard(file, selected)); }));
+  return el("div", { class: "dash-page" }, controls, body);
 }
 
 const pageHeadings = {
@@ -1030,9 +1345,13 @@ const pageHeadings = {
     subtitle: "Docs, examples and tools for building with WDK. Not part of a shipped wallet.",
   },
   roadmap: { title: "", subtitle: "" },
+  dashboard: {
+    title: "Dashboard",
+    subtitle: "Public adoption, community and support numbers, collected daily into the same repo.",
+  },
   results: {
     title: "Key results",
-    subtitle: "What each north star is measured by. Scaffold: targets, current values and sources are still to be defined.",
+    subtitle: "How each north star is measured.",
   },
   questions: {
     title: "Questions",
@@ -1110,6 +1429,13 @@ function renderPoster() {
   if (page === "roadmap") {
     poster.replaceChildren(el("div", { class: "atlas" }, renderRoadmap()));
     poster.hidden = false;
+    return;
+  }
+
+  if (page === "dashboard") {
+    renderDashboard()
+      .then((node) => { poster.replaceChildren(el("div", { class: "atlas" }, node)); poster.hidden = false; })
+      .catch((error) => showError(error.message));
     return;
   }
 
@@ -1331,6 +1657,7 @@ async function main() {
     return;
   }
 
+  if (page === "roadmap" || page === "results") await loadMetrics();
   renderPoster();
   const togglePending = document.querySelector("#toggle-pending");
   function applyToggles() {
