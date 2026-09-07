@@ -18,7 +18,7 @@ Run it locally from the repo, then open http://localhost:4173:
 python3 -m http.server 4173
 ```
 
-Assets are versioned with `?v=N` in `index.html`; bump both suffixes after changing `app.js`,
+`data/metrics.json` is always revalidated on load, since the Metrics workflow rewrites it without touching the version. Other assets are versioned with `?v=N` in `index.html`; bump both suffixes after changing `app.js`,
 `styles.css`, `atlas.yaml` or `NOTES.md`, or GitHub Pages serves cached copies for a while.
 
 ## Keeping the map honest
