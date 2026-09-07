@@ -47,7 +47,7 @@ the org's private repos, for the workflow to see them.
 `bin/collect-metrics.mjs` gathers public figures for every public WDK repo and the npm package it
 publishes: daily downloads, pull requests and issues per day (external ones by author association),
 time to first response on issues, and a daily snapshot of stars, forks, contributors and open counts.
-It merges them into `data/metrics.json`. The `Metrics` workflow runs it every day at 06:30 UTC and on
+It merges them into `data/metrics.json`. Scope is every public repo matching `audit.repoPattern` — WDK's public open-source footprint, the documentation site included. That is deliberately wider than `audit.ignoreRepos`, which only says what is not a module on the map. The `Metrics` workflow runs it every day at 06:30 UTC and on
 demand and commits the result to `main`. Only public data is collected; the workflow token is enough.
 
 ```

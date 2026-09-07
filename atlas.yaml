@@ -25,7 +25,8 @@ mission: Open-source, self-custodial wallet infrastructure for anyone.
 audit:
   org: tetherto
   repoPattern: "^(wdk$|wdk-|pear-wrk-wdk$|create-wdk-module$)"
-  # Org repos that are not modules; not reported as missing from the atlas.
+  # Org repos that are not modules; not reported as missing from the atlas. This list is about the map
+  # only: bin/collect-metrics.mjs ignores it and tracks every public wdk-* repo, wdk-docs included.
   ignoreRepos:
     - wdk-docs
     - wdk-docs-migration
