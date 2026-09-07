@@ -1,0 +1,20 @@
+# Temporary: can the Actions runner read dated stargazers, where a local token cannot?
+name: Star probe
+on: { workflow_dispatch: {} }
+permissions: { contents: read }
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          for r in tetherto/wdk tetherto/wdk-docs tetherto/wdk-cli torvalds/linux; do
+            code=$(curl -s -o /tmp/o -w '%{http_code}' -H "authorization: Bearer $GH_TOKEN" \
+              -H "accept: application/vnd.github.star+json" \
+              "https://api.github.com/repos/$r/stargazers?per_page=1")
+            printf 'RESULT %-22s http=%s first=%s\n' "$r" "$code" "$(head -c 60 /tmp/o | tr -d '\n')"
+          done
+          anon=$(curl -s -o /dev/null -w '%{http_code}' -H "accept: application/vnd.github.star+json" \
+            "https://api.github.com/repos/tetherto/wdk/stargazers?per_page=1")
+          echo "RESULT anon tetherto/wdk http=$anon"
