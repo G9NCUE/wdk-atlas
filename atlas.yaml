@@ -34,6 +34,7 @@ audit:
     - wdk-devops-open
     - wdk-ansible-playbooks
     - wdk-module-templates
+    - wdk-lib-lookup-storage
   # Dependencies never drawn as `requires`. Foundation modules are implicit already.
   implicitRequires: []
   # Sections whose modules consume many packages (apps, developer tools): only their stale `requires` are reported.
@@ -121,7 +122,7 @@ sections:
 
   - id: core
     label: The engine
-    blurb: Plain JavaScript. It runs in Node as-is, and that is the quickest way to try it. On a phone the kit runs it inside a Bare worklet instead, and everything in this box lives there
+    blurb: Plain JavaScript, with two supported ways to run it. In plain Node, lightweight and familiar, like any other library. Or on a phone, inside a Bare worklet, where everything in this box lives and the keys stay out of the app
     module: pear-wrk-wdk
     seal: Keys never leave this box
     path:
@@ -130,12 +131,13 @@ sections:
     # Lanes listed here are drawn as one chain × capability grid instead of card rows.
     matrix: [wallets, protocols]
     why:
-      label: Why a Bare worklet, not plain Node?
+      label: "Plain Node or a Bare worklet: when to use which"
       points:
-        - Plain Node works and developers know it. Nothing in this box needs the worklet to function.
-        - One runtime, one SDK. The same bundle runs on iOS, Android and desktop, with no per-platform port.
+        - Plain Node is the lightweight path. No bundle to build, no extra runtime, the same feel as ethers or bitcoinjs and as the hosted SDKs. Easiest to debug.
+        - The worklet is the phone path. One bundle runs on iOS, Android and desktop with no per-platform port.
         - Its own thread. Signing and network calls never block the app's screen.
         - A sealed room. Keys and seeds stay in the worklet; the app only ever sees the encrypted form.
+        - Both are official. Pick Node for servers, agents and quick trials; pick the worklet for anything that ships to a phone.
     lanes:
       - id: kernel
         label: The assembler
@@ -216,7 +218,7 @@ modules:
     band: kernel
     status: planned
     publisher: tetherto
-    summary: 'A home for rules about transactions: limits, allow-lists, checks before a transfer leaves. The first version of the rules engine lives inside the conductor today; shared rule libraries would go here.'
+    summary: 'A library of ready-made transaction rules: limits, allow-lists, checks before a transfer leaves. The rules engine itself lives in the conductor and stays there; this package will hold the common policies (Jonathan, 2026-09-06).'
     repo: https://github.com/tetherto/wdk-policies
 
   - id: wdk-wallet-btc
@@ -820,9 +822,11 @@ modules:
     title: iPhone bridge (Swift)
     section: platform
     band: native
-    status: shipped
+    status: wip
     publisher: tetherto
     summary: 'The iOS and macOS side of the kit: a Swift package that starts the worklet and exposes wallet operations to an Apple app. Private today.'
+    notes:
+      - Private repo today. To be published on Swift Package Manager (Jonathan, 2026-09-06)
     repo: https://github.com/tetherto/wdk-core-swift
 
 
@@ -857,9 +861,11 @@ modules:
     title: Starter app, iPhone
     section: app
     band: apps
-    status: shipped
+    status: wip
     publisher: tetherto
     summary: 'A sample iOS wallet showing how to use the Swift core. Private today.'
+    notes:
+      - Private repo today. Stays private until the Swift core is published
     repo: https://github.com/tetherto/wdk-starter-swift
     relations:
       - { type: requires, target: wdk-core-swift }
@@ -890,16 +896,6 @@ modules:
     publisher: tetherto
     summary: 'Small runnable examples, one folder per package or integration.'
     repo: https://github.com/tetherto/wdk-examples
-
-  - id: wdk-playground
-    name: wdk-playground
-    title: Try it in the browser
-    section: dev
-    band: reference
-    status: shipped
-    publisher: tetherto
-    summary: 'An app to try every kit module interactively with one shared configuration. Private today.'
-    repo: https://github.com/tetherto/wdk-playground
 
 
   # --- Tooling ---
@@ -934,18 +930,6 @@ modules:
     publisher: tetherto
     summary: 'When a network connection or a price source stops answering, this switches to the next one on the list. Used by the wallets inside the worklet and by the price feed in the app.'
     repo: https://github.com/tetherto/wdk-failover-provider
-
-  - id: wdk-secret-manager
-    name: wdk-secret-manager
-    title: Seed generation & encryption
-    section: core
-    band: internals
-    status: shipped
-    publisher: tetherto
-    summary: Generates the seed and encrypts it so only the encrypted form ever leaves the room. Built to run inside the worklet as well as in ordinary JavaScript.
-    notes:
-      - In the shipped flow the worklet does this job with its own code (pear-wrk-wdk, handlers/secrets.js); this package is the standalone version of it
-    repo: https://github.com/tetherto/wdk-secret-manager
 
   - id: wdk-signer-local
     name: wdk-signer-local
@@ -1076,7 +1060,7 @@ roadmap:
   - id: policy-engine
     northStar: kit
     label: Policy engine
-    summary: Phase 2 libraries for common rules, phase 3 a policy DSL, phase 4 policies in the developer portal.
+    summary: Phase 2 is a library of common rules in wdk-policies, the engine staying in the conductor; phase 3 a policy language; phase 4 policies in the developer portal.
     quarter: 2026Q3
     status: wip
     priority: P0
@@ -1476,5 +1460,12 @@ roadmap:
     label: Changelog and release notes on a cadence
     summary: A regular, readable account of what changed across the packages, so users and contributors do not have to read commit logs. Owner not yet defined.
     quarter: 2026Q4
+    status: planned
+    priority: P2
+  - id: flutter-host
+    northStar: ecosystem
+    label: Flutter host binding, through a grant
+    summary: A Flutter binding to the worklet, built by the ecosystem under the existing grant template rather than by the core team; a proof of concept exists. Owner to confirm with Raquel.
+    quarter: backlog
     status: planned
     priority: P2
