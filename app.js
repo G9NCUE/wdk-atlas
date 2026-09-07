@@ -1338,6 +1338,26 @@ function renderRepoPanel(file, selected, onChange) {
   return panel;
 }
 
+// When a series has no complete period at this grain, say why and when one arrives, rather than
+// drawing an empty chart that reads as broken.
+function coverageNote(coverage) {
+  const unit = { daily: "day", weekly: "week", monthly: "month" }[grain];
+  const start = coverage && coverage[0];
+  if (!start) return `No complete ${unit} of data yet.`;
+  let first;
+  if (grain === "monthly") {
+    const [y, m] = start.split("-").map(Number);
+    const firstFull = start.endsWith("-01") ? new Date(Date.UTC(y, m - 1, 1)) : new Date(Date.UTC(y, m, 1));
+    const done = new Date(Date.UTC(firstFull.getUTCFullYear(), firstFull.getUTCMonth() + 1, 1));
+    first = `${firstFull.toLocaleDateString("en", { month: "long", year: "numeric", timeZone: "UTC" })}, complete on ${done.toLocaleDateString("en", { day: "numeric", month: "long", timeZone: "UTC" })}`;
+  } else if (grain === "weekly") {
+    first = `the first full week after ${start}`;
+  } else {
+    first = `the first full day after ${start}`;
+  }
+  return `No complete ${unit} yet. Collection starts ${start}; the first one is ${first}.`;
+}
+
 function buildDashboard(file, selected) {
   const snaps = file.snapshots || {};
   const snapDays = Object.keys(snaps).sort();
@@ -1363,11 +1383,11 @@ function buildDashboard(file, selected) {
   const withPkg = selected.filter((r) => file.repos[r].package).length;
 
   const tiles = el("div", { class: "tiles" },
-    statTile(`npm downloads, last full ${unit}`, fmtNum(dlLast.now), deltaPill(dlLast.now, dlLast.prev), dlLast.key ? `${dlLast.key} · ${selected.filter((r) => file.repos[r].package).length} packages` : "no download data for this selection"),
+    statTile(`npm downloads, last full ${unit}`, dlLast.now == null ? "—" : fmtNum(dlLast.now), deltaPill(dlLast.now, dlLast.prev), dlLast.key ? `${dlLast.key} · ${selected.filter((r) => file.repos[r].package).length} packages` : coverageNote(dlCov)),
     statTile("GitHub stars", fmtNum(sum(latest.stars)), deltaPill(starsLast.now, starsLast.prev), `${selected.length} repos · ${fmtNum(sum(latest.forks))} forks`),
-    statTile(`External pull requests merged, last ${unit}`, String(lastTwo(xM).now ?? 0), deltaPill(lastTwo(xM).now ?? 0, lastTwo(xM).prev), `${lastTwo(xO).now ?? 0} opened`),
+    statTile(`External pull requests merged, last ${unit}`, lastTwo(xM).now == null ? "—" : String(lastTwo(xM).now), deltaPill(lastTwo(xM).now, lastTwo(xM).prev), lastTwo(xM).now == null ? coverageNote(evCov) : `${lastTwo(xO).now ?? 0} opened`),
     statTile("Contributors", String(people), deltaPill(lastTwo(contribSeries).now, lastTwo(contribSeries).prev), "people with commits, bots excluded, unique across the selection"),
-    statTile("Open issues", String(sum(latest.openIssues)), deltaPill(lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), `${lastTwo(isO).now ?? 0} opened · ${lastTwo(isC).now ?? 0} closed · last ${unit}`),
+    statTile("Open issues", String(sum(latest.openIssues)), deltaPill(lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), lastTwo(isO).now == null ? coverageNote(evCov) : `${lastTwo(isO).now} opened · ${lastTwo(isC).now ?? 0} closed · last ${unit}`),
     statTile("Modules published", String(published), el("span", { class: "delta none" }, `of ${withPkg} packages`), `${(atlas.modules || []).filter((m) => m.publisher && m.publisher !== file.org && m.status === "shipped").length} more by third parties, not in this count`)
   );
 
@@ -1375,7 +1395,7 @@ function buildDashboard(file, selected) {
   const byStars = selected.map((r) => ({ label: r, hint: file.repos[r].title !== r ? file.repos[r].title : "", value: (latest.stars || {})[r] || 0 })).sort((a, b) => b.value - a.value).slice(0, 8);
 
   const adoption = dashSection("Adoption & growth", [
-    chartCard(`npm downloads per ${unit}`, fmtNum(dlLast.now), deltaPill(dlLast.now, dlLast.prev), dl.length ? lineChart(dl) : el("p", { class: "chart-foot" }, "No download data for this selection."), "Selected packages summed. npm reports a few days late, so the current period is left out."),
+    chartCard(`npm downloads per ${unit}`, fmtNum(dlLast.now), deltaPill(dlLast.now, dlLast.prev), dl.length ? lineChart(dl) : el("p", { class: "chart-foot" }, coverageNote(dlCov)), "Selected packages summed. npm reports a few days late, so the current period is left out."),
     chartCard(`Downloads by package, last full ${unit}`, null, null, hBars(byPackage, { color: SERIES[1] }), "Top eight of the selection."),
     chartCard("Stars by repository", fmtNum(sum(latest.stars)), null, hBars(byStars, { color: SERIES[2] }), "Top eight of the selection."),
     chartCard(`Stars over time`, null, null, starsSeries.length > 1 ? lineChart(starsSeries, { color: SERIES[2] }) : el("p", { class: "chart-foot" }, "Needs at least two daily snapshots; the first was taken " + (snapDays[0] || "today") + "."), "Total at the end of each period, from daily snapshots."),
@@ -1389,13 +1409,13 @@ function buildDashboard(file, selected) {
     .map(([login, a]) => ({ label: login, hint: `${((file.authors || {})[login] || "").toLowerCase().replace(/_/g, " ")} · ${a.merged} merged`, value: a.opened }));
   const windowLabel = windowKeys.size ? `last ${windowKeys.size} ${unit}${windowKeys.size === 1 ? "" : "s"}` : "no complete period yet";
   const community = dashSection("Community & engagement", [
-    chartCard(`External contributors, ${windowLabel}`, String(Object.keys(authors).length), null, topAuthors.length ? hBars(topAuthors, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, "No external pull requests in the window."), "Top five by pull requests opened over the periods shown; hover for GitHub's label and merges. A teammate or a bot showing up here means the internal list needs a fix."),
-    chartCard(`Pull requests per ${unit}`, String(lastTwo(prsO).now ?? 0), null, groupedBars(pr.cats, [{ label: "Opened", values: pr.a }, { label: "Merged", values: pr.b }]), "Complete periods only."),
-    chartCard(`External pull requests per ${unit}`, String(lastTwo(xO).now ?? 0), null, groupedBars(xpr.cats, [{ label: "Opened", values: xpr.a }, { label: "Merged", values: xpr.b }]), "Authors who are not members or collaborators of the org."),
+    chartCard(`External contributors, ${windowLabel}`, String(Object.keys(authors).length), null, topAuthors.length ? hBars(topAuthors, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, windowKeys.size ? "No external pull requests in the window." : coverageNote(evCov)), "Top five by pull requests opened over the periods shown; hover for GitHub's label and merges. A teammate or a bot showing up here means the internal list needs a fix."),
+    chartCard(`Pull requests per ${unit}`, lastTwo(prsO).now == null ? "—" : String(lastTwo(prsO).now), null, pr.cats.length ? groupedBars(pr.cats, [{ label: "Opened", values: pr.a }, { label: "Merged", values: pr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Complete periods only."),
+    chartCard(`External pull requests per ${unit}`, lastTwo(xO).now == null ? "—" : String(lastTwo(xO).now), null, xpr.cats.length ? groupedBars(xpr.cats, [{ label: "Opened", values: xpr.a }, { label: "Merged", values: xpr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Authors who are not members or collaborators of the org."),
     chartCard("Contributors over time", String(people), null, contribSeries.length > 1 ? lineChart(contribSeries, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, "Needs at least two daily snapshots."), "Summed over the selected repos at the end of each period; a person active in two repos counts twice here, once in the headline."),
   ]);
   const support = dashSection("Support & responsiveness", [
-    chartCard(`Issues opened and closed per ${unit}`, String(sum(latest.openIssues)), deltaPill(lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), groupedBars(iss.cats, [{ label: "Opened", values: iss.a }, { label: "Closed", values: iss.b }]), "Headline is the open backlog today."),
+    chartCard(`Issues opened and closed per ${unit}`, String(sum(latest.openIssues)), deltaPill(lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), iss.cats.length ? groupedBars(iss.cats, [{ label: "Opened", values: iss.a }, { label: "Closed", values: iss.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Headline is the open backlog today."),
     chartCard("Open backlog over time", null, null, backlogSeries.length > 1 ? lineChart(backlogSeries, { color: SERIES[0] }) : hBars([{ label: "Open issues", value: sum(latest.openIssues) }, { label: "Open pull requests", value: sum(latest.openPrs) }]), backlogSeries.length > 1 ? "Open issues at the end of each period." : "Today; a curve appears after the second snapshot."),
   ]);
   const note = el("p", { class: "dash-note" }, `Public sources only: the npm registry and the GitHub API. ${selected.length} of ${Object.keys(file.repos).length} public WDK repos selected. Daily series cover the last 30 days and grow by one day per run; stars, contributors and open counts are daily snapshots, the first taken ${snapDays[0]}. Last collected ${String(file.updated).slice(0, 10)}. Community, newsletter and website figures are not public and are not shown.`);
