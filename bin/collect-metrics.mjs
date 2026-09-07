@@ -20,6 +20,12 @@
 //   since: first day the event series cover
 // Pruning keeps the file small: snapshots stay daily for 90 days then thin to one a month; daily
 // series are dropped after 400 days. The page fetches this file, so it must not grow without bound.
+//
+// Stars, forks, contributors and open counts are snapshots, not history: GitHub's dated stargazer
+// list is closed to us. Probed 2026-09-07 — an Actions token gets 403 "Resource not accessible by
+// integration" on every repo, anonymous gets 401, and a personal token gets 404 on almost everything
+// including torvalds/linux (two repos answer 200, unexplained). GraphQL reports stargazerCount but
+// an empty stargazers connection. So these series can only grow forward, one point per run.
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { createContext, runInContext } from "node:vm";
 import { dirname, join } from "node:path";
