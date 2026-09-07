@@ -604,7 +604,7 @@ modules:
 
   - id: wdk-protocol-fiat-moonpay
     name: wdk-protocol-fiat-moonpay
-    title: Buy with a card via MoonPay
+    title: Buy & sell via MoonPay
     section: core
     band: protocols
     kind: fiat
@@ -1375,7 +1375,7 @@ roadmap:
   - id: onramp-providers
     northStar: ecosystem
     label: Two new on-ramp providers
-    summary: Onramper and Transak, for the Tether Wallet.
+    summary: Transak, which ships as a WDK module written by their own team. No Onramper module exists in the org; where that half landed is unconfirmed.
     quarter: 2026Q2
     status: done
   # ---- Q3 2026 items from the sheet that the atlas did not have yet.
