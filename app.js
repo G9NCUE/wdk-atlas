@@ -1,3 +1,12 @@
+// WDK Atlas — one page per section of atlas.yaml, rendered in the browser with no build step.
+//
+// Data: atlas.yaml (modules, sections, north stars with key results, roadmap) and data/metrics.json
+// (public metrics, written daily by the Metrics workflow). Both are fetched with the asset version
+// from index.html, so bumping ?v=N there refreshes everything.
+//
+// Pages, in nav order: roadmap (the front page), results, dashboard, map, dev, and the unlisted
+// questions page. `page` below decides which one renders; each has its own section in this file.
+//
 // Asset version from this script's own URL (app.js?v=N); data fetches carry it so a bump refreshes everything.
 const ASSET_V = (() => { try { return new URL(document.currentScript.src, location.href).searchParams.get("v") || ""; } catch { return ""; } })();
 const versioned = (path) => (ASSET_V ? `${path}?v=${ASSET_V}` : path);
@@ -127,6 +136,12 @@ function progressOf(item) {
 function progressStyle(percent) {
   return percent == null ? null : `--p:${percent}%`;
 }
+
+
+// ==========================================================================================================
+// Card renderer — the Developer Resources page
+// Bigger cards with a title, package name and roadmap chips. The map uses the chip renderer instead.
+// ==========================================================================================================
 
 function renderModule(module) {
   const ecosystem = isEcosystem(module);
@@ -328,6 +343,12 @@ function renderSection(section, { collapsible = true } = {}) {
 
 // ---- Main page: the stack drawn as a cross-section. One rail step and one band per section;
 // inside the engine, the wallet and protocol lanes become a chain × capability grid.
+
+
+// ==========================================================================================================
+// Map page — chips, the chain x capability grid, and the rail
+// The kit drawn as a cross-section: one band per section, wallets and protocols as a grid.
+// ==========================================================================================================
 
 function pendingFor(id) {
   return roadmapFor(id).filter((entry) => entry.status !== "done");
@@ -683,6 +704,12 @@ function moduleChip(ref) {
   );
 }
 
+
+// ==========================================================================================================
+// Roadmap page — the front page
+// North star rows on a shared quarter timeline, plus a backlog view and search.
+// ==========================================================================================================
+
 const QUARTERS = ["2026Q1", "2026Q2", "2026Q3", "2026Q4", "2027Q1", "2027Q2"];
 let view = new URLSearchParams(location.search).get("view") === "backlog" ? "backlog" : "timeline";
 
@@ -765,6 +792,12 @@ function renderTimelineHead(quarters, now) {
 }
 
 // Dashboard data, loaded once for the pages that read key results from it.
+
+// ==========================================================================================================
+// Key results — evaluation shared by the roadmap chips and the Key results page
+// A key result is measured by hand in atlas.yaml, or by a `metric` block read from the dashboard data.
+// ==========================================================================================================
+
 let METRICS = null;
 async function loadMetrics() {
   if (METRICS) return METRICS;
@@ -1041,6 +1074,12 @@ function renderRoadmap() {
 }
 
 // Key results page: one grid for the whole page so columns line up across stars; one status language.
+
+// ==========================================================================================================
+// Key results page
+// One grid for every star so the columns line up; one status per row: measured, pending, to define.
+// ==========================================================================================================
+
 function krStatus(kr) {
   if (kr.progress != null) return { key: "measured", label: "Measured" };
   if (kr.fromDashboard || kr.source) return { key: "pending", label: "Not measured yet" };
@@ -1104,6 +1143,12 @@ function renderResults() {
 }
 
 // ---- Dashboard: public metrics from data/metrics.json (one row per ISO week, collected by the Metrics action).
+
+// ==========================================================================================================
+// Dashboard page
+// Public metrics from data/metrics.json. Charts are inline SVG; no charting library.
+// ==========================================================================================================
+
 const SERIES = ["#3987e5", "#199e70", "#c98500"]; // categorical, fixed order, validated for the dark surface
 const fmtNum = (n) => (n == null ? "—" : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${Math.round(n / 1e3)}K` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(n));
 
@@ -1366,6 +1411,12 @@ async function renderDashboard() {
   return el("div", { class: "dash-page" }, controls, body);
 }
 
+
+// ==========================================================================================================
+// Page headings and the unlisted Questions page
+// Questions renders the questions section of NOTES.md; ten taps on the logo reveal its tab.
+// ==========================================================================================================
+
 const pageHeadings = {
   main: { title: "WDK Atlas", subtitle: "", hidden: true },   // the logo carries the brand; keep an h1 for assistive tech
   dev: {
@@ -1442,6 +1493,12 @@ async function renderQuestions() {
   prose.innerHTML = marked.parse(section);
   return prose;
 }
+
+
+// ==========================================================================================================
+// Shell — page routing, the details drawer, events and boot
+// renderPoster picks the page; the drawer is shared by the map and the developer page.
+// ==========================================================================================================
 
 function renderPoster() {
   const heading = pageHeadings[page] || pageHeadings.main;

@@ -18,6 +18,8 @@
 //   snapshots: { "YYYY-MM-DD": { stars, forks, openIssues, openPrs, contributors: { repo: count }, published: [repo…] } }
 //   contributors: { repo: [login…] }   current, kept once
 //   since: first day the event series cover
+// Pruning keeps the file small: snapshots stay daily for 90 days then thin to one a month; daily
+// series are dropped after 400 days. The page fetches this file, so it must not grow without bound.
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { createContext, runInContext } from "node:vm";
 import { dirname, join } from "node:path";
@@ -35,6 +37,8 @@ const atlas = ctx.jsyaml.load(readFileSync(join(ROOT, "atlas.yaml"), "utf8"));
 const ORG = (atlas.audit && atlas.audit.org) || "tetherto";
 const REPO_PATTERN = new RegExp((atlas.audit && atlas.audit.repoPattern) || "^(wdk$|wdk-|pear-wrk-wdk$|create-wdk-module$)");
 const isBot = (login) => !login || login.endsWith("[bot]");
+const SNAPSHOT_DAILY_DAYS = 90;  // every snapshot for this long, then one per month
+const SERIES_DAYS = 400;         // daily series kept this long (a year plus a margin)
 
 const gh = async (path) => {
   const res = await fetch(`https://api.github.com${path}`, {
@@ -196,6 +200,24 @@ try {
   file.snapshots[today] = snap;
   file.contributors = contributorsByRepo;
   file.since = file.since || since30; // first day the event series cover
+
+  // Keep the file small enough to fetch on every page view: daily snapshots for SNAPSHOT_DAILY_DAYS,
+  // then the first snapshot of each month; daily series for SERIES_DAYS, enough for a year-on-year read.
+  const cutoff = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+  const snapCut = cutoff(SNAPSHOT_DAILY_DAYS), seenMonth = new Set();
+  for (const d of Object.keys(file.snapshots).sort()) {
+    if (d >= snapCut) continue;
+    const month = d.slice(0, 7);
+    if (seenMonth.has(month)) delete file.snapshots[d];
+    else seenMonth.add(month);
+  }
+  const seriesCut = cutoff(SERIES_DAYS);
+  for (const perRepo of Object.values(file.daily)) {
+    for (const [repo, days] of Object.entries(perRepo)) {
+      for (const d of Object.keys(days)) if (d < seriesCut) delete days[d];
+      if (!Object.keys(days).length) delete perRepo[repo];
+    }
+  }
   file.authors = { ...(file.authors || {}), ...authorLabel }; // login -> GitHub's association label, last seen
   file.updated = new Date().toISOString();
   if (DRY) console.log(JSON.stringify({ repos: Object.keys(repos).length, snapshot: snap }, null, 2));

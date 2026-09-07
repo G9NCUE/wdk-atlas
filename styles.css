@@ -11,19 +11,13 @@
   --accent: hsl(18 100% 50%);
   --accent-hover: hsl(18 100% 45%);
   --success: hsl(145 100% 39%);
-  --green: hsl(151 64% 51%);
   --warning: hsl(41 100% 50%);
   --error: hsl(0 100% 64%);
-  --teal: hsl(170 82% 49%);
   --purple: hsl(266 100% 64%);
-  --shipped-fill: color-mix(in srgb, var(--success) 16%, var(--card));
-  --shipped-line: var(--success);
   --wip-fill: color-mix(in srgb, var(--warning) 12%, var(--card));
   --wip-line: var(--warning);
   --planned-fill: var(--card);
   --planned-line: var(--muted);
-  --blocked-fill: color-mix(in srgb, var(--error) 14%, var(--card));
-  --blocked-line: var(--error);
   --ecosystem: var(--purple);
   --dark-grey: hsl(0 0% 13%);
   --white-5: hsl(0 0% 100% / 0.05);
@@ -40,7 +34,6 @@
   --font-display: "Sharp Grotesk", sharpGrotesk, "Space Grotesk", Inter, sans-serif;
   --font-mono: Inconsolata, ui-monospace, monospace;
   --module-width: 196px;
-  --rail-gap: 32px;
 }
 
 * {
@@ -306,6 +299,12 @@ body.page-roadmap .poster {
   min-width: calc(var(--cols, 4) * var(--col-min) + (var(--cols, 4) - 1) * 16px);
 }
 
+.timeline-track {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
 .timeline-head-wrap {
   position: sticky;
   top: 76px;
@@ -321,11 +320,6 @@ body.page-roadmap .poster {
   scrollbar-color: var(--muted) transparent;
 }
 
-.timeline-track {
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-}
 
 .timeline-track .star-head {
   position: sticky;
@@ -2114,7 +2108,7 @@ summary .module-stack {
   }
 }
 
-/* Key results: a strip of chips under each north star, and the Key results page. */
+/* ---- Key result chips, shown under each north star on the roadmap ----------------------------- */
 .kr-strip {
   display: flex;
   flex-wrap: wrap;
@@ -2231,7 +2225,7 @@ summary .module-stack {
   color: var(--accent);
 }
 
-/* Map search: sits with the toggle and legend; filtered chips vanish, emptied cells dim. */
+/* ---- Map search: filtered chips vanish, emptied cells dim ------------------------------------- */
 .header-side .map-search {
   align-self: flex-end;
 }
@@ -2248,7 +2242,7 @@ summary .module-stack {
   opacity: 0.3;
 }
 
-/* GitHub link, top right of the bar. */
+/* ---- GitHub link, top right of the bar -------------------------------------------------------- */
 .gh-link {
   display: inline-flex;
   align-items: center;
@@ -2271,7 +2265,7 @@ summary .module-stack {
   outline-offset: 2px;
 }
 
-/* Dashboard */
+/* ---- Dashboard: tiles, inline SVG charts, folding sections ------------------------------------ */
 .dash-page { display: flex; flex-direction: column; gap: 28px; padding: 0 16px 40px; }
 body.page-dashboard .atlas { max-width: none; }
 
@@ -2310,7 +2304,7 @@ body.page-dashboard .atlas { max-width: none; }
 
 .dash-note { margin: 0; max-width: 90ch; font-size: 12px; line-height: 16px; color: var(--secondary); }
 
-/* Dashboard controls: granularity switch and the tracked-repos panel */
+/* ---- Dashboard controls: granularity switch and the tracked-repos panel ----------------------- */
 .dash-controls { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .dash-body { display: flex; flex-direction: column; gap: 28px; }
 .repo-panel { position: relative; }
@@ -2332,7 +2326,7 @@ body.page-dashboard .atlas { max-width: none; }
 .tile-feeds { margin-top: auto; font-size: 11px; color: var(--accent); text-decoration: none; }
 .tile-feeds:hover { text-decoration: underline; }
 
-/* Key results page, v2: one shared grid */
+/* ---- Key results page: one shared grid so columns line up across stars ------------------------ */
 .kr-strip-summary { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--secondary); }
 .kr-strip-summary strong { color: var(--ink); font-weight: 600; }
 .kr-strip-summary a { color: inherit; text-decoration: none; }
