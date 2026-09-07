@@ -181,7 +181,7 @@ function renderModule(module) {
         "aria-expanded": "false",
         style: progressStyle(percent),
       },
-      el("span", { class: "module-name" }, module.title || module.name || module.id),
+      el("span", { class: "module-name" }, module.title || module.name || module.id, module.private && lockMark()),
       module.title && el("span", { class: "module-id" }, module.name || module.id),
       chainsOf(module).length > 0 &&
         el(
@@ -382,7 +382,7 @@ function shortTitle(module, context) {
 
 // What the map search matches on: titles, package name, id, chains, kind, publisher, status, summary.
 function searchTextOf(module) {
-  return [module.title, module.short, module.name, module.id, ...chainsOf(module), module.kind, module.publisher, module.status === "shipped" ? "live" : module.status, module.summary]
+  return [module.title, module.short, module.name, module.id, ...chainsOf(module), module.kind, module.publisher, module.status === "shipped" ? "live" : module.status, module.private ? "private" : "", module.summary]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -405,6 +405,9 @@ function applyMapSearch(query, count) {
 }
 
 // The compact module: status dot, plain title, publisher for ecosystem modules, pending count.
+// A private repo gets a lock, so a reader knows the link will not open for them.
+const lockMark = () => el("span", { class: "lock", title: "Private repository", "aria-label": "private" });
+
 function renderChip(module, context) {
   const ecosystem = isEcosystem(module);
   const pending = pendingFor(module.id);
@@ -416,6 +419,7 @@ function renderChip(module, context) {
     { class: classes, type: "button", "data-id": module.id, "data-node": module.id, "aria-expanded": "false", title: module.name || module.id, "data-search": searchTextOf(module) },
     el("i", { class: "dot", "aria-hidden": "true" }),
     el("span", { class: "mod-title" }, shortTitle(module, context)),
+    module.private && lockMark(),
     ecosystem && el("span", { class: "pub" }, module.publisher),
     pending.length > 0 &&
       el("span", { class: "pend", title: pending.map((entry) => entry.label).join(", ") }, String(pending.length))
@@ -1597,6 +1601,7 @@ function drawerContent(item) {
     ? "North star"
     : [
         item.status === "shipped" ? "live" : item.status,
+        item.private ? "private repo" : null,
         chainsOf(item).join(" · "),
         isEcosystem(item) ? `third party · ${item.publisher}` : item.publisher,
         item.kind,
