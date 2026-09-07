@@ -39,7 +39,8 @@ const REPO_PATTERN = new RegExp((atlas.audit && atlas.audit.repoPattern) || "^(w
 // The same exclusions the drift check uses, so both tools see one set of repos.
 const IGNORE = new Set((atlas.audit && atlas.audit.ignoreRepos) || []);
 const IGNORE_PATTERN = atlas.audit && atlas.audit.ignorePattern ? new RegExp(atlas.audit.ignorePattern) : null;
-const tracked = (name) => REPO_PATTERN.test(name) && !IGNORE.has(name) && !(IGNORE_PATTERN && IGNORE_PATTERN.test(name));
+// A repo drawn on the map is always tracked; the ignore rules only decide what else counts.
+const tracked = (name, onMap) => REPO_PATTERN.test(name) && (onMap || (!IGNORE.has(name) && !(IGNORE_PATTERN && IGNORE_PATTERN.test(name))));
 const isBot = (login) => !login || login.endsWith("[bot]");
 const SNAPSHOT_DAILY_DAYS = 90;  // every snapshot for this long, then one per month
 const SERIES_DAYS = 400;         // daily series kept this long (a year plus a margin)
@@ -87,7 +88,7 @@ try {
     if (r && r[1].toLowerCase() === ORG.toLowerCase()) byRepoName.set(r[2].toLowerCase(), m);
   }
   // Public repos only: the workflow token cannot see private ones, and the dashboard publishes nothing private.
-  const wdkRepos = (await ghAll(`/orgs/${ORG}/repos?type=public`)).filter((r) => tracked(r.name) && !r.archived && !r.fork);
+  const wdkRepos = (await ghAll(`/orgs/${ORG}/repos?type=public`)).filter((r) => tracked(r.name, byRepoName.has(r.name.toLowerCase())) && !r.archived && !r.fork);
   const repos = {};
   for (const r of wdkRepos) {
     const m = byRepoName.get(r.name.toLowerCase());
