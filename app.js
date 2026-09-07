@@ -803,10 +803,13 @@ function renderTimelineHead(quarters, now) {
 // ==========================================================================================================
 
 let METRICS = null;
+// The Metrics workflow rewrites this file daily without touching the asset version, and can push twice
+// in one day, so a versioned URL is not enough: revalidate every load. The server answers 304 when the
+// file has not changed, so this costs a round trip, not a download.
 async function loadMetrics() {
   if (METRICS) return METRICS;
   try {
-    const res = await fetch(`data/metrics.json?v=${ASSET_V || "0"}-${new Date().toISOString().slice(0, 10)}`);
+    const res = await fetch("data/metrics.json", { cache: "no-cache" });
     METRICS = res.ok ? await res.json() : null;
   } catch { METRICS = null; }
   return METRICS;
@@ -1146,7 +1149,7 @@ function renderResults() {
   return el("div", { class: "results-page" }, strip, note, head, blocks);
 }
 
-// ---- Dashboard: public metrics from data/metrics.json (one row per ISO week, collected by the Metrics action).
+// ---- Dashboard: public metrics from data/metrics.json, collected daily by the Metrics workflow.
 
 // ==========================================================================================================
 // Dashboard page
@@ -1423,10 +1426,8 @@ function buildDashboard(file, selected) {
 }
 
 async function renderDashboard() {
-  const stamp = new Date().toISOString().slice(0, 10);
-  const response = await fetch(`data/metrics.json?v=${ASSET_V || "0"}-${stamp}`);
-  if (!response.ok) throw new Error("No data/metrics.json yet. Run bin/collect-metrics.mjs or the Metrics action.");
-  const file = await response.json();
+  const file = await loadMetrics();
+  if (!file) throw new Error("No data/metrics.json yet. Run bin/collect-metrics.mjs or the Metrics action.");
   if (file.schema !== 3) throw new Error("data/metrics.json is an older schema; run the collector again.");
   const all = Object.keys(file.repos || {}).sort();
   let selected = readSelection(all);
