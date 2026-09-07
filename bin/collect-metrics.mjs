@@ -36,6 +36,10 @@ runInContext(readFileSync(join(ROOT, "vendor/js-yaml.min.js"), "utf8"), ctx);
 const atlas = ctx.jsyaml.load(readFileSync(join(ROOT, "atlas.yaml"), "utf8"));
 const ORG = (atlas.audit && atlas.audit.org) || "tetherto";
 const REPO_PATTERN = new RegExp((atlas.audit && atlas.audit.repoPattern) || "^(wdk$|wdk-|pear-wrk-wdk$|create-wdk-module$)");
+// The same exclusions the drift check uses, so both tools see one set of repos.
+const IGNORE = new Set((atlas.audit && atlas.audit.ignoreRepos) || []);
+const IGNORE_PATTERN = atlas.audit && atlas.audit.ignorePattern ? new RegExp(atlas.audit.ignorePattern) : null;
+const tracked = (name) => REPO_PATTERN.test(name) && !IGNORE.has(name) && !(IGNORE_PATTERN && IGNORE_PATTERN.test(name));
 const isBot = (login) => !login || login.endsWith("[bot]");
 const SNAPSHOT_DAILY_DAYS = 90;  // every snapshot for this long, then one per month
 const SERIES_DAYS = 400;         // daily series kept this long (a year plus a margin)
@@ -82,7 +86,8 @@ try {
     const r = /github\.com\/([^/]+)\/([^/#?]+)/.exec(m.repo || "");
     if (r && r[1].toLowerCase() === ORG.toLowerCase()) byRepoName.set(r[2].toLowerCase(), m);
   }
-  const wdkRepos = (await ghAll(`/orgs/${ORG}/repos?type=public`)).filter((r) => REPO_PATTERN.test(r.name) && !r.archived && !r.fork);
+  // Public repos only: the workflow token cannot see private ones, and the dashboard publishes nothing private.
+  const wdkRepos = (await ghAll(`/orgs/${ORG}/repos?type=public`)).filter((r) => tracked(r.name) && !r.archived && !r.fork);
   const repos = {};
   for (const r of wdkRepos) {
     const m = byRepoName.get(r.name.toLowerCase());

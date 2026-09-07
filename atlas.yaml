@@ -8,6 +8,8 @@
 # (columns from `chains` below, rows from the lanes' `groups`, a module's row from its `kind`).
 # relations: `requires` = a package.json dependency (checked by bin/check-atlas.mjs); `under` = drawn as a
 #   column under that box; `on` = a protocol runs on that wallet's account; `implements` = fills that form.
+# private: true when the repo is not public; draws a lock on the card. bin/check-atlas.mjs reports the
+#   flag when it stops matching GitHub, so it cannot drift silently.
 # chains: chain labels (EVM, BTC, TON, …); they place a module in the columns of the engine grid.
 # short: optional shorter title for the grid, where the row and column already say the rest.
 # roadmap: one list at the root (below). Each item names the modules it touches; the chips
@@ -827,6 +829,7 @@ modules:
     summary: 'The iOS and macOS side of the kit: a Swift package that starts the worklet and exposes wallet operations to an Apple app. Private today.'
     notes:
       - Private repo today. To be published on Swift Package Manager (Jonathan, 2026-09-06)
+    private: true
     repo: https://github.com/tetherto/wdk-core-swift
 
 
@@ -866,6 +869,7 @@ modules:
     summary: 'A sample iOS wallet showing how to use the Swift core. Private today.'
     notes:
       - Private repo today. Stays private until the Swift core is published
+    private: true
     repo: https://github.com/tetherto/wdk-starter-swift
     relations:
       - { type: requires, target: wdk-core-swift }

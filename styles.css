@@ -2354,3 +2354,15 @@ body.page-dashboard .atlas { max-width: none; }
 .status-pill.measured { color: var(--success); background: color-mix(in srgb, var(--success) 14%, var(--card)); }
 .status-pill.pending { color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, var(--card)); }
 .status-pill.undefined { color: var(--muted); background: var(--surface); }
+
+/* ---- Private repository: a small lock beside the name ----------------------------------------- */
+.lock {
+  display: inline-block;
+  flex: none;
+  width: 11px;
+  height: 12px;
+  margin-left: 6px;
+  vertical-align: -1px;
+  background: no-repeat center / contain;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 14' fill='none' stroke='%23a89e8f' stroke-width='1.4'%3E%3Crect x='1.2' y='5.8' width='9.6' height='7.2' rx='1.4' fill='%23a89e8f' fill-opacity='.18'/%3E%3Cpath d='M3.6 5.8V4a2.4 2.4 0 0 1 4.8 0v1.8'/%3E%3C/svg%3E");
+}
