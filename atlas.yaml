@@ -42,7 +42,7 @@ audit:
   # Sections whose modules consume many packages (apps, developer tools): only their stale `requires` are reported.
   consumerSections: [app, dev]
   # Backend workers, apps and infrastructure: never modules, never reported.
-  ignorePattern: "(-wrk$|-wrk-|-app-node$|-e2e-tests$|^wdk-faucet-|^wdk-indexer-docs$|^wdk-indexer-webhook)"
+  ignorePattern: "(^wdk-.*-wrk(-|$)|-app-node$|-e2e-tests$|^wdk-faucet-|^wdk-indexer-docs$|^wdk-indexer-webhook)"
 
 # North stars: the three objectives every roadmap initiative serves (roadmap items carry `northStar: <id>`).
 # `keyResults` are the measurable results behind each star, shown on the roadmap rows and on the Key results page.
