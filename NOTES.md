@@ -92,39 +92,46 @@ dependencies are, and whether it is in the worklet bundle.
 
 ## 5. Questions for the maintainer
 
-Reviewed 2026-09-02 against package sources, npm and GitHub. Earlier items that turned out to be
-atlas fixes (RGB relation, wdk-wallet interface list, pricing/indexer placement) were applied and dropped.
+Reviewed 2026-09-02 against sources; answered by Jonathan in the decisions document on 2026-09-06.
 
-1. **Seed encryption: two implementations, one in use.** The shipped flow (React Native and Kotlin
-   cores) calls the worklet's `generateEntropyAndEncrypt` RPC; `pear-wrk-wdk/src/utils/crypto.js`
-   encrypts with AES-GCM and a random 32-byte key via `bare-crypto`. `wdk-secret-manager` uses
-   PBKDF2 + libsodium secretbox with a versioned header; nothing in the org imports it, yet the docs
-   credit it for the starter's "encrypted storage" (react-native-starter.mdx) and it sees ~900
-   npm downloads a month. The two formats are not interchangeable. Can the package be dropped, or
-   should the worklet adopt it so backups and restores share one format?
-2. **`wdk-signer-local` still has no consumer.** `ISigner` now exists in `wdk-wallet` and
+Still open:
+
+1. **`wdk-signer-local` still has no consumer.** `ISigner` now exists in `wdk-wallet` and
    `wdk-wallet-evm` ships seed and private-key signers; btc has none. `wdk-signer-local` exposes
    plain functions (`sign`, `getPublicKey`, `createMnemonic`…), not an `ISigner`. Is it meant to be
    wrapped as one, and when does btc get a signer?
-3. **Official stance on how to run WDK.** The packages run in plain Node; the phone cores run them in
-   a Bare worklet. The atlas now recommends the worklet and explains why (one runtime across
-   platforms, own thread, keys out of the app). Is that the product and communication line, and
-   should Bare / BareKit appear in the atlas as the foundation the engine stands on?
-4. **No Flutter host binding.** Kotlin and Swift cores exist; none of the 155 visible org repos is
-   Flutter. Moor's `wdk_core_flutter` POC sits on the Kotlin core. Planned, or community?
-5. **Three private repos on the map.** `tetherto/wdk-core-swift`, `tetherto/wdk-starter-swift` and
-   `tetherto/wdk-playground` exist but are private (seen with an org token on 2026-09-02); `arkade-os/wdk`
-   and `claudiovb/wdk-core-swift` do not exist. The docs mention neither a playground nor a Swift core.
-   Will the three be published, and when? Until then the atlas shows cards nobody outside can open.
-6. **`wdk-policies` and `wdk-doctor-app` are empty repos** (initial commit, README only). Phase 1 of
-   the policy engine already ships inside `wdk` (`src/policy`, since beta.16). Is `wdk-policies`
-   meant to extract that engine or to hold the phase 2 rule libraries? What is the doctor app's scope?
-   Also: `tetherto/wdk-safe-core-sdk` (fork of Safe{Core}, July 2026) is not in the atlas; a
-   dependency fork for the Safe multisig protocol, or a module?
-7. **Three roadmap items with no definition.** `unified-usdt-balance`, `social-recovery` and
-   `browser-extension` are titles in the previous roadmap sheet with no description anywhere else
-   (checked the sheet, the org repos and the docs, 2026-09-03). The roadmap shows them with a
-   "scope undefined" blurb on purpose. Who owns each, and what is the one-paragraph scope?
+2. **Three roadmap items with no definition.** `unified-usdt-balance`, `social-recovery` and
+   `browser-extension` are titles in the previous roadmap sheet with no description anywhere else.
+   The roadmap shows them with a "scope undefined" blurb on purpose. Who owns each, and what is the
+   one-paragraph scope?
+
+Follow-ups from the 2026-09-06 decisions, to close by 2026-09-19 (end of sprint 14):
+
+- Fabrice: message the TW team before `wdk-backup-remote` is archived (is it in use?).
+- Fabrice: heads-up to the Telegram team before the two TON protocol repos are archived.
+- Fabrice: ask Racquel whether `wdk-module-templates` is worth keeping or can be deleted.
+- Fabrice: confirm with Francesco that `wdk-lib-lookup-storage` is indexer plumbing and stays private.
+- Fabrice: confirm the Flutter-through-a-grant route with Raquel.
+- Jonathan (sprint task): delete the twelve empty scaffolds and `wdk-demo-wallet`; archive the four
+  2025 EVM protocols, the two TON protocols, both backup packages, `wdk-wrapper-failover-cascade`,
+  `wdk-safe-core-sdk`, and `wdk-secret-manager` with an npm deprecation and a docs fix.
+- Jonathan: publish `wdk-indexer-http` to npm; ship `wdk-core-swift` on Swift Package Manager.
+- Atlas, once GitHub reflects the above: the weekly check goes quiet on those repos; flip the indexer
+  client and the Swift cards when the releases land.
+
+Answered (2026-09-06):
+
+- **Seed encryption.** `wdk-secret-manager` is archived and dropped from WDK; the worklet's own
+  encryption is the one implementation. Card removed from the map; docs still credit the package.
+- **Node or worklet.** Both are official paths. Plain Node stays documented as lightweight, familiar
+  and easier to debug; the worklet is the phone path. The engine text says so.
+- **Flutter.** Not on the core team's plate; to be built by the ecosystem under the grant template if
+  there is a product case. In the backlog as an ecosystem initiative; owner to confirm with Raquel.
+- **Private repos.** `wdk-core-swift` will ship on Swift Package Manager; `wdk-playground` holds
+  end-to-end test runners and may go public as a dev tool but is off the map; `arkade-os/wdk` is
+  private but published on npm, Arkade may be asked to open it.
+- **`wdk-policies`** will hold a library of common policies; the engine stays in `wdk`.
+  `wdk-safe-core-sdk` is an archived fork, no longer a dependency.
 
 ## 6. Not done
 
