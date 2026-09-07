@@ -44,6 +44,9 @@ const REPO_PATTERN = new RegExp((atlas.audit && atlas.audit.repoPattern) || "^(w
 const isBot = (login) => !login || login.endsWith("[bot]");
 const SNAPSHOT_DAILY_DAYS = 90;  // every snapshot for this long, then one per month
 const SERIES_DAYS = 400;         // daily series kept this long (a year plus a margin)
+// npm serves an arbitrary date range (up to 18 months per call), so downloads are fetched for the whole
+// retention window every run rather than the trailing 30 days. One request per package, self-healing,
+// and it backfills history the first time it runs.
 
 const gh = async (path) => {
   const res = await fetch(`https://api.github.com${path}`, {
@@ -103,7 +106,8 @@ try {
   const published = [];
   for (const [name, r] of Object.entries(repos)) {
     if (!r.package) continue;
-    const range = await npmJson(`https://api.npmjs.org/downloads/range/last-month/${r.package}`);
+    const from = new Date(Date.now() - SERIES_DAYS * 864e5).toISOString().slice(0, 10);
+    const range = await npmJson(`https://api.npmjs.org/downloads/range/${from}:${today}/${r.package}`);
     if (range && range.downloads) {
       const days = {};
       for (const d of range.downloads) days[d.day] = d.downloads;
@@ -194,6 +198,8 @@ try {
   if (existsSync(OUT)) { try { const f = JSON.parse(readFileSync(OUT, "utf8")); if (f.schema === 3) file = f; } catch {} }
   file.repos = repos;
   for (const [name, perRepo] of Object.entries(daily)) {
+    // downloads come back for the whole retention window, so the fetch is authoritative and replaces
+    if (name === "downloads") { file.daily.downloads = perRepo; continue; }
     file.daily[name] = file.daily[name] || {};
     const allRepos = new Set([...Object.keys(file.daily[name]), ...Object.keys(perRepo)]);
     for (const repo of allRepos) {
