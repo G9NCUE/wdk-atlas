@@ -100,7 +100,14 @@ Still open:
    `wdk-wallet-evm` ships seed and private-key signers; btc has none. `wdk-signer-local` exposes
    plain functions (`sign`, `getPublicKey`, `createMnemonic`…), not an `ISigner`. Is it meant to be
    wrapped as one, and when does btc get a signer?
-2. **Three roadmap items with no definition.** `unified-usdt-balance`, `social-recovery` and
+2. **Social login and recovery: descoped, or still intended?** The Q2 sheet marks it in progress, but no
+   WDK module for social login or recovery exists — no repo, no package, and the only code hits in the
+   org are the developer portal's own sign-in. The one shipped primitive is Shamir secret sharing in
+   `wdk-utils` (split a mnemonic into n shares, k reconstruct), published at 1.0.0-beta.11. So either
+   the item was descoped to that and should be closed with the SSS work credited, or it is still
+   intended — in which case it is the largest developer-experience gap against Privy, Web3Auth and
+   Para, who all lead with social login, and it belongs on the 2027 roadmap with an owner.
+3. **Three roadmap items with no definition.** `unified-usdt-balance`, `social-recovery` and
    `browser-extension` are titles in the previous roadmap sheet with no description anywhere else.
    The roadmap shows them with a "scope undefined" blurb on purpose. Who owns each, and what is the
    one-paragraph scope?

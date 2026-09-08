@@ -1016,7 +1016,7 @@ roadmap:
     northStar: kit
     label: Abstract signers
     summary: One signer interface on every wallet package, so seed, private key, hardware and remote signers plug into the same account.
-    quarter: 2026Q3
+    quarter: 2026Q4
     status: wip
     priority: P0
     modules:
@@ -1037,7 +1037,7 @@ roadmap:
     label: Ledger
     parent: signers
     summary: Hardware signing through a standalone Ledger package, first on Bitcoin, EVM and Solana; other hardware wallets can follow the same path.
-    quarter: 2026Q3
+    quarter: 2026Q4
     status: wip
     priority: P2
     modules:
@@ -1049,7 +1049,7 @@ roadmap:
     label: Passkey signer
     parent: signers
     summary: A pluggable passkey signer for EVM chains that expose the 256r1 precompile.
-    quarter: 2026Q3
+    quarter: 2027Q1
     status: planned
     priority: P2
     modules: [wdk-wallet-evm]
@@ -1058,7 +1058,7 @@ roadmap:
     label: MPC signer
     parent: signers
     summary: Spike on pluggable MPC signers, or recipes for using existing MPC services with WDK.
-    quarter: 2026Q3
+    quarter: 2027Q2
     status: planned
     priority: P2
     modules: []
@@ -1066,7 +1066,7 @@ roadmap:
     northStar: kit
     label: Policy engine
     summary: Phase 2 is a library of common rules in wdk-policies, the engine staying in the conductor; phase 3 a policy language; phase 4 policies in the developer portal.
-    quarter: 2026Q3
+    quarter: 2026Q4
     status: wip
     priority: P0
     modules: [wdk, wdk-policies]
@@ -1074,19 +1074,19 @@ roadmap:
     northStar: kit
     label: Standardised error handling
     summary: The same error classes and messages across every wallet module.
-    quarter: 2026Q3
+    quarter: 2026Q4
     status: wip
     priority: P1
     progress: 70
     modules: [wdk, wdk-wallet]
   - id: native-cores-v2
     northStar: kit
-    label: Swift and Kotlin cores on par with React Native
+    label: Swift core at parity with React Native
     summary: Strong typing, sensitive storage and a plug-in interface for native packages, matching the React Native host.
-    quarter: 2026Q3
+    quarter: 2026Q4
     status: wip
     priority: P0
-    modules: [wdk-core-kotlin, wdk-core-swift]
+    modules: [wdk-core-swift]
   - id: sda
     northStar: kit
     label: Smart deposit address interface
@@ -1115,7 +1115,7 @@ roadmap:
     northStar: kit
     label: PSBT multisig on Bitcoin
     summary: 'Shared wallets on Bitcoin where several people sign each transaction.'
-    quarter: backlog
+    quarter: 2027Q1
     status: planned
     priority: P2
     modules: [wdk-protocol-multisig-psbt]
@@ -1145,8 +1145,8 @@ roadmap:
     modules: [wdk-cli]
   - id: docs-revamp
     northStar: dx
-    label: Docs revamp and developer portal
-    summary: Recipes and guides; core concepts explained (seed lifecycle, class inheritance, policy engine, cloud backup).
+    label: Docs revamp
+    summary: Recipes and guides, core concepts explained, the docs rebuilt around what developers actually ask.
     quarter: 2026Q3
     status: wip
     priority: P1
@@ -1154,8 +1154,8 @@ roadmap:
   - id: leave-beta
     northStar: kit
     label: Security audit, then 1.0.0
-    summary: First external audit; packages leave their beta tags once it completes.
-    quarter: 2026Q3
+    summary: The external audit itself, then the packages leave beta. Q4 lays the groundwork; this is the audit and the 1.0.0 release.
+    quarter: 2027Q1
     status: planned
     priority: P1
     modules: []
@@ -1163,7 +1163,7 @@ roadmap:
     northStar: dx
     label: Asset registry in the wallet API
     summary: Make the known-tokens registry reachable from every wallet package.
-    quarter: 2026Q3
+    quarter: backlog
     status: planned
     priority: P2
     modules: [wdk-wallet]
@@ -1171,7 +1171,7 @@ roadmap:
     northStar: kit
     label: Testnet transactions in CI
     summary: End-to-end transactions on testnets as a scheduled job, to catch chain runtime changes.
-    quarter: 2026Q3
+    quarter: 2027Q1
     status: planned
     priority: P2
     modules: []
@@ -1331,9 +1331,9 @@ roadmap:
   - id: social-recovery
     northStar: kit
     label: Social login and recovery
-    summary: 'Scope undefined: in progress in the previous roadmap, with no description anywhere. See the open questions.'
-    quarter: 2026Q2
-    status: wip
+    summary: Scope unconfirmed. No WDK module for social login or recovery exists; the only shipped primitive is Shamir secret sharing in wdk-utils. Was this descoped to that, or is it still intended? See the open questions.
+    quarter: backlog
+    status: planned
     priority: P1
   - id: docs-phase-1
     northStar: dx
@@ -1397,7 +1397,7 @@ roadmap:
     northStar: ecosystem
     label: Cards interface, with a first contributor
     summary: The form for connecting card providers, and one external module that fills it.
-    quarter: 2026Q3
+    quarter: 2026Q4
     status: wip
     priority: P0
     modules: [wdk-wallet]
@@ -1405,7 +1405,7 @@ roadmap:
     northStar: dx
     label: Recipes and examples
     summary: Claw and Hermes agents with the CLI, a QVAC example, transaction simulation APIs.
-    quarter: 2026Q3
+    quarter: backlog
     status: planned
     priority: P0
     modules: [wdk-examples]
@@ -1413,28 +1413,28 @@ roadmap:
     northStar: ecosystem
     label: x402 facilitator on EVM or Solana
     summary: Needs Tether's stance first.
-    quarter: 2026Q3
+    quarter: backlog
     status: planned
     priority: P1
   - id: browser-extension
     northStar: kit
     label: Browser extension
     summary: 'Scope undefined: a title in the previous roadmap, no description anywhere. See the open questions.'
-    quarter: 2026Q3
+    quarter: backlog
     status: planned
     priority: P1
   - id: keet
     northStar: ecosystem
     label: Wallet features for Keet
     summary: Understand what the Keet team needs to land a wallet in the app.
-    quarter: 2026Q3
+    quarter: backlog
     status: planned
     priority: P1
   - id: mpp
     northStar: ecosystem
     label: MPP support
     summary: Paradigm's Machine Payments Protocol, an x402 alternative.
-    quarter: 2026Q3
+    quarter: backlog
     status: planned
     priority: P2
   - id: kyt-policy
@@ -1471,6 +1471,75 @@ roadmap:
     northStar: ecosystem
     label: Flutter host binding, through a grant
     summary: A Flutter binding to the worklet, built by the ecosystem under the existing grant template rather than by the core team; a proof of concept exists. Owner to confirm with Raquel.
-    quarter: backlog
+    quarter: 2027Q2
+    status: planned
+    priority: P2
+  # ---- Q4 2026: the last stop before beta exit (Tether product presentation, September 2026).
+  - id: audit-groundwork
+    northStar: kit
+    label: Groundwork for the first external audit
+    summary: 'Everything the auditors need before they start: scope, threat model, coverage and the fixes that cannot wait. The gate to 1.0.'
+    quarter: 2026Q4
+    status: planned
+    priority: P0
+  - id: kotlin-beta
+    northStar: kit
+    label: Kotlin core to beta
+    summary: The Android side brought up to a beta bar, one step behind the Swift core's parity target.
+    quarter: 2026Q4
+    status: wip
+    priority: P0
+    modules: [wdk-core-kotlin]
+  - id: sda-implementations
+    northStar: kit
+    label: Smart deposit addresses, partner implementations
+    summary: The interface shipped in Q3; this is the first partner modules that fill it, so deposits on one chain can be received on another.
+    quarter: 2026Q4
+    status: planned
+    priority: P0
+    modules: [wdk-wallet]
+  - id: repo-cleanup
+    northStar: ecosystem
+    label: Repository cleanup across the org
+    summary: Delete twelve empty scaffolds, archive the superseded protocol, backup and fork repos, and deprecate their npm packages. Agreed with Jonathan on 2026-09-06; tracked in Asana.
+    quarter: 2026Q4
+    status: planned
+    priority: P1
+  - id: publish-indexer-npm
+    northStar: dx
+    label: Publish the indexer client to npm
+    summary: The client is on the map as live but has never been published, so the open indexer API has no installable client. Jonathan offered to help.
+    quarter: 2026Q4
+    status: planned
+    priority: P1
+    modules: [wdk-indexer-http]
+  - id: publish-swift-spm
+    northStar: kit
+    label: Publish the Swift core on Swift Package Manager
+    summary: Makes the iOS side installable and public, and turns the two locked cards on the map into real links.
+    quarter: 2026Q4
+    status: planned
+    priority: P1
+    modules: [wdk-core-swift]
+  # ---- 2027: the three north stars, from the same presentation.
+  - id: coverage-95
+    northStar: kit
+    label: Function coverage above 95%
+    summary: The coverage bar the presentation commits to, alongside testnet transactions running in CI.
+    quarter: 2027Q1
+    status: planned
+    priority: P1
+  - id: dev-portal
+    northStar: dx
+    label: Developer portal live
+    summary: 'The portal itself, separate from the docs rewrite: sign-in, guides, recipes and the module catalogue in one place.'
+    quarter: 2027Q1
+    status: planned
+    priority: P1
+  - id: bounties-programme
+    northStar: ecosystem
+    label: Bounties programme
+    summary: 'The programme behind the key result: fund five community projects built on WDK. Needs a template, a budget and someone to run it.'
+    quarter: 2027Q2
     status: planned
     priority: P2
