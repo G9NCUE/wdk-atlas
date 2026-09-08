@@ -1488,7 +1488,7 @@ roadmap:
     label: Groundwork for the first external audit
     summary: 'Everything the auditors need before they start: scope, threat model, coverage and the fixes that cannot wait. The gate to 1.0.'
     quarter: 2026Q4
-    status: planned
+    status: wip
     priority: P0
   - id: kotlin-beta
     northStar: kit
