@@ -1512,7 +1512,7 @@ roadmap:
     label: Repository cleanup across the org
     summary: Delete twelve empty scaffolds, archive the superseded protocol, backup and fork repos, and deprecate their npm packages. Agreed with Jonathan on 2026-09-06; tracked in Asana.
     quarter: 2026Q4
-    status: planned
+    status: wip
     priority: P1
   - id: publish-indexer-npm
     northStar: dx
