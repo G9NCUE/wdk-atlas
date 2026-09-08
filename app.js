@@ -1664,7 +1664,9 @@ function drawerContent(item) {
     );
 
   const links = [];
-  if (item.repo) links.push(el("a", { href: item.repo }, "GitHub"));
+  // A private repo's link 404s for every reader, so show where it stands instead of offering it.
+  if (item.repo && !item.private) links.push(el("a", { href: item.repo }, "GitHub"));
+  if (item.private) links.push(el("span", { class: "meta" }, "Repository not public yet"));
   if (item.docs) links.push(el("a", { href: item.docs }, "Docs"));
 
   return [

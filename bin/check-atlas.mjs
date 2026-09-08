@@ -117,7 +117,9 @@ const findings = { links: [], status: [], relations: [], coverage: [], roadmap: 
 
 for (const m of modules) {
   const f = facts.get(m.id);
-  if (m.repo && f.repo && !f.repoInfo) findings.links.push({ id: m.id, evidence: `repo link 404: ${m.repo}` });
+  // Invisible and marked private is consistent, not a broken link: without a token that sees the org's
+  // private repos, every private module would otherwise be reported every run.
+  if (m.repo && f.repo && !f.repoInfo && !m.private) findings.links.push({ id: m.id, evidence: `repo link 404: ${m.repo}` });
   if (f.repoInfo && f.repoInfo.archived) findings.links.push({ id: m.id, evidence: `repo is archived` });
   // The `private` flag draws a lock on the card; report it when it stops matching GitHub.
   if (f.repoInfo && Boolean(f.repoInfo.private) !== Boolean(m.private)) {
