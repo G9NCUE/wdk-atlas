@@ -2375,7 +2375,8 @@ body.page-dashboard .atlas { max-width: none; }
   margin: 0;
   font-size: 12px;
   line-height: 16px;
-  color: var(--warning);
+  /* The map's third-party colour: purple always means someone outside Tether. Amber is taken by "in progress". */
+  color: var(--ecosystem);
 }
 
 .partner-mark {
@@ -2384,5 +2385,5 @@ body.page-dashboard .atlas { max-width: none; }
   height: 6px;
   margin-top: 5px;
   border-radius: 50%;
-  border: 1.5px solid var(--warning);
+  border: 1.5px solid var(--ecosystem);
 }
