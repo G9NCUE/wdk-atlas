@@ -755,7 +755,8 @@ function renderRoadmapItem(item, children) {
   const percent = itemProgress(item);
   const modules = moduleChips(item.modules || []);
   const moduleNames = (item.modules || []).map((ref) => { const m = itemById(typeof ref === "string" ? ref : ref.id); return m ? `${m.title || ""} ${m.name || m.id}` : String(ref); });
-  const search = [item.label, item.summary, item.id, stateLabel(item), item.quarter, ...moduleNames].filter(Boolean).join(" ").toLowerCase();
+  const partners = item.partners || [];
+  const search = [item.label, item.summary, item.id, stateLabel(item), item.quarter, ...moduleNames, ...partners, partners.length ? "partner-dependent" : ""].filter(Boolean).join(" ").toLowerCase();
   return el(
     "article",
     { class: `roadmap-card ${item.status || "planned"}`, id: item.id, "data-roadmap": item.id, "data-search": search },
@@ -775,6 +776,9 @@ function renderRoadmapItem(item, children) {
     percent != null && item.status === "wip" &&
       el("div", { class: "progress", role: "progressbar", "aria-valuenow": percent, "aria-valuemin": 0, "aria-valuemax": 100 }, el("span", { style: `width:${percent}%` })),
     item.summary && el("p", { class: "roadmap-card-summary" }, item.summary),
+    partners.length > 0 &&
+      el("p", { class: "roadmap-partners", title: "This cannot be finished by the WDK team alone" },
+        el("span", { class: "partner-mark", "aria-hidden": "true" }), "Needs ", partners.join(", ")),
     modules.length > 0 && el("div", { class: "roadmap-modules" }, modules),
     children.length > 0 && el("div", { class: "roadmap-children" }, children)
   );

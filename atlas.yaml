@@ -17,6 +17,8 @@
 #   id, label, summary, quarter (2026Q1 … 2027Q2 | backlog), status (planned | wip | done),
 #   priority (P0..P2), progress (0-100, optional), parent (id of the umbrella item, optional),
 #   modules: list of module ids, or { id, status, progress } to override the state for that module.
+#   partners (optional): the outside parties an item cannot be finished without. Drawn on the card, so a
+#     P0 the team cannot close alone does not read like one it can.
 # progress: 0–100 fill-wash on WIP packages and WIP roadmap chips.
 
 mission: Open-source, self-custodial wallet infrastructure for anyone.
@@ -1154,6 +1156,7 @@ roadmap:
   - id: leave-beta
     northStar: kit
     label: Security audit, then 1.0.0
+    partners: [an external auditor]
     summary: The external audit itself, then the packages leave beta. Q4 lays the groundwork; this is the audit and the 1.0.0 release.
     quarter: 2027Q1
     status: planned
@@ -1186,6 +1189,7 @@ roadmap:
   - id: new-chains
     northStar: ecosystem
     label: New chains under review
+    partners: [the ecosystem]
     summary: Sui and Hyperliquid, pending demand.
     quarter: backlog
     status: planned
@@ -1396,6 +1400,7 @@ roadmap:
   - id: cards-interface
     northStar: ecosystem
     label: Cards interface, with a first contributor
+    partners: [a second consumer, unconfirmed]
     summary: The form for connecting card providers, and one external module that fills it.
     quarter: 2026Q4
     status: wip
@@ -1426,6 +1431,7 @@ roadmap:
   - id: keet
     northStar: ecosystem
     label: Wallet features for Keet
+    partners: [the Keet team]
     summary: Understand what the Keet team needs to land a wallet in the app.
     quarter: backlog
     status: planned
@@ -1440,6 +1446,7 @@ roadmap:
   - id: kyt-policy
     northStar: ecosystem
     label: KYT providers through the policy engine
+    partners: ["a KYT provider such as Crystal or Blockaid"]
     summary: A policy backed by Crystal, Blockaid or similar.
     quarter: backlog
     status: planned
@@ -1470,6 +1477,7 @@ roadmap:
   - id: flutter-host
     northStar: ecosystem
     label: Flutter host binding, through a grant
+    partners: [the ecosystem, under a grant]
     summary: A Flutter binding to the worklet, built by the ecosystem under the existing grant template rather than by the core team; a proof of concept exists. Owner to confirm with Raquel.
     quarter: 2027Q2
     status: planned
@@ -1493,7 +1501,8 @@ roadmap:
   - id: sda-implementations
     northStar: kit
     label: Smart deposit addresses, partner implementations
-    summary: The interface shipped in Q3; this is the first partner modules that fill it, so deposits on one chain can be received on another.
+    partners: [Rhino.fi, Candide]
+    summary: 'The interface shipped in Q3; these are the first partner modules that fill it, so a deposit on one chain arrives on another. Rhino.fi and Candide are in the pipeline.'
     quarter: 2026Q4
     status: planned
     priority: P0
@@ -1532,8 +1541,8 @@ roadmap:
   - id: dev-portal
     northStar: dx
     label: Developer portal live
-    summary: 'The portal itself, separate from the docs rewrite: sign-in, guides, recipes and the module catalogue in one place.'
-    quarter: 2027Q1
+    summary: 'The portal itself, separate from the docs rewrite. Ownership unclear: it may belong to the developer portal team rather than to WDK. In the backlog until that is settled.'
+    quarter: backlog
     status: planned
     priority: P1
   - id: bounties-programme
@@ -1543,3 +1552,11 @@ roadmap:
     quarter: 2027Q2
     status: planned
     priority: P2
+  - id: indexer-swagger
+    northStar: dx
+    label: Indexer API reference in the docs
+    summary: 'Publish the indexer API as a Swagger/OpenAPI reference on the docs site, so the open API has documentation to match. The service stays closed source; the API does not.'
+    quarter: 2026Q4
+    status: planned
+    priority: P1
+    modules: [wdk-indexer-http]
