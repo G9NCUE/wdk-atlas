@@ -343,9 +343,12 @@ body.page-roadmap .site-header {
 
 .roadmap-controls {
   display: flex;
-  flex: none;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 12px;
+  min-width: 0;
 }
 
 .search {
@@ -425,6 +428,65 @@ body.page-roadmap .site-header {
 .view-toggle a[aria-current] {
   color: var(--ink);
   background: var(--dark-grey);
+}
+
+/* Status filter: a legend you can switch. Off = dimmed, hollow dot, cards of that status hidden. */
+.status-filter {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.status-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-btn);
+  background: transparent;
+  color: var(--ink);
+  font: 600 14px/1 var(--font-sans);
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.status-toggle:hover {
+  background: var(--card-elevated);
+}
+
+.status-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.status-toggle .state-dot {
+  flex: none;
+  box-shadow: 0 0 0 1px transparent;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.status-toggle[aria-pressed="false"] {
+  color: var(--muted);
+}
+
+.status-toggle[aria-pressed="false"] .state-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--muted);
+}
+
+.status-toggle[aria-pressed="false"] .view-count {
+  opacity: 0.5;
+}
+
+.star-tally li.off {
+  opacity: 0.4;
 }
 
 .view-count {
