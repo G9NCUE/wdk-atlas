@@ -759,7 +759,7 @@ function renderRoadmapItem(item, children) {
   const search = [item.label, item.summary, item.id, stateLabel(item), item.quarter, ...moduleNames, ...partners, partners.length ? "partner-dependent" : ""].filter(Boolean).join(" ").toLowerCase();
   return el(
     "article",
-    { class: `roadmap-card ${item.status || "planned"}`, id: item.id, "data-roadmap": item.id, "data-search": search },
+    { class: `roadmap-card ${item.status || "planned"}`, id: item.id, "data-roadmap": item.id, "data-search": search, "data-status": item.status || "planned" },
     el(
       "div",
       { class: "roadmap-card-head" },
@@ -967,18 +967,32 @@ function spotlightTarget() {
   card.addEventListener("animationend", () => card.classList.remove("is-target"), { once: true });
 }
 
-// Search: filters initiative cards by title, summary, id and module names; stars with a match open.
-function renderSearch(apply = applySearch, what = "initiatives") {
+// Filters: free-text search and a status toggle (done / in progress / planned). Both narrow the same
+// set of cards; stars with a match open, stars without one dim and fold.
+const STATUSES = ["done", "wip", "planned"];
+const filter = {
+  query: "",
+  statuses: (() => {
+    const raw = (new URLSearchParams(location.search).get("status") || "").split(",").filter((s) => STATUSES.includes(s));
+    return new Set(raw.length ? raw : STATUSES);
+  })(),
+  count: null,
+};
+
+function renderSearch(apply = applyFilters, what = "initiatives") {
   const input = el("input", { class: "search-input", type: "search", placeholder: `Search ${what}…`, "aria-label": `Search ${what}`, autocomplete: "off" });
   const count = el("span", { class: "search-count", "aria-live": "polite" });
   const wrap = el("label", { class: "search" }, input, count);
-  input.addEventListener("input", () => apply(input.value, count));
+  const run = () => {
+    filter.query = input.value;
+    filter.count = count;
+    apply(input.value, count);
+  };
+  input.addEventListener("input", run);
   // ?q= prefills the search, so a filtered view can be shared as a link.
   const initial = new URLSearchParams(location.search).get("q") || "";
-  if (initial) {
-    input.value = initial;
-    requestAnimationFrame(() => apply(initial, count));
-  }
+  if (initial) input.value = initial;
+  if (initial || (apply === applyFilters && filter.statuses.size < STATUSES.length)) requestAnimationFrame(run);
   document.addEventListener("keydown", (event) => {
     if (event.key === "/" && document.activeElement !== input && !event.metaKey && !event.ctrlKey) {
       event.preventDefault();
@@ -988,36 +1002,88 @@ function renderSearch(apply = applySearch, what = "initiatives") {
   return wrap;
 }
 
-function applySearch(query, count) {
-  const q = query.trim().toLowerCase();
-  const stars = poster.querySelectorAll("details.star-row");
+// Three toggles that read like a legend: switch a status off to hide its cards. At least one stays on.
+// The choice is kept in ?status= so a filtered roadmap can be shared as a link.
+function renderStatusFilter(counts) {
+  const buttons = STATUSES.map((status) => {
+    const label = status === "wip" ? "In progress" : status === "done" ? "Done" : "Planned";
+    const button = el(
+      "button",
+      { class: `status-toggle ${status}`, type: "button", "data-status": status, "aria-pressed": filter.statuses.has(status) ? "true" : "false", title: `Show or hide ${label.toLowerCase()} initiatives` },
+      el("span", { class: `state-dot ${status}`, "aria-hidden": "true" }),
+      label,
+      counts[status] > 0 && el("span", { class: "view-count" }, String(counts[status]))
+    );
+    button.addEventListener("click", () => {
+      if (filter.statuses.has(status)) {
+        if (filter.statuses.size === 1) return; // nothing left to show; keep the last one on
+        filter.statuses.delete(status);
+      } else {
+        filter.statuses.add(status);
+      }
+      for (const b of buttons) b.setAttribute("aria-pressed", filter.statuses.has(b.dataset.status) ? "true" : "false");
+      const params = new URLSearchParams(location.search);
+      if (filter.statuses.size === STATUSES.length) params.delete("status");
+      else params.set("status", STATUSES.filter((s) => filter.statuses.has(s)).join(","));
+      const qs = params.toString();
+      history.replaceState(null, "", `${location.pathname}${qs ? "?" + qs : ""}${location.hash}`);
+      for (const a of poster.querySelectorAll(".view-toggle a")) a.href = viewHref(a.dataset.view);
+      applyFilters(filter.query, filter.count);
+    });
+    return button;
+  });
+  return el("div", { class: "status-filter", role: "group", "aria-label": "Filter by status" }, buttons);
+}
+
+function applyFilters(query, count) {
+  const q = (query || "").trim().toLowerCase();
+  const narrowed = filter.statuses.size < STATUSES.length;
+  const active = Boolean(q) || narrowed;
+  const okText = (card) => !q || (card.dataset.search || "").includes(q);
+  const okStatus = (card) => filter.statuses.has(card.dataset.status || "planned");
   let total = 0;
-  for (const star of stars) {
+  for (const star of poster.querySelectorAll("details.star-row")) {
     let visible = 0;
-    for (const card of star.querySelectorAll(".roadmap-card")) {
-      const own = !q || (card.dataset.search || "").includes(q);
-      const childHit = q && [...card.querySelectorAll(".roadmap-children .roadmap-card")].some((c) => (c.dataset.search || "").includes(q));
-      card.hidden = !(own || childHit);
-      if (q && own && !card.closest(".roadmap-children")) visible += 1;
-      if (q && own && card.closest(".roadmap-children")) visible += 1;
+    for (const parent of star.querySelectorAll(".roadmap-card")) {
+      if (parent.closest(".roadmap-children")) continue;
+      const parentText = okText(parent);
+      const own = parentText && okStatus(parent);
+      let shownChildren = 0;
+      let matchedChildren = 0;
+      // Children of a matching parent stay visible; the parent itself stays if any child matches.
+      for (const child of parent.querySelectorAll(".roadmap-children .roadmap-card")) {
+        const match = okStatus(child) && okText(child);
+        const show = okStatus(child) && (parentText || okText(child));
+        child.hidden = !show;
+        if (show) shownChildren += 1;
+        if (match) matchedChildren += 1;
+      }
+      parent.hidden = !(own || shownChildren > 0);
+      visible += (own ? 1 : 0) + matchedChildren;
     }
-    // Children of a matching parent stay visible; the parent itself stays if any child matches.
-    for (const parent of star.querySelectorAll(".roadmap-card:not([hidden])")) {
-      if (!q || (parent.dataset.search || "").includes(q)) for (const c of parent.querySelectorAll(".roadmap-children .roadmap-card")) c.hidden = false;
-    }
+    for (const li of star.querySelectorAll(".star-tally li")) li.classList.toggle("off", narrowed && !STATUSES.some((s) => li.classList.contains(s) && filter.statuses.has(s)));
     total += visible;
-    star.dataset.searching = q ? "1" : "";
-    star.dataset.matches = q ? String(visible) : "";
-    star.open = q ? visible > 0 : star.dataset.userOpen === "1";
+    star.dataset.searching = active ? "1" : "";
+    star.dataset.matches = active ? String(visible) : "";
+    star.open = active ? visible > 0 : star.dataset.userOpen === "1";
   }
-  count.textContent = q ? `${total} ${total === 1 ? "match" : "matches"}` : "";
+  if (count) count.textContent = q ? `${total} ${total === 1 ? "match" : "matches"}` : "";
+}
+
+// Switching view keeps the search-free filters (?status=) so the same slice shows on both sides.
+function viewHref(id) {
+  const params = new URLSearchParams(location.search);
+  params.set("page", "roadmap");
+  if (id === "backlog") params.set("view", "backlog");
+  else params.delete("view");
+  return `./?${params}`;
 }
 
 function renderViewToggle(backlogCount) {
   const link = (id, label, count) =>
     el(
       "a",
-      { href: `./?page=roadmap${id === "backlog" ? "&view=backlog" : ""}`, "aria-current": view === id ? "page" : null },
+      { href: viewHref(id), "data-view": id, "aria-current": view === id ? "page" : null },
       label,
       count > 0 && el("span", { class: "view-count" }, String(count))
     );
@@ -1069,7 +1135,9 @@ function renderRoadmap() {
   }
   if (!roots.length) rows.push(el("p", { class: "meta" }, view === "backlog" ? "The backlog is empty." : "No roadmap entries in atlas.yaml yet."));
 
-  const intro = el("div", { class: "roadmap-intro" }, mission, el("div", { class: "roadmap-controls" }, renderSearch(), renderViewToggle(backlogCount)));
+  const shown = { done: 0, wip: 0, planned: 0 };
+  for (const item of roots.flatMap((root) => [root, ...(byParent.get(root.id) || [])])) shown[item.status || "planned"] += 1;
+  const intro = el("div", { class: "roadmap-intro" }, mission, el("div", { class: "roadmap-controls" }, renderSearch(), renderStatusFilter(shown), renderViewToggle(backlogCount)));
   if (view !== "timeline") {
     return el("div", { class: "roadmap-page" }, intro, el("p", { class: "backlog-note" }, "Not yet scheduled. Ranked by north star, then priority."), rows);
   }
