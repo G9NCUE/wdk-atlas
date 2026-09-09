@@ -1084,9 +1084,9 @@ roadmap:
   - id: native-cores-v2
     northStar: kit
     label: Swift core at parity with React Native
-    summary: Strong typing, sensitive storage and a plug-in interface for native packages, matching the React Native host.
+    summary: Strong typing, sensitive storage and a plug-in interface for native packages, matching the React Native host. The HRPC transport rewrite is drafted on a branch and not yet merged.
     quarter: 2026Q4
-    status: wip
+    status: planned
     priority: P0
     modules: [wdk-core-swift]
   - id: sda
@@ -1525,7 +1525,8 @@ roadmap:
   - id: publish-swift-spm
     northStar: kit
     label: Publish the Swift core on Swift Package Manager
-    summary: Makes the iOS side installable and public, and turns the two locked cards on the map into real links.
+    partners: [an Apple Developer account under Tether]
+    summary: Makes the iOS side installable and public, and turns the two locked cards on the map into real links. Nothing can be published until the Apple developer account exists.
     quarter: 2026Q4
     status: planned
     priority: P1
