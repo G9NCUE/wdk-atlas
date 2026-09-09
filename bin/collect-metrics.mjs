@@ -14,12 +14,18 @@
 //                { repo: { "YYYY-MM-DD": n } } }         rewritten for the last 30 days on every run, older days kept
 //              issueResponse: { repo: { "YYYY-MM-DD": [hours to first response, -1 if none yet] } }
 //              externalAuthorsOpened | externalAuthorsMerged: { repo: { "YYYY-MM-DD": { login: n } } }
-//   authors:   { login: association label last seen }
+//   authors:   { login: association label last seen; MEMBER/OWNER/COLLABORATOR mark a teammate and stick }
 //   snapshots: { "YYYY-MM-DD": { stars, forks, openIssues, openPrs, contributors: { repo: count }, published: [repo…] } }
 //   contributors: { repo: [login…] }   current, kept once
 //   since: first day the event series cover
 // Pruning keeps the file small: snapshots stay daily for 90 days then thin to one a month; daily
 // series are dropped after 400 days. The page fetches this file, so it must not grow without bound.
+//
+// Who is a teammate: GitHub's author_association only says MEMBER when the token can see the org's
+// membership. The default Actions token cannot (memberships in this org are mostly private), so with it
+// every teammate reads CONTRIBUTOR and lands in the external charts. Three sources, any one is enough:
+// the org member list (when the token belongs to a member; set ATLAS_TOKEN), a MEMBER/OWNER/COLLABORATOR
+// label kept in `authors` from an earlier run that could see, and `audit.team` in atlas.yaml.
 //
 // Stars, forks, contributors and open counts are snapshots, not history: GitHub's dated stargazer
 // list is closed to us. Probed 2026-09-07 — an Actions token gets 403 "Resource not accessible by
@@ -89,6 +95,8 @@ const day = (t) => String(t || "").slice(0, 10);
 try {
   const today = iso(new Date());
   const since30 = iso(daysAgo(30));
+  let file = { schema: 3, org: ORG, repos: {}, daily: {}, snapshots: {} };
+  if (existsSync(OUT)) { try { const f = JSON.parse(readFileSync(OUT, "utf8")); if (f.schema === 3) file = f; } catch {} }
 
   // ---------------------------------------------------------------- repos in scope, and the module each maps to
   const byRepoName = new Map();
@@ -140,7 +148,20 @@ try {
   const repoSet = new Set(wdkRepos.map((r) => r.name));
   const repoOf = (item) => (item.repository_url || "").split("/").pop();
   const inScope = (item) => repoSet.has(repoOf(item));
-  const external = (item) => Boolean(item.user && item.user.login) && !isBot(item.user.login) && !["MEMBER", "OWNER", "COLLABORATOR"].includes(item.author_association);
+  // Teammates (see the header). The member list counts only when the token holder is an org member:
+  // for anyone else GitHub quietly answers with the public members, which would look complete and is not.
+  const INTERNAL = new Set(["MEMBER", "OWNER", "COLLABORATOR"]);
+  const team = new Set((atlas.audit && atlas.audit.team) || []);
+  let members = null;
+  try {
+    const viewer = await gh(`/user/memberships/orgs/${ORG}`);
+    if (viewer && viewer.state === "active") members = new Set((await ghAll(`/orgs/${ORG}/members`)).map((u) => u.login));
+  } catch { members = null; }
+  const remembered = new Set(Object.entries(file.authors || {}).filter(([, label]) => INTERNAL.has(label)).map(([login]) => login));
+  if (members) console.error(`collect-metrics: ${members.size} org members visible; teammate labels are refreshed`);
+  else console.error(`collect-metrics: the token cannot list org members; ${remembered.size} teammates kept from earlier runs, ${team.size} from audit.team`);
+  const isInternal = (login, association) => team.has(login) || INTERNAL.has(association) || (members ? members.has(login) : remembered.has(login));
+  const external = (item) => Boolean(item.user && item.user.login) && !isBot(item.user.login) && !isInternal(item.user.login, item.author_association);
   const search = async (q) => (await ghAll(`/search/issues?q=${encodeURIComponent(`org:${ORG} ${q}`)}`)).filter(inScope);
   for (const i of await search("is:issue is:open")) snap.openIssues[repoOf(i)] = (snap.openIssues[repoOf(i)] || 0) + 1;
 
@@ -162,8 +183,13 @@ try {
     }
     return out;
   };
+  // Every author's label, not only external ones, so a teammate seen once stays a teammate on runs that cannot see.
   const authorLabel = {};
-  for (const i of [...prsOpened30, ...prsMerged30]) if (external(i)) authorLabel[i.user.login] = i.author_association;
+  for (const i of [...prsOpened30, ...prsMerged30]) {
+    const login = i.user && i.user.login;
+    if (!login || isBot(login)) continue;
+    authorLabel[login] = members && members.has(login) && !INTERNAL.has(i.author_association) ? "MEMBER" : i.author_association;
+  }
   const bucket = (items, key, filter = () => true) => {
     const out = {};
     for (const i of items) {
@@ -200,8 +226,6 @@ try {
   };
 
   // ---------------------------------------------------------------- merge into the file
-  let file = { schema: 3, org: ORG, repos: {}, daily: {}, snapshots: {} };
-  if (existsSync(OUT)) { try { const f = JSON.parse(readFileSync(OUT, "utf8")); if (f.schema === 3) file = f; } catch {} }
   file.repos = repos;
   for (const [name, perRepo] of Object.entries(daily)) {
     // downloads come back for the whole retention window, so the fetch is authoritative and replaces
@@ -213,6 +237,7 @@ try {
       for (const d of Object.keys(merged)) if (d >= since30) delete merged[d];        // the window is rewritten
       Object.assign(merged, perRepo[repo] || {});
       if (Object.keys(merged).length) file.daily[name][repo] = Object.fromEntries(Object.entries(merged).sort());
+      else delete file.daily[name][repo]; // a window with nothing left must not keep last run's entries
     }
   }
   file.snapshots[today] = snap;
@@ -236,7 +261,12 @@ try {
       if (!Object.keys(days).length) delete perRepo[repo];
     }
   }
-  file.authors = { ...(file.authors || {}), ...authorLabel }; // login -> GitHub's association label, last seen
+  // login -> association label, last seen. A teammate label survives a run whose token cannot see membership.
+  file.authors = file.authors || {};
+  for (const [login, label] of Object.entries(authorLabel)) {
+    const kept = file.authors[login];
+    file.authors[login] = !members && INTERNAL.has(kept) && !INTERNAL.has(label) ? kept : label;
+  }
   file.updated = new Date().toISOString();
   if (DRY) console.log(JSON.stringify({ repos: Object.keys(repos).length, snapshot: snap }, null, 2));
   else {

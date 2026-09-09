@@ -27,6 +27,11 @@ mission: Open-source, self-custodial wallet infrastructure for anyone.
 audit:
   org: tetherto
   repoPattern: "^(wdk$|wdk-|pear-wrk-wdk$|create-wdk-module$)"
+  # GitHub logins to count as the team on the Dashboard, whatever GitHub says about them. Normally not
+  # needed: bin/collect-metrics.mjs reads the org's member list when its token belongs to a member
+  # (ATLAS_TOKEN) and remembers teammates it has seen. Use this for people GitHub cannot tell apart.
+  team:
+    - jonathunne
   # Org repos that are not modules; not reported as missing from the atlas. This list is about the map
   # only: bin/collect-metrics.mjs ignores it and tracks every public wdk-* repo, wdk-docs included.
   ignoreRepos:
