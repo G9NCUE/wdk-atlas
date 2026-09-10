@@ -39,8 +39,8 @@ GITHUB_TOKEN=$(gh auth token) node bin/check-atlas.mjs
 
 The `Atlas drift` workflow runs it every Monday and on demand, and keeps a single issue labelled
 `atlas-drift` up to date with the findings. Fix the YAML, or add a repo to `audit.ignoreRepos`, and
-the next run drops the line. Set an `ATLAS_TOKEN` repository secret, a read-only token with access to
-the org's private repos, for the workflow to see them.
+the next run drops the line. The `ATLAS_TOKEN` repository secret (a classic token with `read:org`, plus
+`repo` if the drift check should see private repos) is shared with the metrics workflow below.
 
 ## Metrics
 
@@ -48,7 +48,10 @@ the org's private repos, for the workflow to see them.
 publishes: daily downloads, pull requests and issues per day (external ones by author association),
 time to first response on issues, and a daily snapshot of stars, forks, contributors and open counts.
 Downloads are fetched for the whole retention window each run, so npm history is backfilled (about 13 months); everything else accumulates from the day collection started, and GitHub serves no dated star history for this org, so stars only move as daily snapshots pile up. It merges them into `data/metrics.json`. Scope is every public repo matching `audit.repoPattern` — WDK's public open-source footprint, the documentation site included. That is deliberately wider than `audit.ignoreRepos`, which only says what is not a module on the map. The `Metrics` workflow runs it every day at 06:30 UTC and on
-demand and commits the result to `main`. Only public data is collected; the workflow token is enough.
+demand and commits the result to `main`. Only public data is collected. `ATLAS_TOKEN` matters for one thing:
+GitHub only says who is an org member to a member's token, so without it every teammate would count as an
+external contributor. The collector reads the member list when it can, remembers teammate labels across runs,
+and treats the logins in `audit.team` as the team whatever GitHub says.
 
 ```
 GITHUB_TOKEN=$(gh auth token) node bin/collect-metrics.mjs --dry
