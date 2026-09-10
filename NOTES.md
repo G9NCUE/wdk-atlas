@@ -147,3 +147,8 @@ Answered (2026-09-06):
 - Roadmap chips are still shown by default.
 - The stack-map artifact (a separate page built from the same YAML, with moor-wallet traces) is
   not part of this repo.
+
+## PoC note (asana sync)
+
+Placeholder edit for the GitHub Project to Asana synchronisation proof of concept. Safe to revert.
+Adds the Cards interface module as a planned item, see issue #3.
