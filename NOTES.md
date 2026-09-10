@@ -147,3 +147,7 @@ Answered (2026-09-06):
 - Roadmap chips are still shown by default.
 - The stack-map artifact (a separate page built from the same YAML, with moor-wallet traces) is
   not part of this repo.
+
+## Spike: status from milestones (PoC asana sync)
+
+Draft placeholder for issue #4. Safe to revert.
