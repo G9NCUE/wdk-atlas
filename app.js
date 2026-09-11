@@ -1473,7 +1473,6 @@ function buildDashboard(file, selected) {
     chartCard(`npm downloads per ${unit}`, fmtNum(dlLast.now), deltaPill(dlLast.now, dlLast.prev), dl.length ? lineChart(dl) : el("p", { class: "chart-foot" }, coverageNote(dlCov)), "Selected packages summed. npm reports a few days late, so the current period is left out."),
     chartCard(`Downloads by package, last full ${unit}`, null, null, hBars(byPackage, { color: SERIES[1] }), "Top eight of the selection."),
     chartCard("Stars by repository", fmtNum(sum(latest.stars)), null, hBars(byStars, { color: SERIES[2] }), "Top eight of the selection."),
-    chartCard(`Stars over time`, null, null, starsSeries.length > 1 ? lineChart(starsSeries, { color: SERIES[2] }) : el("p", { class: "chart-foot" }, `A running total, counted once a day since ${snapDays[0] || "today"}. GitHub does not serve dated star history for this org, so it cannot be backfilled; the line grows one point a day.`), "Total at the end of each period, from daily snapshots."),
   ]);
   // External contributors over the same complete periods the pull request charts show.
   const windowKeys = new Set([...prsO, ...prsM].map((p) => p.key));
