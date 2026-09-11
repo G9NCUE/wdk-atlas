@@ -1371,9 +1371,19 @@ function saveSelection(selected, all) {
   try { selected.length === all.length ? localStorage.removeItem(SEL_KEY) : localStorage.setItem(SEL_KEY, JSON.stringify(selected)); } catch {}
 }
 
-function renderGrainSwitch() {
+// Monthly is offered once event collection covers a whole calendar month; before that every event
+// chart would only say "no complete month yet". The URL still accepts range=monthly.
+function monthlyReady(file) {
+  const since = file.since; if (!since) return false;
+  const [y, m] = since.split("-").map(Number);
+  const firstFull = since.endsWith("-01") ? new Date(Date.UTC(y, m - 1, 1)) : new Date(Date.UTC(y, m, 1));
+  const done = new Date(Date.UTC(firstFull.getUTCFullYear(), firstFull.getUTCMonth() + 1, 1));
+  return new Date().toISOString().slice(0, 10) >= done.toISOString().slice(0, 10);
+}
+function renderGrainSwitch(file) {
   const link = (id) => { const u = new URLSearchParams(location.search); u.set("page", "dashboard"); u.set("range", id); return el("a", { href: `./?${u}`, "aria-current": grain === id ? "page" : null }, GRAINS[id]); };
-  return el("nav", { class: "view-toggle", "aria-label": "Granularity" }, Object.keys(GRAINS).map(link));
+  const ids = Object.keys(GRAINS).filter((id) => id !== "monthly" || grain === "monthly" || monthlyReady(file));
+  return el("nav", { class: "view-toggle", "aria-label": "Granularity" }, ids.map(link));
 }
 
 // The selection panel: one checkbox per repo, grouped by atlas section; changes re-render the numbers in place.
@@ -1486,11 +1496,9 @@ function buildDashboard(file, selected) {
     chartCard(`External contributors, ${windowLabel}`, String(Object.keys(authors).length), null, topAuthors.length ? hBars(topAuthors, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, windowKeys.size ? "No external pull requests in the window." : coverageNote(evCov)), "Top five by pull requests opened over the periods shown; hover for GitHub's label and merges. A teammate or a bot showing up here means the internal list needs a fix."),
     chartCard(`Pull requests per ${unit}`, lastTwo(prsO).now == null ? "—" : String(lastTwo(prsO).now), null, pr.cats.length ? groupedBars(pr.cats, [{ label: "Opened", values: pr.a }, { label: "Merged", values: pr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Complete periods only."),
     chartCard(`External pull requests per ${unit}`, lastTwo(xO).now == null ? "—" : String(lastTwo(xO).now), null, xpr.cats.length ? groupedBars(xpr.cats, [{ label: "Opened", values: xpr.a }, { label: "Merged", values: xpr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Authors who are not members or collaborators of the org."),
-    chartCard("Contributors over time", String(people), null, contribSeries.length > 1 ? lineChart(contribSeries, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, `Counted once a day since ${snapDays[0] || "today"}; the line grows one point a day.`), "Summed over the selected repos at the end of each period; a person active in two repos counts twice here, once in the headline."),
   ]);
   const support = dashSection("Support & responsiveness", [
     chartCard(`Issues opened and closed per ${unit}`, String(sum(latest.openIssues)), deltaPill(lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), iss.cats.length ? groupedBars(iss.cats, [{ label: "Opened", values: iss.a }, { label: "Closed", values: iss.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Headline is the open backlog today."),
-    chartCard("Open backlog over time", null, null, backlogSeries.length > 1 ? lineChart(backlogSeries, { color: SERIES[0] }) : hBars([{ label: "Open issues", value: sum(latest.openIssues) }, { label: "Open pull requests", value: sum(latest.openPrs) }]), backlogSeries.length > 1 ? "Open issues at the end of each period." : "Today; a curve appears after the second snapshot."),
   ]);
   const note = el("p", { class: "dash-note" }, `Public sources only: the npm registry and the GitHub API. ${selected.length} of ${Object.keys(file.repos).length} public WDK repos selected. Daily series cover the last 30 days and grow by one day per run; stars, contributors and open counts are daily snapshots, the first taken ${snapDays[0]}. Last collected ${String(file.updated).slice(0, 10)}. Community, newsletter and website figures are not public and are not shown.`);
   return [tiles, adoption, community, support, note];
@@ -1503,7 +1511,7 @@ async function renderDashboard() {
   const all = Object.keys(file.repos || {}).sort();
   let selected = readSelection(all);
   const body = el("div", { class: "dash-body" }, buildDashboard(file, selected));
-  const controls = el("div", { class: "dash-controls" }, renderGrainSwitch(), renderRepoPanel(file, selected, (chosen) => { selected = chosen; body.replaceChildren(...buildDashboard(file, selected)); }));
+  const controls = el("div", { class: "dash-controls" }, renderGrainSwitch(file), renderRepoPanel(file, selected, (chosen) => { selected = chosen; body.replaceChildren(...buildDashboard(file, selected)); }));
   return el("div", { class: "dash-page" }, controls, body);
 }
 
