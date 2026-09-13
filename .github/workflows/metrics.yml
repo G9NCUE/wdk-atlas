@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  pages: write # to request the Pages build after the push; the legacy builder does not always notice one
 
 jobs:
   collect:
@@ -33,3 +34,9 @@ jobs:
           git commit -m "metrics: $(date -u +%F)"
           git pull --rebase origin main
           git push
+      # GitHub Pages builds from main, but its legacy builder has skipped pushes before, leaving the site
+      # stale while this job kept committing. Asking for the build is idempotent and takes twenty seconds.
+      - name: Request the Pages build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" --jq .status
