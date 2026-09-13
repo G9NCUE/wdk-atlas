@@ -15,13 +15,17 @@
 # roadmap: one list at the root (below). Each item names the modules it touches; the chips
 # under a module box and the "Pending work" list in its drawer are derived from it.
 #   id, label, summary, quarter (2026Q1 … 2027Q2 | backlog), status (planned | wip | done),
-#   priority (P0..P2), progress (0-100, optional), parent (id of the umbrella item, optional),
+#   priority (P0..P2), parent (id of the umbrella item, optional),
 #   modules: list of module ids, or { id, status, progress } to override the state for that module.
 #   partners (optional): the outside parties an item cannot be finished without. Drawn on the card, so a
 #     P0 the team cannot close alone does not read like one it can.
 # progress: 0–100 fill-wash on WIP packages and WIP roadmap chips.
 
-mission: Open-source, self-custodial wallet infrastructure for anyone.
+mission: Open-source, modular wallet infrastructure for anyone.
+# One line for people who have never heard of WDK; the Overview page opens with it.
+about: >-
+  The Wallet Development Kit (WDK) is Tether's open-source toolkit for building wallets.
+  Published on npm under Apache-2.0, built in public on GitHub.
 
 # Settings for bin/check-atlas.mjs.
 audit:
@@ -54,26 +58,45 @@ audit:
 
 # North stars: the three objectives every roadmap initiative serves (roadmap items carry `northStar: <id>`).
 # `keyResults` are the measurable results behind each star, shown on the roadmap rows and on the Key results page.
-#   id, label; optional: target, current, unit, progress (0-100), source (how it is measured), note.
-#   Without `progress` (or `target` and `current`) a key result shows as "not measured".
-#   `metric` reads the Dashboard data instead (data/metrics.json): kind count (source: thirdPartyModules, target),
+#   id, label, note, and a `metric` that reads public data. Nothing is typed by hand: a result that cannot
+#   be recomputed from npm, GitHub or this file is not a key result here.
+#   kinds: share (field over a scope: published packages or first-party wallets; fields stable, audits, ci, signer),
+#   average (field health over a scope, target %), count (source thirdPartyModules | privateRepos | examples, target),
 #   quarterGrowth (series, targetPct: growth vs the previous calendar quarter), issueResponse (withinHours, target %).
-# Inherited from the Q3 2026 OKR sheet with light editing; a starting point pending review, not a commitment.
+# Rewritten 2026-09-13 from the Q3 2026 OKR sheet so every result is public and checkable; pending review.
 northStars:
   - id: kit
     title: WDK is a production-grade kit for every platform
     summary: Secure, audited, out of beta, with the same SDK on iOS, Android, desktop and Node.
     keyResults:
-      - { id: audit, label: "Complete the first quarterly security audit and take the packages out of beta" }
-      - { id: signer-interface, label: "One signer interface on every wallet package" }
-      - { id: native-parity, label: "Swift and Kotlin cores on par with React Native" }
-      - { id: coverage-ci, label: "Function coverage above 95% and testnet transactions in CI" }
+      - id: stable
+        label: "Every published package at a stable release, out of beta"
+        metric: { kind: share, field: stable, scope: published }
+        note: The npm latest tag carries no beta, alpha or rc suffix.
+      - id: audit
+        label: "Every published package with a published security audit"
+        metric: { kind: share, field: audits, scope: published }
+        note: An audit folder or file at the root of the repo.
+      - id: signer-interface
+        label: "One signer interface on every wallet package"
+        metric: { kind: share, field: signer, scope: wallets }
+        note: First-party wallet repos whose code references ISigner, the shared signer interface.
+      - id: ci-green
+        label: "Green CI on the main branch of every package"
+        metric: { kind: share, field: ci, scope: published }
+        note: Newest completed workflow run on the default branch, whatever the workflow; a stricter test-only check is an open question.
+      - id: public
+        label: "No private repo in the WDK namespace"
+        metric: { kind: count, source: privateRepos, target: 0 }
+        note: Every WDK repo is meant to be public. A private one is either a mistake or waiting on a release.
   - id: dx
     title: Best in class Developer Experience
     summary: From zero to a first transaction in minutes, for humans and for agents.
     keyResults:
-      - { id: recipes, label: "Six new recipes and examples across the docs, the CLI and the agent toolkits" }
-      - { id: des, label: "Developer experience score above 70" }
+      - id: examples
+        label: "Fifteen examples published, six more than in September 2026"
+        metric: { kind: count, source: examples, target: 15 }
+        note: Top-level example folders in the examples repo; nine on 2026-09-13.
       - id: issue-response
         label: "Open issues answered within a week"
         metric: { kind: issueResponse, withinHours: 168, target: 100 }
@@ -88,9 +111,11 @@ northStars:
       - id: external-prs
         label: "External pull requests merged up by 50% in the quarter"
         metric: { kind: quarterGrowth, series: externalPrsMerged, targetPct: 50 }
-      - { id: community-projects, label: "Five live community projects on WDK; five funded through bounties" }
-      - { id: ecosystem-call, label: "Monthly update call with the ecosystem teams" }
-      - { id: transparency, label: "Roadmap, contribution guidelines and module review process public and current" }
+        note: Tether team members are excluded, whatever account they use.
+      - id: health
+        label: "Community health above 80% on every repo"
+        metric: { kind: average, field: health, scope: published, target: 80 }
+        note: GitHub's community profile score. README, licence, contributing guide, code of conduct, issue and pull request templates.
 
 # Columns of the chain × capability grid inside the engine, in display order.
 # A module lands in every column named in its `chains`; `also` folds extra labels into a column
@@ -1084,7 +1109,6 @@ roadmap:
     quarter: 2026Q4
     status: wip
     priority: P1
-    progress: 70
     modules: [wdk, wdk-wallet]
   - id: native-cores-v2
     northStar: kit
