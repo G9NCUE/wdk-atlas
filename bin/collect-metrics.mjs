@@ -14,7 +14,9 @@
 //                { repo: { "YYYY-MM-DD": n } } }         rewritten for the last 30 days on every run, older days kept
 //              issueResponse: { repo: { "YYYY-MM-DD": [hours to first response, -1 if none yet] } }
 //              externalAuthorsOpened | externalAuthorsMerged: { repo: { "YYYY-MM-DD": { login: n } } }
-//   authors:   { login: association label last seen; MEMBER/OWNER/COLLABORATOR mark a teammate and stick }
+//   authors:   { login: GitHub's association label last seen }   external authors only
+//   team:      [sha256(login)…]   teammates seen by a run that could see membership; hashed so the public
+//              file names nobody's private membership, matched by hashing the login again
 //   snapshots: { "YYYY-MM-DD": { stars, forks, openIssues, openPrs, contributors: { repo: count }, published: [repo…],
 //                ci: { repo: conclusion of the last completed run on the default branch },
 //                health: { repo: GitHub community-profile percentage }, community: { repo: { readme, license, contributing, codeOfConduct } },
@@ -42,6 +44,7 @@
 // an empty stargazers connection. So these series can only grow forward, one point per run.
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createContext, runInContext } from "node:vm";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -66,6 +69,7 @@ const isBot = (login) => !login || login.endsWith("[bot]");
 const EXAMPLES_REPO = (atlas.audit && atlas.audit.examplesRepo) || "wdk-examples";
 const EXAMPLES_IGNORE = new Set((atlas.audit && atlas.audit.examplesIgnore) || ["shared"]);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const hashLogin = (login) => createHash("sha256").update(String(login).toLowerCase()).digest("hex");
 const SNAPSHOT_DAILY_DAYS = 90;  // every snapshot for this long, then one per month
 const SERIES_DAYS = 400;         // daily series kept this long (a year plus a margin)
 // npm serves an arbitrary date range (up to 18 months per call), so downloads are fetched for the whole
@@ -224,10 +228,12 @@ try {
     const viewer = await gh(`/user/memberships/orgs/${ORG}`);
     if (viewer && viewer.state === "active") members = new Set((await ghAll(`/orgs/${ORG}/members`)).map((u) => u.login));
   } catch { members = null; }
-  const remembered = new Set(Object.entries(file.authors || {}).filter(([, label]) => INTERNAL.has(label)).map(([login]) => login));
-  if (members) console.error(`collect-metrics: ${members.size} org members visible; teammate labels are refreshed`);
+  // Teammates remembered from earlier runs live in file.team as hashes; older files carried plain labels, drop those.
+  const remembered = new Set(file.team || []);
+  for (const [login, label] of Object.entries(file.authors || {})) if (INTERNAL.has(label)) { remembered.add(hashLogin(login)); delete file.authors[login]; }
+  if (members) console.error(`collect-metrics: ${members.size} org members visible; teammate list is refreshed`);
   else console.error(`collect-metrics: the token cannot list org members; ${remembered.size} teammates kept from earlier runs, ${team.size} from audit.team`);
-  const isInternal = (login, association) => team.has(login) || INTERNAL.has(association) || (members ? members.has(login) : remembered.has(login));
+  const isInternal = (login, association) => team.has(login) || INTERNAL.has(association) || (members ? members.has(login) : remembered.has(hashLogin(login)));
   const external = (item) => Boolean(item.user && item.user.login) && !isBot(item.user.login) && !isInternal(item.user.login, item.author_association);
   const search = async (q) => (await ghAll(`/search/issues?q=${encodeURIComponent(`org:${ORG} ${q}`)}`)).filter(inScope);
   for (const i of await search("is:issue is:open")) snap.openIssues[repoOf(i)] = (snap.openIssues[repoOf(i)] || 0) + 1;
@@ -250,12 +256,14 @@ try {
     }
     return out;
   };
-  // Every author's label, not only external ones, so a teammate seen once stays a teammate on runs that cannot see.
+  // External authors keep GitHub's label for the dashboard hint; teammates go into the hashed team list.
   const authorLabel = {};
+  const teamSeen = new Set(remembered);
   for (const i of [...prsOpened30, ...prsMerged30]) {
     const login = i.user && i.user.login;
     if (!login || isBot(login)) continue;
-    authorLabel[login] = members && members.has(login) && !INTERNAL.has(i.author_association) ? "MEMBER" : i.author_association;
+    if (isInternal(login, i.author_association)) teamSeen.add(hashLogin(login));
+    else authorLabel[login] = i.author_association;
   }
   const bucket = (items, key, filter = () => true) => {
     const out = {};
@@ -331,12 +339,10 @@ try {
       if (!Object.keys(days).length) delete perRepo[repo];
     }
   }
-  // login -> association label, last seen. A teammate label survives a run whose token cannot see membership.
-  file.authors = file.authors || {};
-  for (const [login, label] of Object.entries(authorLabel)) {
-    const kept = file.authors[login];
-    file.authors[login] = !members && INTERNAL.has(kept) && !INTERNAL.has(label) ? kept : label;
-  }
+  // External authors: login -> GitHub's label, last seen. Teammates: hashes only, never a login.
+  file.authors = { ...(file.authors || {}), ...authorLabel };
+  for (const h of teamSeen) for (const login of Object.keys(file.authors)) if (hashLogin(login) === h) delete file.authors[login];
+  file.team = [...teamSeen].sort();
   file.updated = new Date().toISOString();
   if (DRY) console.log(JSON.stringify({ repos: Object.keys(repos).length, snapshot: snap }, null, 2));
   else {
