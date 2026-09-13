@@ -13,7 +13,8 @@ not a key result here.
 - `atlas.yaml` is the source of truth: modules, sections, relations, mission, north stars with their
   key results, and roadmap items. Its header comment documents every field.
 - `data/metrics.json` holds the dashboard data, written by the Metrics workflow.
-- `index.html`, `app.js`, `styles.css` render everything. `vendor/` holds the two libraries used.
+- `index.html`, `app.js`, `styles.css` render everything. `vendor/` holds js-yaml, the one library used.
+  `assets/fonts/` holds the three typefaces, self-hosted so no request leaves the site.
 
 Run it locally from the repo, then open http://localhost:4173:
 
@@ -45,6 +46,19 @@ The `Atlas drift` workflow runs it every Monday and on demand, and keeps a singl
 `atlas-drift` up to date with the findings. Fix the YAML, or add a repo to `audit.ignoreRepos`, and
 the next run drops the line. The `ATLAS_TOKEN` repository secret (a classic token with `read:org`, plus
 `repo` if the drift check should see private repos) is shared with the metrics workflow below.
+
+## Security
+
+- Everything loads from the site's own origin. A Content Security Policy in `index.html` allows
+  scripts, styles and fonts from `'self'` only, no inline code; `el()` applies styles through the
+  CSSOM so no `style` attribute is ever parsed. Text from `atlas.yaml` and the metrics file is
+  rendered as text nodes; the two SVG charts escape every label they interpolate.
+- The metrics file names external contributors with GitHub's own label. Teammates are stored as
+  SHA-256 hashes of their login (`team`), so the public file never says who is an org member;
+  `audit.team` in `atlas.yaml` is the one place a login appears, by choice.
+- Workflows run with the minimum permissions and never on pull requests. `ATLAS_TOKEN` is a classic
+  token with `read:org` only. Pinning the actions to commit SHAs is on the to-do list.
+- `NOTES.md` and `ATLAS_DEVELOPMENT.md` are working notes: git-ignored, never deployed.
 
 ## Metrics
 

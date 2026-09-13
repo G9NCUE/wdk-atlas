@@ -32,6 +32,7 @@ function el(tag, attrs, ...children) {
     for (const [key, value] of Object.entries(attrs)) {
       if (value == null || value === false) continue;
       if (key === "class") node.className = value;
+      else if (key === "style") for (const decl of String(value).split(";")) { const i = decl.indexOf(":"); if (i > 0) node.style.setProperty(decl.slice(0, i).trim(), decl.slice(i + 1).trim()); }
       else node.setAttribute(key, value === true ? "" : value);
     }
   }
@@ -1328,6 +1329,8 @@ function renderResults() {
 // ==========================================================================================================
 
 const SERIES = ["#3987e5", "#199e70", "#c98500"]; // categorical, fixed order, validated for the dark surface
+// The charts are SVG strings; every label that came from data goes through this first.
+const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const fmtNum = (n) => (n == null ? "—" : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${Math.round(n / 1e3)}K` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(n));
 
 function deltaPill(now, before, { invert = false, note = "" } = {}) {
@@ -1372,10 +1375,10 @@ function lineChart(points, { color = SERIES[0], height = 160, unit = "", marks =
   const svg = `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="line chart">
     ${[0, 0.5, 1].map((t) => `<line class="grid" x1="${px}" x2="${W - px}" y1="${y(max * t).toFixed(1)}" y2="${y(max * t).toFixed(1)}"/><text class="axis" x="${px - 6}" y="${(y(max * t) + 4).toFixed(1)}" text-anchor="end">${fmtNum(Math.round(max * t))}</text>`).join("")}
     <path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
-    ${points.map((p, i) => `<g><circle cx="${x(i).toFixed(1)}" cy="${y(p.y).toFixed(1)}" r="4.5" fill="${color}" stroke="var(--card)" stroke-width="2"/><title>${p.label}: ${p.y.toLocaleString()}${unit}</title></g>`).join("")}
+    ${points.map((p, i) => `<g><circle cx="${x(i).toFixed(1)}" cy="${y(p.y).toFixed(1)}" r="4.5" fill="${color}" stroke="var(--card)" stroke-width="2"/><title>${esc(p.label)}: ${p.y.toLocaleString()}${esc(unit)}</title></g>`).join("")}
     ${points.map((p, i) => (i === 0 || i === points.length - 1 ? `<text class="dlabel" x="${x(i).toFixed(1)}" y="${(y(p.y) - 10).toFixed(1)}" text-anchor="middle">${fmtNum(p.y)}</text>` : "")).join("")}
-    ${points.map((p, i) => (labelEvery(points.length, i) ? `<text class="axis" x="${x(i).toFixed(1)}" y="${H - 2}" text-anchor="middle">${p.label}</text>` : "")).join("")}
-    ${points.map((p, i) => { const list = marks && marks.get(p.key); return list && list.length ? `<g class="mark"><path d="M${(x(i) - 3.5).toFixed(1)},${H - py + 3} h7 l-3.5,5 z" fill="var(--muted)"/><title>${list.length} npm release${list.length === 1 ? "" : "s"}: ${list.join(", ")}</title></g>` : ""; }).join("")}
+    ${points.map((p, i) => (labelEvery(points.length, i) ? `<text class="axis" x="${x(i).toFixed(1)}" y="${H - 2}" text-anchor="middle">${esc(p.label)}</text>` : "")).join("")}
+    ${points.map((p, i) => { const list = marks && marks.get(p.key); return list && list.length ? `<g class="mark"><path d="M${(x(i) - 3.5).toFixed(1)},${H - py + 3} h7 l-3.5,5 z" fill="var(--muted)"/><title>${list.length} npm release${list.length === 1 ? "" : "s"}: ${esc(list.join(", "))}</title></g>` : ""; }).join("")}
   </svg>`;
   const box = el("div", { class: "chart-box" }); box.innerHTML = svg; return box;
 }
@@ -1399,8 +1402,8 @@ function groupedBars(categories, series, { height = 160 } = {}) {
   const y = (v) => H - py - (v * (H - 2 * py)) / max;
   const svg = `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="bar chart">
     ${[0, 0.5, 1].map((t) => `<line class="grid" x1="${px}" x2="${W - px}" y1="${y(max * t).toFixed(1)}" y2="${y(max * t).toFixed(1)}"/><text class="axis" x="${px - 6}" y="${(y(max * t) + 4).toFixed(1)}" text-anchor="end">${fmtNum(Math.round(max * t))}</text>`).join("")}
-    ${categories.map((c, ci) => series.map((s, si) => { const v = s.values[ci] || 0; const bx = px + ci * gw + (gw - bw * series.length - 2 * (series.length - 1)) / 2 + si * (bw + 2); return `<g><rect x="${bx.toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, H - py - y(v)).toFixed(1)}" rx="3" fill="${SERIES[si]}"/><title>${c} · ${s.label}: ${v}</title></g>`; }).join("")).join("")}
-    ${categories.map((c, ci) => (labelEvery(categories.length, ci) ? `<text class="axis" x="${(px + ci * gw + gw / 2).toFixed(1)}" y="${H - 2}" text-anchor="middle">${c}</text>` : "")).join("")}
+    ${categories.map((c, ci) => series.map((s, si) => { const v = s.values[ci] || 0; const bx = px + ci * gw + (gw - bw * series.length - 2 * (series.length - 1)) / 2 + si * (bw + 2); return `<g><rect x="${bx.toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, H - py - y(v)).toFixed(1)}" rx="3" fill="${SERIES[si]}"/><title>${esc(c)} · ${esc(s.label)}: ${v}</title></g>`; }).join("")).join("")}
+    ${categories.map((c, ci) => (labelEvery(categories.length, ci) ? `<text class="axis" x="${(px + ci * gw + gw / 2).toFixed(1)}" y="${H - 2}" text-anchor="middle">${esc(c)}</text>` : "")).join("")}
   </svg>`;
   const box = el("div", { class: "chart-box" }); box.innerHTML = svg;
   if (series.length > 1) box.append(el("ul", { class: "legend-row" }, series.map((s, i) => el("li", null, el("i", { style: `background:${SERIES[i]}` }), s.label))));
@@ -2016,7 +2019,7 @@ function onPosterClick(event) {
     if (!hit) return;
     const id = hit.getAttribute("data-section");
     pinBand(id);
-    if (step) poster.querySelector(`.xs > .band[data-section="${id}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+    if (step) poster.querySelector(`.xs > .band[data-section="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" });
     return;
   }
   if (target.closest("summary")) event.preventDefault();
@@ -2032,7 +2035,7 @@ function onDrawerClick(event) {
   event.preventDefault();
   event.stopPropagation();
   const id = goto.getAttribute("data-goto");
-  const anchor = poster.querySelector(`[data-id="${id}"]`);
+  const anchor = poster.querySelector(`[data-id="${CSS.escape(id)}"]`);
   if (anchor) {
     openDrawer(id, anchor);
     anchor.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -2119,7 +2122,7 @@ async function main() {
 
   const initial = location.hash.replace(/^#/, "");
   if (initial) {
-    const anchor = poster.querySelector(`[data-id="${initial}"]`);
+    const anchor = poster.querySelector(`[data-id="${CSS.escape(initial)}"]`);
     if (anchor) openDrawer(initial, anchor);
   }
 }
