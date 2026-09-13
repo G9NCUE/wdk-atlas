@@ -4,8 +4,8 @@
 // (public metrics, written daily by the Metrics workflow). Both are fetched with the asset version
 // from index.html, so bumping ?v=N there refreshes everything.
 //
-// Pages, in nav order: roadmap (the front page), results, dashboard, map, dev, and the unlisted
-// questions page. `page` below decides which one renders; each has its own section in this file.
+// Pages, in nav order: overview (the front page), roadmap, results, dashboard, map, dev.
+// `page` below decides which one renders; each has its own section in this file.
 //
 // Asset version from this script's own URL (app.js?v=N); data fetches carry it so a bump refreshes everything.
 const ASSET_V = (() => { try { return new URL(document.currentScript.src, location.href).searchParams.get("v") || ""; } catch { return ""; } })();
@@ -17,9 +17,9 @@ const errorEl = document.querySelector("#error");
 
 let atlas = null;
 let openId = null;
-// The roadmap is the front page; the map lives at ?page=map ("main" kept as an alias for old links).
-const PAGES = new Set(["roadmap", "results", "dashboard", "map", "dev", "questions"]);
-const page = (() => { const p = new URLSearchParams(location.search).get("page") || "roadmap"; const q = p === "main" ? "map" : p; return PAGES.has(q) ? q : "roadmap"; })();
+// The overview is the front page; the map lives at ?page=map ("main" kept as an alias for old links).
+const PAGES = new Set(["overview", "roadmap", "results", "dashboard", "map", "dev"]);
+const page = (() => { const p = new URLSearchParams(location.search).get("page") || "overview"; const q = p === "main" ? "map" : p; return PAGES.has(q) ? q : "overview"; })();
 
 function showError(message) {
   errorEl.hidden = false;
@@ -725,6 +725,29 @@ function stateLabel(item) {
   return item.status === "wip" ? "in progress" : item.status === "done" ? "done" : "planned";
 }
 
+// Late: the quarter it was planned for has passed and it is not done. Computed, never typed.
+function isLate(item) {
+  return item.status !== "done" && Boolean(item.quarter) && item.quarter !== "backlog" && item.quarter < currentQuarter();
+}
+
+// Repo name behind a module's GitHub URL, the key the metrics file uses.
+function repoNameOf(module) {
+  const m = /github\.com\/[^/]+\/([^/#?]+)/.exec((module && module.repo) || "");
+  return m ? m[1].replace(/\.git$/, "") : null;
+}
+
+// Owners of an initiative: the CODEOWNERS handles of the repos behind its modules. Public, never typed here.
+function ownersOf(item) {
+  if (!METRICS || !METRICS.owners) return [];
+  const out = new Set();
+  for (const ref of item.modules || []) {
+    const m = itemById(typeof ref === "string" ? ref : ref.id);
+    const r = repoNameOf(m);
+    for (const h of (r && METRICS.owners[r]) || []) out.add(h);
+  }
+  return [...out];
+}
+
 // Progress for an initiative: its own number, else the average of the numbers set on its modules. Never a default.
 function itemProgress(item) {
   if (Number.isFinite(Number(item.progress))) return Math.max(0, Math.min(100, Math.round(item.progress)));
@@ -750,16 +773,19 @@ function moduleChips(refs) {
   return [...chips.slice(0, CHIP_LIMIT), ...hidden, more];
 }
 
-// One initiative. Progress shows only when someone set a number; nothing is invented.
-function renderRoadmapItem(item, children) {
-  const percent = itemProgress(item);
+// One initiative. No progress bars: nobody maintains them. A parent says how many children are done.
+function renderRoadmapItem(item, childItems = []) {
   const modules = moduleChips(item.modules || []);
   const moduleNames = (item.modules || []).map((ref) => { const m = itemById(typeof ref === "string" ? ref : ref.id); return m ? `${m.title || ""} ${m.name || m.id}` : String(ref); });
   const partners = item.partners || [];
-  const search = [item.label, item.summary, item.id, stateLabel(item), item.quarter, ...moduleNames, ...partners, partners.length ? "partner-dependent" : ""].filter(Boolean).join(" ").toLowerCase();
+  const late = isLate(item);
+  const owners = ownersOf(item);
+  const children = childItems.map((child) => renderRoadmapItem(child, []));
+  const doneChildren = childItems.filter((c) => c.status === "done").length;
+  const search = [item.label, item.summary, item.id, stateLabel(item), late ? "late" : "", item.quarter, ...moduleNames, ...partners, partners.length ? "partner-dependent" : "", ...owners].filter(Boolean).join(" ").toLowerCase();
   return el(
     "article",
-    { class: `roadmap-card ${item.status || "planned"}`, id: item.id, "data-roadmap": item.id, "data-search": search, "data-status": item.status || "planned" },
+    { class: `roadmap-card ${item.status || "planned"}${late ? " late" : ""}`, id: item.id, "data-roadmap": item.id, "data-search": search, "data-status": item.status || "planned", "data-partners": partners.length ? "1" : null, "data-late": late ? "1" : null },
     el(
       "div",
       { class: "roadmap-card-head" },
@@ -771,14 +797,14 @@ function renderRoadmapItem(item, children) {
       { class: "roadmap-card-state" },
       el("span", { class: `state-dot ${item.status || "planned"}`, "aria-hidden": "true" }),
       el("span", { class: "roadmap-card-status" }, stateLabel(item)),
-      percent != null && item.status === "wip" && el("span", { class: "roadmap-card-progress" }, `${percent}%`)
+      late && el("span", { class: "late-badge", title: `Planned for ${quarterLabel(item.quarter)}, not done` }, `late · ${quarterLabel(item.quarter)}`),
+      childItems.length > 0 && el("span", { class: "roadmap-card-progress" }, `${doneChildren} of ${childItems.length} done`)
     ),
-    percent != null && item.status === "wip" &&
-      el("div", { class: "progress", role: "progressbar", "aria-valuenow": percent, "aria-valuemin": 0, "aria-valuemax": 100 }, el("span", { style: `width:${percent}%` })),
     item.summary && el("p", { class: "roadmap-card-summary" }, item.summary),
     partners.length > 0 &&
       el("p", { class: "roadmap-partners", title: "This cannot be finished by the WDK team alone" },
         el("span", { class: "partner-mark", "aria-hidden": "true" }), "Needs ", partners.join(", ")),
+    owners.length > 0 && el("p", { class: "roadmap-owners", title: "From the CODEOWNERS files of the repos this touches" }, "Owner ", owners.join(", ")),
     modules.length > 0 && el("div", { class: "roadmap-modules" }, modules),
     children.length > 0 && el("div", { class: "roadmap-children" }, children)
   );
@@ -823,17 +849,64 @@ const sumSeries = (perRepo, from, to) => { let n = 0; for (const days of Object.
 const nextQuarter = (q) => (q.endsWith("Q4") ? `${Number(q.slice(0, 4)) + 1}Q1` : `${q.slice(0, 4)}Q${Number(q.slice(5)) + 1}`);
 const quarterBounds = (q) => { const y = Number(q.slice(0, 4)), i = Number(q.slice(5)); const m = (i - 1) * 3; const from = `${y}-${String(m + 1).padStart(2, "0")}-01`; const to = m + 3 > 11 ? `${y + 1}-01-01` : `${y}-${String(m + 4).padStart(2, "0")}-01`; return [from, to]; };
 
-// A key result with `metric` reads its current value and progress from the Dashboard data.
+// Scopes and facts the release-readiness key results read. All from the metrics file or the atlas.
+const isStableVersion = (v) => Boolean(v) && !/-(alpha|beta|rc|next|canary|dev|pre)/i.test(v);
+function publishedRepos() { return Object.entries((METRICS && METRICS.repos) || {}).filter(([, r]) => r.version).map(([n]) => n).sort(); }
+function walletRepos() { return (atlas.modules || []).filter((m) => /^wdk-wallet-/.test(m.id) && !isEcosystem(m) && m.status === "shipped").map(repoNameOf).filter(Boolean); }
+function latestSnapshot() { const snaps = (METRICS && METRICS.snapshots) || {}; const days = Object.keys(snaps).sort(); return days.length ? snaps[days[days.length - 1]] : null; }
+// One repo's fact for a readiness field: true, false, or null when the collector has not measured it.
+function readinessFact(field, repo, snap = latestSnapshot()) {
+  if (field === "stable") return isStableVersion(METRICS && METRICS.repos[repo] && METRICS.repos[repo].version);
+  if (!snap || !snap[field]) return null;
+  const v = snap[field][repo];
+  if (field === "ci") return v == null ? false : v === "success";
+  return v === true;
+}
+const privateModules = () => (atlas.modules || []).filter((x) => x.private);
+const examplesRepoUrl = () => `https://github.com/${orgName()}/${(atlas.audit && atlas.audit.examplesRepo) || "wdk-examples"}`;
+
+// A key result with `metric` reads its current value and progress from public data: the atlas, npm and GitHub
+// through the metrics file. It never reads a number typed by hand.
 function evaluateMetric(kr) {
   const m = kr.metric; if (!m) return null;
-  const out = { source: "Dashboard", link: "./?page=dashboard", note: null, current: null, target: null, progress: null, unit: "" };
+  const out = { source: "Dashboard", link: "./?page=dashboard", note: null, current: null, target: null, progress: null, unit: "", valueTitle: null };
   if (m.kind === "count" && m.source === "thirdPartyModules") {
     const n = (atlas.modules || []).filter((x) => x.publisher && x.publisher !== orgName() && x.status === "shipped").length;
     Object.assign(out, { current: n, target: m.target, progress: m.target ? Math.min(100, Math.round((100 * n) / m.target)) : null, link: "./?page=map", source: "Map, third-party modules" });
     return out;
   }
+  if (m.kind === "count" && m.source === "privateRepos") {
+    const priv = privateModules();
+    Object.assign(out, { current: `${priv.length} private`, target: null, progress: priv.length ? 0 : 100, unit: priv.length ? "target none · hover the number for the repos" : "every repo in scope is public", link: "./?page=map", source: "Map, private repos",
+      valueTitle: priv.length ? priv.map((x) => `${x.title || x.id}${repoNameOf(x) ? ` (${repoNameOf(x)})` : ""}`).join("\n") : null });
+    return out;
+  }
   if (!METRICS || !METRICS.daily) { out.note = "Dashboard data not loaded."; return out; }
   const D = METRICS.daily;
+  if (m.kind === "share" || m.kind === "average") {
+    const snap = latestSnapshot();
+    const scope = m.scope === "wallets" ? walletRepos() : publishedRepos();
+    const scopeLabel = m.scope === "wallets" ? "first-party wallet packages" : "published packages";
+    out.link = "./?page=dashboard#readiness"; out.source = "Dashboard, release readiness";
+    if (m.field !== "stable" && (!snap || !snap[m.field])) { out.note = `Not collected yet (${m.field}); the next metrics run adds it.`; return out; }
+    if (m.kind === "share") {
+      const n = scope.filter((r) => readinessFact(m.field, r, snap) === true).length, total = scope.length;
+      Object.assign(out, { current: `${n} of ${total}`, target: null, progress: total ? Math.round((100 * n) / total) : null, unit: `${scopeLabel} · target all ${total}` });
+      return out;
+    }
+    const vals = scope.map((r) => snap[m.field][r]).filter((v) => typeof v === "number");
+    if (!vals.length) { out.note = "No repo measured yet."; return out; }
+    const at = vals.filter((v) => v >= m.target).length, avg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+    Object.assign(out, { current: `${at} of ${vals.length}`, target: null, progress: Math.round((100 * at) / vals.length), unit: `${scopeLabel} at ${m.target}% or more · average ${avg}% · target all ${vals.length}` });
+    return out;
+  }
+  if (m.kind === "count" && m.source === "examples") {
+    const snap = latestSnapshot(); const n = snap ? snap.examples : null;
+    out.link = examplesRepoUrl(); out.source = "GitHub, examples repo";
+    if (n == null) { out.note = "Not collected yet; the next metrics run adds it."; return out; }
+    Object.assign(out, { current: n, target: m.target, progress: m.target ? Math.min(100, Math.round((100 * n) / m.target)) : null, unit: "example folders" });
+    return out;
+  }
   if (m.kind === "quarterGrowth") {
     const first = METRICS.since || Object.values(D[m.series] || {}).flatMap((x) => Object.keys(x)).sort()[0] || null, today = new Date().toISOString().slice(0, 10);
     const q = quarterOf(today), [qFrom, qTo] = quarterBounds(q);
@@ -882,7 +955,7 @@ function keyResultsOf(star) {
     }
     if (ev && ev.progress != null) progress = ev.progress;
     return { id: o.id || `${star.id}-kr-${i + 1}`, label: o.label || String(kr), target: ev ? ev.target : o.target, current: ev ? ev.current : o.current, unit: ev ? ev.unit : o.unit,
-      source: ev ? ev.source : o.source, sourceLink: ev ? ev.link : null, note: [o.note, ev && ev.note].filter(Boolean).join(" "), fromDashboard: Boolean(ev),
+      source: ev ? ev.source : o.source, sourceLink: ev ? ev.link : null, note: [o.note, ev && ev.note].filter(Boolean).join(" "), fromDashboard: Boolean(ev), valueTitle: ev ? ev.valueTitle : null,
       progress: progress == null ? null : Math.max(0, Math.min(100, Math.round(progress))) };
   });
 }
@@ -906,17 +979,18 @@ function renderKrStrip(star) {
 }
 
 function renderStarRow(star, items, byParent, quarters, now, index, mode = "timeline") {
-  const counts = { done: 0, wip: 0, planned: 0 };
-  for (const item of items) counts[item.status || "planned"] += 1;
+  const counts = { done: 0, wip: 0, planned: 0, late: 0 };
+  for (const item of items) { counts[item.status || "planned"] += 1; if (isLate(item)) counts.late += 1; }
   const tally = el(
     "ul",
     { class: "star-tally" },
     counts.done > 0 && el("li", { class: "done" }, el("strong", null, String(counts.done)), " done"),
     counts.wip > 0 && el("li", { class: "wip" }, el("strong", null, String(counts.wip)), " in progress"),
-    counts.planned > 0 && el("li", { class: "planned" }, el("strong", null, String(counts.planned)), " planned")
+    counts.planned > 0 && el("li", { class: "planned" }, el("strong", null, String(counts.planned)), " planned"),
+    counts.late > 0 && el("li", { class: "late" }, el("strong", null, String(counts.late)), " late")
   );
   const rank = (x) => `${x.priority || "P9"}${x.status === "done" ? 2 : x.status === "wip" ? 0 : 1}`;
-  const card = (item) => renderRoadmapItem(item, (byParent.get(item.id) || []).map((child) => renderRoadmapItem(child, [])));
+  const card = (item) => renderRoadmapItem(item, byParent.get(item.id) || []);
   const body =
     mode === "backlog"
       ? el("div", { class: "backlog-grid" }, items.slice().sort((x, y) => rank(x).localeCompare(rank(y))).map(card))
@@ -931,11 +1005,10 @@ function renderStarRow(star, items, byParent, quarters, now, index, mode = "time
             )
           )
         );
-  const target = location.hash.replace(/^#/, "");
-  const open = Boolean(target) && items.some((item) => item.id === target || (byParent.get(item.id) || []).some((child) => child.id === target));
+  // Rows open by default: a folded roadmap reads as an empty page. The reader's own folds are remembered per view.
   const details = el(
     "details",
-    { class: "star-row", id: `star-${star.id}`, "data-star": star.id, open },
+    { class: "star-row", id: `star-${star.id}`, "data-star": star.id, open: true },
     el(
       "summary",
       { class: "star-head" },
@@ -948,7 +1021,7 @@ function renderStarRow(star, items, byParent, quarters, now, index, mode = "time
   // Clicking a key result goes to its page; it must not toggle the fold.
   details.querySelector(".kr-strip")?.addEventListener("click", (event) => event.stopPropagation());
   details.addEventListener("toggle", () => {
-    if (!details.dataset.searching) details.dataset.userOpen = details.open ? "1" : "";
+    if (!details.dataset.searching) details.dataset.userOpen = details.open ? "1" : "0";
   });
   return details;
 }
@@ -976,8 +1049,21 @@ const filter = {
     const raw = (new URLSearchParams(location.search).get("status") || "").split(",").filter((s) => STATUSES.includes(s));
     return new Set(raw.length ? raw : STATUSES);
   })(),
+  partners: new URLSearchParams(location.search).get("partners") === "1",
   count: null,
 };
+const filterNarrowed = () => filter.statuses.size < STATUSES.length || filter.partners;
+
+// Write the current filters into the address bar so a filtered roadmap can be shared, and keep the view links in step.
+function syncFilterUrl() {
+  const params = new URLSearchParams(location.search);
+  if (filter.statuses.size === STATUSES.length) params.delete("status");
+  else params.set("status", STATUSES.filter((s) => filter.statuses.has(s)).join(","));
+  if (filter.partners) params.set("partners", "1"); else params.delete("partners");
+  const qs = params.toString();
+  history.replaceState(null, "", `${location.pathname}${qs ? "?" + qs : ""}${location.hash}`);
+  for (const a of poster.querySelectorAll(".view-toggle a")) a.href = viewHref(a.dataset.view);
+}
 
 function renderSearch(apply = applyFilters, what = "initiatives") {
   const input = el("input", { class: "search-input", type: "search", placeholder: `Search ${what}…`, "aria-label": `Search ${what}`, autocomplete: "off" });
@@ -992,7 +1078,7 @@ function renderSearch(apply = applyFilters, what = "initiatives") {
   // ?q= prefills the search, so a filtered view can be shared as a link.
   const initial = new URLSearchParams(location.search).get("q") || "";
   if (initial) input.value = initial;
-  if (initial || (apply === applyFilters && filter.statuses.size < STATUSES.length)) requestAnimationFrame(run);
+  if (initial || (apply === applyFilters && filterNarrowed())) requestAnimationFrame(run);
   document.addEventListener("keydown", (event) => {
     if (event.key === "/" && document.activeElement !== input && !event.metaKey && !event.ctrlKey) {
       event.preventDefault();
@@ -1022,12 +1108,7 @@ function renderStatusFilter(counts) {
         filter.statuses.add(status);
       }
       for (const b of buttons) b.setAttribute("aria-pressed", filter.statuses.has(b.dataset.status) ? "true" : "false");
-      const params = new URLSearchParams(location.search);
-      if (filter.statuses.size === STATUSES.length) params.delete("status");
-      else params.set("status", STATUSES.filter((s) => filter.statuses.has(s)).join(","));
-      const qs = params.toString();
-      history.replaceState(null, "", `${location.pathname}${qs ? "?" + qs : ""}${location.hash}`);
-      for (const a of poster.querySelectorAll(".view-toggle a")) a.href = viewHref(a.dataset.view);
+      syncFilterUrl();
       applyFilters(filter.query, filter.count);
     });
     return button;
@@ -1035,12 +1116,30 @@ function renderStatusFilter(counts) {
   return el("div", { class: "status-filter", role: "group", "aria-label": "Filter by status" }, buttons);
 }
 
+// One toggle: only initiatives that depend on a partner. Kept in ?partners=1 like the status filter.
+function renderPartnerToggle(count) {
+  const button = el(
+    "button",
+    { class: "status-toggle partner", type: "button", "aria-pressed": filter.partners ? "true" : "false", title: "Only initiatives that need a partner to finish" },
+    el("span", { class: "partner-mark", "aria-hidden": "true" }),
+    "Partner-dependent",
+    count > 0 && el("span", { class: "view-count" }, String(count))
+  );
+  button.addEventListener("click", () => {
+    filter.partners = !filter.partners;
+    button.setAttribute("aria-pressed", filter.partners ? "true" : "false");
+    syncFilterUrl();
+    applyFilters(filter.query, filter.count);
+  });
+  return el("div", { class: "status-filter", role: "group", "aria-label": "Filter by dependency" }, button);
+}
+
 function applyFilters(query, count) {
   const q = (query || "").trim().toLowerCase();
   const narrowed = filter.statuses.size < STATUSES.length;
-  const active = Boolean(q) || narrowed;
+  const active = Boolean(q) || filterNarrowed();
   const okText = (card) => !q || (card.dataset.search || "").includes(q);
-  const okStatus = (card) => filter.statuses.has(card.dataset.status || "planned");
+  const okStatus = (card) => filter.statuses.has(card.dataset.status || "planned") && (!filter.partners || card.dataset.partners === "1");
   let total = 0;
   for (const star of poster.querySelectorAll("details.star-row")) {
     let visible = 0;
@@ -1065,7 +1164,7 @@ function applyFilters(query, count) {
     total += visible;
     star.dataset.searching = active ? "1" : "";
     star.dataset.matches = active ? String(visible) : "";
-    star.open = active ? visible > 0 : star.dataset.userOpen === "1";
+    star.open = active ? visible > 0 : star.dataset.userOpen !== "0";
   }
   if (count) count.textContent = q ? `${total} ${total === 1 ? "match" : "matches"}` : "";
 }
@@ -1135,9 +1234,9 @@ function renderRoadmap() {
   }
   if (!roots.length) rows.push(el("p", { class: "meta" }, view === "backlog" ? "The backlog is empty." : "No roadmap entries in atlas.yaml yet."));
 
-  const shown = { done: 0, wip: 0, planned: 0 };
-  for (const item of roots.flatMap((root) => [root, ...(byParent.get(root.id) || [])])) shown[item.status || "planned"] += 1;
-  const intro = el("div", { class: "roadmap-intro" }, mission, el("div", { class: "roadmap-controls" }, renderSearch(), renderStatusFilter(shown), renderViewToggle(backlogCount)));
+  const shown = { done: 0, wip: 0, planned: 0, partners: 0 };
+  for (const item of roots.flatMap((root) => [root, ...(byParent.get(root.id) || [])])) { shown[item.status || "planned"] += 1; if ((item.partners || []).length) shown.partners += 1; }
+  const intro = el("div", { class: "roadmap-intro" }, mission, el("div", { class: "roadmap-controls" }, renderSearch(), renderStatusFilter(shown), renderPartnerToggle(shown.partners), renderViewToggle(backlogCount)));
   if (view !== "timeline") {
     return el("div", { class: "roadmap-page" }, intro, el("p", { class: "backlog-note" }, "Not yet scheduled. Ranked by north star, then priority."), rows);
   }
@@ -1170,7 +1269,7 @@ function krValue(kr) {
   const cur = kr.current == null ? "—" : String(kr.current);
   const tgt = kr.target == null ? null : String(kr.target);
   const plain = tgt && /^[\d.,]+%?$/.test(tgt); // "12", "100%": read as "of"; anything else is a rule, shown as "target …"
-  return el("span", { class: "kr-value" }, el("b", null, cur), tgt && el("span", { class: "kr-target" }, plain ? ` of ${tgt}` : ` · target ${tgt}`));
+  return el("span", { class: "kr-value" }, el("b", { class: kr.valueTitle ? "has-tip" : null, title: kr.valueTitle || null }, cur), tgt && el("span", { class: "kr-target" }, plain ? ` of ${tgt}` : ` · target ${tgt}`));
 }
 
 function krRow(kr) {
@@ -1231,7 +1330,7 @@ function renderResults() {
 const SERIES = ["#3987e5", "#199e70", "#c98500"]; // categorical, fixed order, validated for the dark surface
 const fmtNum = (n) => (n == null ? "—" : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${Math.round(n / 1e3)}K` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(n));
 
-function deltaPill(now, before, { invert = false } = {}) {
+function deltaPill(now, before, { invert = false, note = "" } = {}) {
   if (before == null || now == null) return el("span", { class: "delta none" }, "no prior data");
   const diff = now - before;
   const pct = before ? Math.round((1000 * diff) / before) / 10 : null;
@@ -1239,7 +1338,19 @@ function deltaPill(now, before, { invert = false } = {}) {
   const good = invert ? dir === "down" : dir === "up";
   const arrow = dir === "up" ? "↑" : dir === "down" ? "↓" : "→";
   const sign = diff > 0 ? "+" : diff < 0 ? "−" : "";
-  return el("span", { class: `delta ${dir === "flat" ? "flat" : good ? "good" : "bad"}` }, `${arrow} ${sign}${fmtNum(Math.abs(diff))}${pct == null ? "" : ` (${sign}${Math.abs(pct)}%)`}`);
+  return el("span", { class: `delta ${dir === "flat" ? "flat" : good ? "good" : "bad"}`, title: note || null }, `${arrow} ${sign}${fmtNum(Math.abs(diff))}${pct == null ? "" : ` (${sign}${Math.abs(pct)}%)`}`, note && el("span", { class: "delta-note" }, note));
+}
+
+// Trend against the average of the previous four periods, which is what a reader means by "is it up".
+// Falls back to the previous period while fewer than five exist.
+function trendPill(pts, { invert = false } = {}) {
+  const short = { daily: "day", weekly: "wk", monthly: "mo" }[grain];
+  if (pts.length >= 5) {
+    const last = pts[pts.length - 1].y, base = pts.slice(-5, -1).reduce((a, p) => a + p.y, 0) / 4;
+    return deltaPill(last, Math.round(base), { invert, note: `vs 4-${short} avg` });
+  }
+  const { now, prev } = lastTwo(pts);
+  return deltaPill(now, prev, { invert, note: prev == null ? "" : `vs prev ${short}` });
 }
 
 function statTile(label, value, delta, hint, feeds) {
@@ -1251,7 +1362,7 @@ function statTile(label, value, delta, hint, feeds) {
 const labelEvery = (n, i) => n <= 12 || i === n - 1 || i % Math.ceil(n / 8) === 0;
 
 // Inline SVG line chart, one series, hover titles on points, selective direct labels (first and last).
-function lineChart(points, { color = SERIES[0], height = 160, unit = "" } = {}) {
+function lineChart(points, { color = SERIES[0], height = 160, unit = "", marks = null } = {}) {
   const W = 520, H = height, px = 28, py = 16;
   const ys = points.map((p) => p.y);
   const max = Math.max(...ys, 1), min = 0;
@@ -1264,8 +1375,19 @@ function lineChart(points, { color = SERIES[0], height = 160, unit = "" } = {}) 
     ${points.map((p, i) => `<g><circle cx="${x(i).toFixed(1)}" cy="${y(p.y).toFixed(1)}" r="4.5" fill="${color}" stroke="var(--card)" stroke-width="2"/><title>${p.label}: ${p.y.toLocaleString()}${unit}</title></g>`).join("")}
     ${points.map((p, i) => (i === 0 || i === points.length - 1 ? `<text class="dlabel" x="${x(i).toFixed(1)}" y="${(y(p.y) - 10).toFixed(1)}" text-anchor="middle">${fmtNum(p.y)}</text>` : "")).join("")}
     ${points.map((p, i) => (labelEvery(points.length, i) ? `<text class="axis" x="${x(i).toFixed(1)}" y="${H - 2}" text-anchor="middle">${p.label}</text>` : "")).join("")}
+    ${points.map((p, i) => { const list = marks && marks.get(p.key); return list && list.length ? `<g class="mark"><path d="M${(x(i) - 3.5).toFixed(1)},${H - py + 3} h7 l-3.5,5 z" fill="var(--muted)"/><title>${list.length} npm release${list.length === 1 ? "" : "s"}: ${list.join(", ")}</title></g>` : ""; }).join("")}
   </svg>`;
   const box = el("div", { class: "chart-box" }); box.innerHTML = svg; return box;
+}
+
+// Which npm releases fall in each bucket of the current grain, for the selected repos.
+function releaseMarks(file, selected) {
+  const marks = new Map();
+  for (const r of selected) for (const [d, ver] of Object.entries((file.releases || {})[r] || {})) {
+    const k = bucketKey(d); if (!marks.has(k)) marks.set(k, []);
+    marks.get(k).push(`${unscoped(file.repos[r] && file.repos[r].package) || r} ${ver}`);
+  }
+  return marks;
 }
 
 // Grouped bars: categories on x, up to three series, 2px gaps, hover titles, legend below.
@@ -1466,21 +1588,25 @@ function buildDashboard(file, selected) {
   const pr = align(prsO, prsM), xpr = align(xO, xM), iss = align(isO, isC);
   const published = (latest.published || []).filter((r) => selected.includes(r)).length;
   const withPkg = selected.filter((r) => file.repos[r].package).length;
+  const stable = selected.filter((r) => readinessFact("stable", r, latest)).length;
+  const krs = new Map((atlas.northStars || []).flatMap((star) => keyResultsOf(star)).map((kr) => [kr.id, kr]));
+  const feeds = (id) => { const kr = krs.get(id); return kr ? { id, label: `${kr.label}${kr.target != null ? ` · target ${kr.target}` : ""}` } : null; };
 
   const tiles = el("div", { class: "tiles" },
-    statTile(`npm downloads, last full ${unit}`, dlLast.now == null ? "—" : fmtNum(dlLast.now), deltaPill(dlLast.now, dlLast.prev), dlLast.key ? `${dlLast.key} · ${selected.filter((r) => file.repos[r].package).length} packages` : coverageNote(dlCov)),
-    statTile("GitHub stars", fmtNum(sum(latest.stars)), deltaPill(starsLast.now, starsLast.prev), `${selected.length} repos · ${fmtNum(sum(latest.forks))} forks${snapDays.length < 2 ? "" : ` · counted daily since ${snapDays[0]}`}`),
-    statTile(`External pull requests merged, last ${unit}`, lastTwo(xM).now == null ? "—" : String(lastTwo(xM).now), deltaPill(lastTwo(xM).now, lastTwo(xM).prev), lastTwo(xM).now == null ? coverageNote(evCov) : `${lastTwo(xO).now ?? 0} opened`),
-    statTile("Contributors", String(people), deltaPill(lastTwo(contribSeries).now, lastTwo(contribSeries).prev), "people with commits, bots excluded, unique across the selection"),
-    statTile("Open issues", String(sum(latest.openIssues)), deltaPill(lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), lastTwo(isO).now == null ? coverageNote(evCov) : `${lastTwo(isO).now} opened · ${lastTwo(isC).now ?? 0} closed · last ${unit}`),
-    statTile("Modules published", String(published), el("span", { class: "delta none" }, `of ${withPkg} packages`), `${(atlas.modules || []).filter((m) => m.publisher && m.publisher !== file.org && m.status === "shipped").length} more by third parties, not in this count`)
+    statTile(`npm downloads, last full ${unit}`, dlLast.now == null ? "—" : fmtNum(dlLast.now), trendPill(dl), dlLast.key ? `${dlLast.key} · ${withPkg} packages` : coverageNote(dlCov)),
+    statTile("GitHub stars", fmtNum(sum(latest.stars)), trendPill(starsSeries), `${selected.length} repos · ${fmtNum(sum(latest.forks))} forks${snapDays.length < 2 ? "" : ` · counted daily since ${snapDays[0]}`}`),
+    statTile(`External pull requests merged, last ${unit}`, lastTwo(xM).now == null ? "—" : String(lastTwo(xM).now), trendPill(xM), lastTwo(xM).now == null ? coverageNote(evCov) : `${lastTwo(xO).now ?? 0} opened · Tether team excluded`, feeds("external-prs")),
+    statTile("Contributors", String(people), trendPill(contribSeries), "people with commits, bots excluded, unique across the selection"),
+    statTile("Open issues", String(sum(latest.openIssues)), trendPill(backlogSeries, { invert: true }), lastTwo(isO).now == null ? coverageNote(evCov) : `${lastTwo(isO).now} opened · ${lastTwo(isC).now ?? 0} closed · last ${unit}`, feeds("issue-response")),
+    statTile("Packages published", String(published), el("span", { class: "delta none" }, `${stable} stable · ${published - stable} in beta`), `${(atlas.modules || []).filter((m) => m.publisher && m.publisher !== file.org && m.status === "shipped").length} more by third parties, not in this count`, feeds("stable")),
+    latest.dependents != null && statTile("Projects depending on WDK", fmtNum(latest.dependents), el("span", { class: "delta none" }, "public repos outside the org"), "repos whose package.json names a WDK package, from GitHub code search")
   );
 
   const byPackage = selected.filter((r) => file.repos[r].package).map((r) => { const pts = seriesBuckets({ [r]: (D.downloads || {})[r] }, [r], { coverage: dlCov }); return { label: unscoped(file.repos[r].package), hint: file.repos[r].title !== r ? file.repos[r].title : "", value: lastTwo(pts).now || 0 }; }).sort((a, b) => b.value - a.value).slice(0, 8);
   const byStars = selected.map((r) => ({ label: r, hint: file.repos[r].title !== r ? file.repos[r].title : "", value: (latest.stars || {})[r] || 0 })).sort((a, b) => b.value - a.value).slice(0, 8);
 
   const adoption = dashSection("Adoption & growth", [
-    chartCard(`npm downloads per ${unit}`, fmtNum(dlLast.now), deltaPill(dlLast.now, dlLast.prev), dl.length ? lineChart(dl) : el("p", { class: "chart-foot" }, coverageNote(dlCov)), "Selected packages summed. npm reports a few days late, so the current period is left out."),
+    chartCard(`npm downloads per ${unit}`, fmtNum(dlLast.now), trendPill(dl), dl.length ? lineChart(dl, { marks: releaseMarks(file, selected) }) : el("p", { class: "chart-foot" }, coverageNote(dlCov)), "Selected packages summed. npm reports a few days late, so the current period is left out. Ticks mark npm releases; hover for the versions."),
     chartCard(`Downloads by package, last full ${unit}`, null, null, hBars(byPackage, { color: SERIES[1] }), "Top eight of the selection."),
     chartCard("Stars by repository", fmtNum(sum(latest.stars)), null, hBars(byStars, { color: SERIES[2] }), "Top eight of the selection."),
   ]);
@@ -1500,8 +1626,45 @@ function buildDashboard(file, selected) {
   const support = dashSection("Support & responsiveness", [
     chartCard(`Issues opened and closed per ${unit}`, String(sum(latest.openIssues)), deltaPill(lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), iss.cats.length ? groupedBars(iss.cats, [{ label: "Opened", values: iss.a }, { label: "Closed", values: iss.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Headline is the open backlog today."),
   ]);
+  const readiness = renderReadiness(file, selected, latest);
   const note = el("p", { class: "dash-note" }, `Public sources only: the npm registry and the GitHub API. ${selected.length} of ${Object.keys(file.repos).length} public WDK repos selected. Daily series cover the last 30 days and grow by one day per run; stars, contributors and open counts are daily snapshots, the first taken ${snapDays[0]}. Last collected ${String(file.updated).slice(0, 10)}. Community, newsletter and website figures are not public and are not shown.`);
-  return [tiles, adoption, community, support, note];
+  return [tiles, adoption, community, support, readiness, note];
+}
+
+// Release readiness: the facts behind the "production-grade kit" key results, one row per published package.
+// Every cell is public: npm's latest tag, the last CI run, an audit folder, GitHub's community profile,
+// the ISigner reference, CODEOWNERS.
+function renderReadiness(file, selected, latest) {
+  const repos = selected.filter((r) => file.repos[r].version).sort();
+  const wallets = new Set(walletRepos());
+  const mark = (v) => (v == null ? el("span", { class: "fact none", title: "not measured" }, "·") : el("span", { class: `fact ${v ? "yes" : "no"}` }, v ? "✓" : "✕"));
+  const count = (field) => repos.filter((r) => readinessFact(field, r, latest) === true).length;
+  const measured = (field) => field === "stable" || Boolean(latest[field]);
+  const healthVals = repos.map((r) => (latest.health || {})[r]).filter((v) => typeof v === "number");
+  const avgHealth = healthVals.length ? Math.round(healthVals.reduce((a, b) => a + b, 0) / healthVals.length) : null;
+  const summary = el("p", { class: "ready-summary" },
+    `${count("stable")} of ${repos.length} stable`, " · ",
+    measured("ci") ? `${count("ci")} green CI` : "CI not collected yet", " · ",
+    measured("audits") ? `${count("audits")} with an audit` : "audits not collected yet", " · ",
+    avgHealth == null ? "community health not collected yet" : `community health ${avgHealth}% on average`,
+    latest.signer ? ` · signer interface in ${[...wallets].filter((r) => latest.signer[r]).length} of ${wallets.size} wallets` : "");
+  const head = el("tr", null, ["Package", "Version", "Stable", "CI", "Audit", "Health", "Signer", "Owners"].map((h) => el("th", null, h)));
+  const rows = repos.map((r) => {
+    const info = file.repos[r];
+    return el("tr", null,
+      el("td", null, el("a", { href: `https://github.com/${file.org}/${r}` }, unscoped(info.package) || r), info.title && info.title !== r && el("span", { class: "ready-title" }, info.title)),
+      el("td", { class: "mono" }, info.version || "—"),
+      el("td", null, mark(readinessFact("stable", r, latest))),
+      el("td", null, mark(readinessFact("ci", r, latest))),
+      el("td", null, mark(readinessFact("audits", r, latest))),
+      el("td", { class: "mono" }, (latest.health || {})[r] == null ? "·" : `${latest.health[r]}%`),
+      el("td", null, wallets.has(r) ? mark(readinessFact("signer", r, latest)) : el("span", { class: "fact none", title: "not a wallet package" }, "–")),
+      el("td", { class: "mono owners" }, ((file.owners || {})[r] || []).join(" ") || "—"));
+  });
+  const table = el("div", { class: "table-wrap" }, el("table", { class: "ready" }, el("thead", null, head), el("tbody", null, rows)));
+  const section = dashSection("Release readiness", [el("div", { class: "ready-card" }, summary, table, el("p", { class: "chart-foot" }, "Stable: the npm latest tag has no beta, alpha or rc suffix. CI: last completed run on the default branch. Audit: a folder or file named audit at the repo root. Health: GitHub's community profile score. Signer: the repo references ISigner. Owners: CODEOWNERS."))]);
+  section.id = "readiness";
+  return section;
 }
 
 async function renderDashboard() {
@@ -1517,8 +1680,7 @@ async function renderDashboard() {
 
 
 // ==========================================================================================================
-// Page headings and the unlisted Questions page
-// Questions renders the questions section of NOTES.md; ten taps on the logo reveal its tab.
+// Page headings, the Overview page and the freshness line
 // ==========================================================================================================
 
 const pageHeadings = {
@@ -1528,6 +1690,7 @@ const pageHeadings = {
     subtitle: "Docs, examples and tools for building with WDK. Not part of a shipped wallet.",
   },
   roadmap: { title: "", subtitle: "" },
+  overview: { title: "", subtitle: "" },
   dashboard: {
     title: "Dashboard",
     subtitle: "Public adoption, community and support numbers, collected daily into the same repo.",
@@ -1536,66 +1699,120 @@ const pageHeadings = {
     title: "Key results",
     subtitle: "How each north star is measured.",
   },
-  questions: {
-    title: "Questions",
-    subtitle: "Open questions for Jonathan and the team. Read from the questions section of NOTES.md.",
-  },
 };
 
-// Questions page: unlisted. Ten taps on the logo reveal the link; the browser remembers it.
-const QUESTIONS_KEY = "atlas:questions";
-const QUESTIONS_TAPS = 10;
+// ---- Overview: the front page. What WDK is, where each north star stands, this quarter, the headline
+// numbers and the risks. Everything on it is derived from atlas.yaml and the metrics file.
 
-function questionsUnlocked() {
-  try { return localStorage.getItem(QUESTIONS_KEY) === "on"; } catch { return false; }
+const fmtDay = (iso) => (iso ? new Date(iso).toLocaleDateString("en", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "—");
+
+function briefItem(item) {
+  const late = isLate(item);
+  return el("li", { class: `brief-item ${item.status || "planned"}${late ? " late" : ""}` },
+    el("span", { class: `state-dot ${item.status || "planned"}`, "aria-hidden": "true" }),
+    el("a", { href: `./?page=roadmap#${item.id}` }, item.label),
+    late && el("span", { class: "late-badge" }, `late · ${quarterLabel(item.quarter)}`),
+    (item.partners || []).length > 0 && el("span", { class: "partner-mark", title: `Needs ${item.partners.join(", ")}`, "aria-label": `needs ${item.partners.join(", ")}` }));
 }
 
-function revealQuestions() {
-  document.querySelector("#nav-questions").hidden = false;
+function briefList(title, items, more, empty) {
+  const rank = (x) => `${x.priority || "P9"}`;
+  const shown = items.slice().sort((a, b) => rank(a).localeCompare(rank(b))).slice(0, 8);
+  return el("section", { class: "brief-col" },
+    el("h3", { class: "brief-col-title" }, title, el("span", { class: "view-count" }, String(items.length))),
+    items.length ? el("ul", { class: "brief-items" }, shown.map(briefItem)) : el("p", { class: "meta" }, empty),
+    items.length > shown.length && el("a", { class: "brief-more", href: more }, `all ${items.length} on the roadmap`));
 }
 
-function wireLogoTaps() {
-  const brand = document.querySelector(".brand");
-  let taps = 0;
-  let timer = null;
-  brand.addEventListener("click", (event) => {
-    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    event.preventDefault();
-    clearTimeout(timer);
-    taps += 1;
-    if (taps >= QUESTIONS_TAPS) {
-      taps = 0;
-      try { localStorage.setItem(QUESTIONS_KEY, "on"); } catch {}
-      revealQuestions();
-      location.href = "./?page=questions";
-      return;
-    }
-    // A lone tap still goes home; a run of taps does not reload the page in between.
-    timer = setTimeout(() => {
-      if (taps === 1) location.href = brand.getAttribute("href");
-      taps = 0;
-    }, 400);
+function briefTiles(file) {
+  const all = Object.keys(file.repos || {}).sort();
+  const snaps = file.snapshots || {}; const snapDays = Object.keys(snaps).sort(); const latest = snaps[snapDays[snapDays.length - 1]] || {};
+  const D = file.daily || {};
+  const dl = seriesBuckets(D.downloads, all, { coverage: coverageOf(D.downloads, file, false) });
+  const xM = seriesBuckets(D.externalPrsMerged, all, { coverage: coverageOf(D.prsOpened, file, true) });
+  const sum4 = (pts) => pts.slice(-4).reduce((a, p) => a + p.y, 0);
+  const prev4 = (pts) => (pts.length >= 8 ? pts.slice(-8, -4).reduce((a, p) => a + p.y, 0) : null);
+  const published = all.filter((r) => file.repos[r].version), stable = published.filter((r) => readinessFact("stable", r, latest)).length;
+  const people = new Set(all.flatMap((r) => (file.contributors || {})[r] || [])).size;
+  const unit = { daily: "day", weekly: "week", monthly: "month" }[grain];
+  return el("div", { class: "tiles brief-tiles" },
+    statTile(`npm downloads, last full ${unit}`, dl.length ? fmtNum(dl[dl.length - 1].y) : "—", trendPill(dl), `${published.length} packages`),
+    statTile("Packages published", String(published.length), el("span", { class: "delta none" }, `${stable} stable · ${published.length - stable} in beta`), "on npm, first party"),
+    statTile("Contributors", String(people), null, "people with commits, bots excluded"),
+    statTile(`External pull requests merged, last 4 ${unit}s`, xM.length ? String(sum4(xM)) : "—", deltaPill(xM.length ? sum4(xM) : null, prev4(xM), { note: "vs prev 4" }), "Tether team excluded"),
+    latest.dependents != null && statTile("Projects depending on WDK", fmtNum(latest.dependents), null, "public repos outside the org"),
+    statTile("GitHub stars", fmtNum(all.reduce((n, r) => n + ((latest.stars || {})[r] || 0), 0)), null, `${all.length} public repos`)
+  );
+}
+
+function briefRisks(stars, items) {
+  const risks = [];
+  const late = items.filter(isLate);
+  if (late.length) risks.push(el("li", { class: "risk bad" }, el("strong", null, `${late.length} past their quarter: `), late.flatMap((i, k) => [k ? ", " : "", el("a", { href: `./?page=roadmap#${i.id}` }, i.label)])));
+  const partnerWip = items.filter((i) => i.status !== "done" && (i.partners || []).length);
+  if (partnerWip.length) risks.push(el("li", { class: "risk" }, el("strong", null, `${partnerWip.length} open initiatives need a partner: `), partnerWip.flatMap((i, k) => [k ? ", " : "", el("a", { href: `./?page=roadmap#${i.id}` }, i.label), ` (${i.partners.join(", ")})`])));
+  const priv = privateModules();
+  if (priv.length) risks.push(el("li", { class: "risk" }, el("strong", null, `${priv.length} repos still private: `), priv.map((m) => m.title || m.id).join(", "), " ", el("a", { href: "./?page=map" }, "on the map")));
+  const krs = stars.flatMap((star) => keyResultsOf(star));
+  const far = krs.filter((kr) => kr.progress != null && kr.progress < 25);
+  for (const kr of far) risks.push(el("li", { class: "risk bad" }, el("strong", null, "Far from target: "), el("a", { href: `./?page=results#${kr.id}` }, kr.label), ` · ${kr.current}${kr.target != null ? ` of ${kr.target}` : ""}`));
+  const unmeasured = krs.filter((kr) => kr.progress == null);
+  if (unmeasured.length) risks.push(el("li", { class: "risk" }, el("strong", null, `${unmeasured.length} key results not measured yet`), " · ", el("a", { href: "./?page=results" }, "see why")));
+  return el("section", { class: "brief-risks" }, el("h2", { class: "brief-h" }, "Risks and gaps"), risks.length ? el("ul", null, risks) : el("p", { class: "meta" }, "Nothing flagged: no initiative is late, no result is far from target."));
+}
+
+async function renderOverview() {
+  const file = await loadMetrics();
+  const stars = atlas.northStars || [];
+  const items = roadmapItems();
+  const now = currentQuarter(), next = nextQuarter(now);
+  const counts = { done: 0, wip: 0, planned: 0 };
+  for (const item of items) counts[item.status || "planned"] += 1;
+  const intro = el("section", { class: "brief-intro" },
+    el("div", { class: "brief-intro-text mission" },
+      el("p", { class: "eyebrow" }, "WDK in one page"),
+      el("h2", { class: "mission-text" }, atlas.mission || ""),
+      atlas.about && el("p", { class: "brief-about" }, atlas.about)),
+    el("div", { class: "brief-intro-side" },
+      el("p", { class: "mission-sub" }, `${stars.length} north stars · ${counts.done} initiatives shipped · ${counts.wip} in progress · ${counts.planned} planned`),
+      file && el("p", { class: "mission-sub" }, `Atlas updated ${fmtDay(file.atlasUpdated)} · metrics collected ${fmtDay(file.updated)}`)));
+  const starBlocks = stars.map((star, index) => {
+    const linked = items.filter((item) => item.northStar === star.id);
+    const c = { done: 0, wip: 0, planned: 0, late: 0 };
+    for (const item of linked) { c[item.status || "planned"] += 1; if (isLate(item)) c.late += 1; }
+    const krs = keyResultsOf(star);
+    return el("section", { class: "brief-star" },
+      el("header", { class: "star-head static" },
+        el("span", { class: "star-index" }, String(index + 1).padStart(2, "0")),
+        el("div", { class: "star-text" }, el("h3", { class: "star-title plain" }, el("a", { href: `./?page=roadmap#star-${star.id}` }, star.title)), star.summary && el("p", { class: "star-summary" }, star.summary)),
+        el("ul", { class: "star-tally" },
+          el("li", null, el("strong", null, String(linked.length)), " initiatives"),
+          c.done > 0 && el("li", { class: "done" }, el("strong", null, String(c.done)), " done"),
+          c.wip > 0 && el("li", { class: "wip" }, el("strong", null, String(c.wip)), " in progress"),
+          c.late > 0 && el("li", { class: "late" }, el("strong", null, String(c.late)), " late"))),
+      el("ul", { class: "brief-krs" }, krs.map((kr) => el("li", { class: kr.progress == null ? "unmeasured" : "" },
+        el("a", { class: "brief-kr-label", href: `./?page=results#${kr.id}` }, kr.label),
+        kr.progress == null
+          ? el("span", { class: "kr-none" }, "not measured")
+          : el("span", { class: "brief-kr-meter" }, el("span", { class: "kr-bar" }, el("span", { style: `width:${kr.progress}%` })), el("span", { class: `brief-kr-value${kr.valueTitle ? " has-tip" : ""}`, title: kr.valueTitle || null }, `${kr.current}${kr.target != null && String(kr.target) !== String(kr.current) ? ` / ${kr.target}` : ""}`))))));
   });
+  const quarter = el("section", { class: "brief-quarter" },
+    el("h2", { class: "brief-h" }, `This quarter, ${quarterLabel(now)}`),
+    el("div", { class: "brief-cols" },
+      briefList("Shipped", items.filter((i) => i.status === "done" && i.quarter === now), `./?page=roadmap&status=done`, "Nothing shipped yet this quarter."),
+      briefList("In progress", items.filter((i) => i.status === "wip"), `./?page=roadmap&status=wip`, "Nothing in progress."),
+      briefList(`Next, ${quarterLabel(next)}`, items.filter((i) => (i.status || "planned") === "planned" && i.quarter === next), `./?page=roadmap&status=planned`, "Nothing scheduled yet.")));
+  return el("div", { class: "brief-page" }, intro, file ? briefTiles(file) : el("p", { class: "meta" }, "Metrics not loaded."), el("h2", { class: "brief-h" }, "North stars"), starBlocks, quarter, briefRisks(stars, items));
 }
 
-// The "Questions for the maintainer" section of NOTES.md, up to the next second-level heading.
-function questionsSection(markdown) {
-  const lines = markdown.split("\n");
-  const start = lines.findIndex((line) => /^##\s.*questions/i.test(line));
-  if (start < 0) return null;
-  const rest = lines.slice(start + 1);
-  const end = rest.findIndex((line) => /^##\s/.test(line));
-  return rest.slice(0, end < 0 ? rest.length : end).join("\n").trim();
-}
-
-async function renderQuestions() {
-  const response = await fetch(versioned("NOTES.md"));
-  if (!response.ok) throw new Error(`Could not load NOTES.md (${response.status}).`);
-  const section = questionsSection(await response.text());
-  if (!section) throw new Error("NOTES.md has no '## … Questions' section.");
-  const prose = el("article", { class: "prose" });
-  prose.innerHTML = marked.parse(section);
-  return prose;
+// Footer on every page: when the atlas last changed and when the numbers were last collected.
+function renderFreshness(file) {
+  const foot = document.querySelector("#site-foot");
+  if (!foot || !file) return;
+  foot.replaceChildren(
+    `Atlas updated ${fmtDay(file.atlasUpdated)} · metrics collected ${fmtDay(file.updated)} · public sources only: npm and GitHub · `,
+    el("a", { href: document.querySelector(".gh-link").href }, "source"));
+  foot.hidden = false;
 }
 
 
@@ -1616,6 +1833,13 @@ function renderPoster() {
     link.toggleAttribute("aria-current", link.getAttribute("data-page") === page);
   }
 
+  if (page === "overview") {
+    renderOverview()
+      .then((node) => { poster.replaceChildren(el("div", { class: "atlas" }, node)); poster.hidden = false; })
+      .catch((error) => showError(error.message));
+    return;
+  }
+
   if (page === "roadmap") {
     poster.replaceChildren(el("div", { class: "atlas" }, renderRoadmap()));
     poster.hidden = false;
@@ -1632,17 +1856,6 @@ function renderPoster() {
   if (page === "results") {
     poster.replaceChildren(el("div", { class: "atlas" }, renderResults()));
     poster.hidden = false;
-    return;
-  }
-
-  if (page === "questions") {
-    revealQuestions();
-    renderQuestions()
-      .then((prose) => {
-        poster.replaceChildren(el("div", { class: "atlas" }, prose));
-        poster.hidden = false;
-      })
-      .catch((error) => showError(error.message));
     return;
   }
 
@@ -1855,6 +2068,7 @@ async function main() {
 
   if (page === "roadmap" || page === "results") await loadMetrics();
   renderPoster();
+  loadMetrics().then(renderFreshness);
   const togglePending = document.querySelector("#toggle-pending");
   function applyToggles() {
     poster.classList.toggle("hide-pending", !togglePending.checked);
@@ -1877,8 +2091,13 @@ async function main() {
   const gh = document.querySelector(".gh-link");
   const pagesHost = /^([^.]+)\.github\.io$/.exec(location.hostname);
   if (gh && pagesHost) gh.href = `https://github.com/${pagesHost[1]}/${location.pathname.split("/").filter(Boolean)[0] || ""}`;
-  if (questionsUnlocked()) revealQuestions();
-  wireLogoTaps();
+
+  // Phones: the nav folds behind a menu button. Closes on a link, on Escape and on a tap outside.
+  const navToggle = document.querySelector(".nav-toggle");
+  const setMenu = (open) => { navToggle.setAttribute("aria-expanded", open ? "true" : "false"); document.body.classList.toggle("menu-open", open); };
+  navToggle.addEventListener("click", () => setMenu(navToggle.getAttribute("aria-expanded") !== "true"));
+  document.addEventListener("click", (event) => { if (document.body.classList.contains("menu-open") && !event.target.closest(".topbar-left")) setMenu(false); });
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") setMenu(false); });
 
   window.addEventListener("hashchange", () => { if (page === "roadmap") spotlightTarget(); });
 

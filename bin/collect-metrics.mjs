@@ -15,8 +15,16 @@
 //              issueResponse: { repo: { "YYYY-MM-DD": [hours to first response, -1 if none yet] } }
 //              externalAuthorsOpened | externalAuthorsMerged: { repo: { "YYYY-MM-DD": { login: n } } }
 //   authors:   { login: association label last seen; MEMBER/OWNER/COLLABORATOR mark a teammate and stick }
-//   snapshots: { "YYYY-MM-DD": { stars, forks, openIssues, openPrs, contributors: { repo: count }, published: [repo…] } }
+//   snapshots: { "YYYY-MM-DD": { stars, forks, openIssues, openPrs, contributors: { repo: count }, published: [repo…],
+//                ci: { repo: conclusion of the last completed run on the default branch },
+//                health: { repo: GitHub community-profile percentage }, community: { repo: { readme, license, contributing, codeOfConduct } },
+//                audits: { repo: true when an audit folder or file sits at the repo root },
+//                signer: { repo: true when the code references ISigner }   (code search; absent when the token cannot search)
+//                examples: number of example folders in the examples repo, dependents: repos outside the org that depend on a WDK package } }
 //   contributors: { repo: [login…] }   current, kept once
+//   owners: { repo: [handle…] }        from CODEOWNERS, current, kept once
+//   releases: { repo: { "YYYY-MM-DD": version } }   npm publish dates inside the retention window, rewritten each run
+//   atlasUpdated: last commit touching atlas.yaml, from git
 //   since: first day the event series cover
 // Pruning keeps the file small: snapshots stay daily for 90 days then thin to one a month; daily
 // series are dropped after 400 days. The page fetches this file, so it must not grow without bound.
@@ -33,6 +41,7 @@
 // including torvalds/linux (two repos answer 200, unexplained). GraphQL reports stargazerCount but
 // an empty stargazers connection. So these series can only grow forward, one point per run.
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { createContext, runInContext } from "node:vm";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -54,6 +63,9 @@ const REPO_PATTERN = new RegExp((atlas.audit && atlas.audit.repoPattern) || "^(w
 // publish". wdk-docs is the developer documentation behind docs.wdk.tether.io and belongs in the
 // numbers. Private repos never appear here: the query below asks GitHub for public ones only.
 const isBot = (login) => !login || login.endsWith("[bot]");
+const EXAMPLES_REPO = (atlas.audit && atlas.audit.examplesRepo) || "wdk-examples";
+const EXAMPLES_IGNORE = new Set((atlas.audit && atlas.audit.examplesIgnore) || ["shared"]);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SNAPSHOT_DAILY_DAYS = 90;  // every snapshot for this long, then one per month
 const SERIES_DAYS = 400;         // daily series kept this long (a year plus a margin)
 // npm serves an arbitrary date range (up to 18 months per call), so downloads are fetched for the whole
@@ -118,6 +130,7 @@ try {
   // ---------------------------------------------------------------- npm: daily downloads per package, published versions
   const downloads = {};
   const published = [];
+  const releases = {};
   for (const [name, r] of Object.entries(repos)) {
     if (!r.package) continue;
     const from = new Date(Date.now() - SERIES_DAYS * 864e5).toISOString().slice(0, 10);
@@ -134,18 +147,72 @@ try {
     const meta = await npmJson(`https://registry.npmjs.org/${r.package.replace("/", "%2F")}`);
     const v = meta && meta["dist-tags"] ? meta["dist-tags"].latest : null;
     if (v && v !== "0.0.0") { published.push(name); repos[name].version = v; }
+    // Publish dates inside the retention window, for release markers on the charts.
+    if (meta && meta.time) {
+      const from = new Date(Date.now() - SERIES_DAYS * 864e5).toISOString().slice(0, 10);
+      const dated = {};
+      for (const [ver, t] of Object.entries(meta.time)) { if (ver === "created" || ver === "modified") continue; const d = day(t); if (d >= from) dated[d] = ver; }
+      if (Object.keys(dated).length) releases[name] = Object.fromEntries(Object.entries(dated).sort());
+    }
   }
 
+  const repoSet = new Set(wdkRepos.map((r) => r.name));
+  const repoSetHas = (name) => repoSet.has(name);
+
   // ---------------------------------------------------------------- GitHub snapshot: stars, forks, contributors, open counts
-  const snap = { stars: {}, forks: {}, openIssues: {}, openPrs: {}, contributors: {}, published };
+  const snap = { stars: {}, forks: {}, openIssues: {}, openPrs: {}, contributors: {}, published, ci: {}, health: {}, community: {}, audits: {} };
   const contributorsByRepo = {}; // logins, kept once (current), not per snapshot
+  const ownersByRepo = {};       // CODEOWNERS handles, kept once (current)
   for (const r of wdkRepos) {
     snap.stars[r.name] = r.stargazers_count;
     snap.forks[r.name] = r.forks_count;
     contributorsByRepo[r.name] = (await ghAll(`/repos/${ORG}/${r.name}/contributors?anon=0`)).map((u) => u.login).filter((l) => !isBot(l));
     snap.contributors[r.name] = contributorsByRepo[r.name].length;
+    // Key-result sources, all public: the last completed CI run on the default branch, GitHub's community
+    // profile, an audit folder or file at the root, and CODEOWNERS for who owns the repo.
+    const runs = await gh(`/repos/${ORG}/${r.name}/actions/runs?branch=${encodeURIComponent(r.default_branch || "main")}&status=completed&per_page=1`);
+    snap.ci[r.name] = runs && runs.workflow_runs && runs.workflow_runs[0] ? runs.workflow_runs[0].conclusion : null;
+    const profile = await gh(`/repos/${ORG}/${r.name}/community/profile`);
+    if (profile) {
+      snap.health[r.name] = profile.health_percentage;
+      const f = profile.files || {};
+      snap.community[r.name] = { readme: Boolean(f.readme), license: Boolean(f.license), contributing: Boolean(f.contributing), codeOfConduct: Boolean(f.code_of_conduct) };
+    }
+    const root = await gh(`/repos/${ORG}/${r.name}/contents`);
+    snap.audits[r.name] = Array.isArray(root) && root.some((e) => /audit/i.test(e.name));
+    for (const path of [".github/CODEOWNERS", "CODEOWNERS"]) {
+      const c = await gh(`/repos/${ORG}/${r.name}/contents/${path}`);
+      if (!c || !c.content) continue;
+      const text = Buffer.from(c.content, "base64").toString("utf8");
+      const handles = [...new Set(text.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#")).flatMap((l) => l.split(/\s+/).slice(1)).filter((h) => h.startsWith("@")))];
+      if (handles.length) ownersByRepo[r.name] = handles;
+      break;
+    }
   }
-  const repoSet = new Set(wdkRepos.map((r) => r.name));
+  // Examples: top-level folders of the examples repo, dot-folders and shared code excluded.
+  if (repoSetHas(EXAMPLES_REPO)) {
+    const root = await gh(`/repos/${ORG}/${EXAMPLES_REPO}/contents`);
+    if (Array.isArray(root)) snap.examples = root.filter((e) => e.type === "dir" && !e.name.startsWith(".") && !EXAMPLES_IGNORE.has(e.name)).length;
+  }
+  // Code search needs a user token and allows ten calls a minute; skipped, not guessed, when unavailable.
+  const codeSearch = async (q, pages = 10) => {
+    const seen = new Set();
+    for (let pageNo = 1; pageNo <= pages; pageNo += 1) {
+      let body;
+      try { body = await gh(`/search/code?q=${encodeURIComponent(q)}&per_page=100&page=${pageNo}`); } catch { return null; }
+      if (!body || !Array.isArray(body.items)) return pageNo === 1 ? null : seen;
+      for (const item of body.items) seen.add(item.repository.full_name);
+      if (body.items.length < 100 || seen.size >= body.total_count) break;
+      await sleep(6500);
+    }
+    return seen;
+  };
+  const signerRepos = await codeSearch(`ISigner org:${ORG}`);
+  if (signerRepos) { snap.signer = {}; for (const r of wdkRepos) snap.signer[r.name] = signerRepos.has(`${ORG}/${r.name}`); }
+  else console.error("collect-metrics: code search unavailable with this token; signer coverage not measured");
+  await sleep(6500);
+  const dependents = await codeSearch(`"@${ORG}/wdk" filename:package.json -org:${ORG}`);
+  if (dependents) snap.dependents = dependents.size;
   const repoOf = (item) => (item.repository_url || "").split("/").pop();
   const inScope = (item) => repoSet.has(repoOf(item));
   // Teammates (see the header). The member list counts only when the token holder is an org member:
@@ -242,6 +309,9 @@ try {
   }
   file.snapshots[today] = snap;
   file.contributors = contributorsByRepo;
+  file.owners = ownersByRepo;
+  file.releases = releases;
+  try { file.atlasUpdated = execSync("git log -1 --format=%cI -- atlas.yaml", { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] }).toString().trim() || file.atlasUpdated || null; } catch {}
   file.since = file.since || since30; // first day the event series cover
 
   // Keep the file small enough to fetch on every page view: daily snapshots for SNAPSHOT_DAILY_DAYS,

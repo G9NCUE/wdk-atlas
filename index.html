@@ -11,7 +11,7 @@
       rel="stylesheet"
     />
     <link rel="icon" type="image/svg+xml" href="assets/wdk-logo.svg" />
-    <link rel="stylesheet" href="styles.css?v=30" />
+    <link rel="stylesheet" href="styles.css?v=31" />
   </head>
   <body>
     <header class="topbar" id="topbar">
@@ -20,14 +20,17 @@
           <a class="brand" href="./" aria-label="WDK Atlas home">
             <img class="brand-logo" src="assets/wdk-logo.svg" alt="WDK" width="170" height="61" />
           </a>
-          <nav aria-label="Primary navigation">
+          <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="Menu">
+            <span class="nav-toggle-bar" aria-hidden="true"></span>
+          </button>
+          <nav id="primary-nav" aria-label="Primary navigation">
             <ul class="nav">
-              <li><a href="./" data-page="roadmap">Roadmap</a></li>
+              <li><a href="./" data-page="overview">Overview</a></li>
+              <li><a href="./?page=roadmap" data-page="roadmap">Roadmap</a></li>
               <li><a href="./?page=results" data-page="results">Key results</a></li>
               <li><a href="./?page=dashboard" data-page="dashboard">Dashboard</a></li>
               <li><a href="./?page=map" data-page="map">WDK Visual Map</a></li>
               <li><a href="./?page=dev" data-page="dev">Developer Resources</a></li>
-              <li id="nav-questions" hidden><a href="./?page=questions" data-page="questions">Questions</a></li>
             </ul>
           </nav>
         </div>
@@ -62,9 +65,10 @@
     <div id="poster" class="poster" hidden></div>
 
     <aside id="drawer" class="drawer" role="dialog" aria-labelledby="drawer-title" hidden></aside>
+    <footer id="site-foot" class="site-foot" hidden></footer>
 
     <script src="vendor/js-yaml.min.js"></script>
     <script src="vendor/marked.min.js"></script>
-    <script src="app.js?v=30"></script>
+    <script src="app.js?v=31"></script>
   </body>
 </html>
