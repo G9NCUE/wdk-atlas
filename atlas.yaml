@@ -859,10 +859,9 @@ modules:
     band: native
     status: wip
     publisher: tetherto
-    summary: 'The iOS and macOS side of the kit: a Swift package that starts the worklet and exposes wallet operations to an Apple app. Private today.'
+    summary: 'The iOS and macOS side of the kit: a Swift package that starts the worklet and exposes wallet operations to an Apple app.'
     notes:
-      - Private repo today, so the card carries no link. To be published on Swift Package Manager (Jonathan, 2026-09-06)
-    private: true
+      - Repo made public 2026-09-16. To be published on Swift Package Manager (Jonathan, 2026-09-06)
     repo: https://github.com/tetherto/wdk-core-swift
 
 
@@ -899,10 +898,9 @@ modules:
     band: apps
     status: wip
     publisher: tetherto
-    summary: 'A sample iOS wallet showing how to use the Swift core. Private today.'
+    summary: 'A sample iOS wallet showing how to use the Swift core.'
     notes:
-      - Private repo today, so the card carries no link. Stays private until the Swift core is published
-    private: true
+      - Repo made public 2026-09-16, alongside the Swift core
     repo: https://github.com/tetherto/wdk-starter-swift
     relations:
       - { type: requires, target: wdk-core-swift }

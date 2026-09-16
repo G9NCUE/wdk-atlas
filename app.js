@@ -1265,12 +1265,16 @@ function krStatus(kr) {
   return { key: "undefined", label: "To define" };
 }
 
+// A value with more behind it (`valueTitle`, one line per item) gets a CSS tooltip that opens on hover and on
+// keyboard focus at once; a native title needs a still pointer for a second and never shows on touch.
+const tipAttrs = (tip, text) => (tip ? { class: "has-tip", "data-tip": tip, tabindex: "0", "aria-label": `${text}: ${tip.split("\n").join(", ")}` } : {});
+
 function krValue(kr) {
   if (kr.current == null && kr.target == null) return el("span", { class: "kr-none" }, "—");
   const cur = kr.current == null ? "—" : String(kr.current);
   const tgt = kr.target == null ? null : String(kr.target);
   const plain = tgt && /^[\d.,]+%?$/.test(tgt); // "12", "100%": read as "of"; anything else is a rule, shown as "target …"
-  return el("span", { class: "kr-value" }, el("b", { class: kr.valueTitle ? "has-tip" : null, title: kr.valueTitle || null }, cur), tgt && el("span", { class: "kr-target" }, plain ? ` of ${tgt}` : ` · target ${tgt}`));
+  return el("span", { class: "kr-value" }, el("b", tipAttrs(kr.valueTitle, cur), cur), tgt && el("span", { class: "kr-target" }, plain ? ` of ${tgt}` : ` · target ${tgt}`));
 }
 
 function krRow(kr) {
@@ -1797,7 +1801,7 @@ async function renderOverview() {
         el("a", { class: "brief-kr-label", href: `./?page=results#${kr.id}` }, kr.label),
         kr.progress == null
           ? el("span", { class: "kr-none" }, "not measured")
-          : el("span", { class: "brief-kr-meter" }, el("span", { class: "kr-bar" }, el("span", { style: `width:${kr.progress}%` })), el("span", { class: `brief-kr-value${kr.valueTitle ? " has-tip" : ""}`, title: kr.valueTitle || null }, `${kr.current}${kr.target != null && String(kr.target) !== String(kr.current) ? ` / ${kr.target}` : ""}`))))));
+          : el("span", { class: "brief-kr-meter" }, el("span", { class: "kr-bar" }, el("span", { style: `width:${kr.progress}%` })), (() => { const text = `${kr.current}${kr.target != null && String(kr.target) !== String(kr.current) ? ` / ${kr.target}` : ""}`; const a = tipAttrs(kr.valueTitle, text); return el("span", { ...a, class: `brief-kr-value${a.class ? " has-tip" : ""}` }, text); })())))));
   });
   const quarter = el("section", { class: "brief-quarter" },
     el("h2", { class: "brief-h" }, `This quarter, ${quarterLabel(now)}`),
