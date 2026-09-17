@@ -1095,9 +1095,9 @@ roadmap:
   - id: policy-engine
     northStar: kit
     label: Policy engine
-    summary: Phase 2 is a library of common rules in wdk-policies, the engine staying in the conductor; phase 3 a policy language; phase 4 policies in the developer portal.
-    quarter: 2026Q4
-    status: wip
+    summary: Phase 2 is a library of common rules in wdk-policies, the engine staying in the conductor; phase 3 a policy language; phase 4 policies in the developer portal. Parked on 2026-09-16, awaiting clarity on next steps.
+    quarter: backlog
+    status: planned
     priority: P0
     modules: [wdk, wdk-policies]
   - id: error-handling
@@ -1113,7 +1113,7 @@ roadmap:
     label: Swift core at parity with React Native
     summary: Strong typing, sensitive storage and a plug-in interface for native packages, matching the React Native host. The HRPC transport rewrite is drafted on a branch and not yet merged.
     quarter: 2026Q4
-    status: planned
+    status: wip
     priority: P0
     modules: [wdk-core-swift]
   - id: sda
@@ -1162,7 +1162,7 @@ roadmap:
     summary: Plug a bundle into the worklet and poke at whatever is in it, so the team and contributor teams can dogfood and debug any package without a throwaway app per package.
     quarter: 2026Q3
     status: wip
-    priority: P1
+    priority: P2
     modules: [wdk-doctor-app, wdk-worklet-bundler]
   - id: cli-completion
     northStar: dx
@@ -1515,7 +1515,7 @@ roadmap:
     label: Groundwork for the first external audit
     summary: 'Everything the auditors need before they start: scope, threat model, coverage and the fixes that cannot wait. The gate to 1.0.'
     quarter: 2026Q4
-    status: wip
+    status: planned
     priority: P0
   - id: kotlin-beta
     northStar: kit
@@ -1553,9 +1553,9 @@ roadmap:
     northStar: kit
     label: Publish the Swift core on Swift Package Manager
     partners: [an Apple Developer account under Tether]
-    summary: Makes the iOS side installable and public, and turns the two locked cards on the map into real links. Nothing can be published until the Apple developer account exists.
+    summary: Makes the iOS side installable with one line in a Swift project, now that the repo is public. Nothing can be published until the Apple developer account exists.
     quarter: 2026Q4
-    status: planned
+    status: wip
     priority: P1
     modules: [wdk-core-swift]
   # ---- 2027: the three north stars, from the same presentation.
