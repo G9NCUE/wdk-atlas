@@ -4,7 +4,8 @@
 //   node bin/collect-metrics.mjs            collect today, write data/metrics.json
 //   node bin/collect-metrics.mjs --dry      print the day's snapshot instead of writing
 //
-// Sources: the npm registry download API and the GitHub API (GITHUB_TOKEN or ATLAS_TOKEN for the rate limit).
+// Sources: the npm registry download API and the GitHub API (GITHUB_TOKEN for the rate limit; the Actions
+// token is enough, code search included, probed 2026-09-18).
 // Public figures only. Scope: the org's public repos matching audit.repoPattern in atlas.yaml, and the npm
 // package each publishes (from its package.json). The page sums whatever repos the reader selects.
 //
@@ -32,10 +33,11 @@
 // series are dropped after 400 days. The page fetches this file, so it must not grow without bound.
 //
 // Who is a teammate: GitHub's author_association only says MEMBER when the token can see the org's
-// membership. The default Actions token cannot (memberships in this org are mostly private), so with it
-// every teammate reads CONTRIBUTOR and lands in the external charts. Three sources, any one is enough:
-// the org member list (when the token belongs to a member; set ATLAS_TOKEN), a MEMBER/OWNER/COLLABORATOR
-// label kept in `authors` from an earlier run that could see, and `audit.team` in atlas.yaml.
+// membership. The Actions token cannot (memberships in this org are mostly private), so with it every
+// teammate reads CONTRIBUTOR and lands in the external charts. The list in `audit.team` (atlas.yaml) is
+// the source of truth and is maintained by hand; no secret is needed for it. Two fallbacks remain for a
+// local run: the org member list when the token belongs to a member, and hashes remembered from runs
+// that could see.
 //
 // Stars, forks, contributors and open counts are snapshots, not history: GitHub's dated stargazer
 // list is closed to us. Probed 2026-09-07 — an Actions token gets 403 "Resource not accessible by
@@ -51,7 +53,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "data", "metrics.json");
-const TOKEN = process.env.ATLAS_TOKEN || process.env.GITHUB_TOKEN || "";
+const TOKEN = process.env.GITHUB_TOKEN || "";
 const DRY = process.argv.includes("--dry");
 
 const ctx = {};
@@ -198,7 +200,7 @@ try {
     const root = await gh(`/repos/${ORG}/${EXAMPLES_REPO}/contents`);
     if (Array.isArray(root)) snap.examples = root.filter((e) => e.type === "dir" && !e.name.startsWith(".") && !EXAMPLES_IGNORE.has(e.name)).length;
   }
-  // Code search needs a user token and allows ten calls a minute; skipped, not guessed, when unavailable.
+  // Code search works with the Actions token and allows ten calls a minute; skipped, not guessed, when unavailable.
   const codeSearch = async (q, pages = 10) => {
     const seen = new Set();
     for (let pageNo = 1; pageNo <= pages; pageNo += 1) {

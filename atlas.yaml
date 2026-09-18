@@ -31,11 +31,41 @@ about: >-
 audit:
   org: tetherto
   repoPattern: "^(wdk$|wdk-|pear-wrk-wdk$|create-wdk-module$)"
-  # GitHub logins to count as the team on the Dashboard, whatever GitHub says about them. Normally not
-  # needed: bin/collect-metrics.mjs reads the org's member list when its token belongs to a member
-  # (ATLAS_TOKEN) and remembers teammates it has seen. Use this for people GitHub cannot tell apart.
+  # GitHub logins counted as the Tether team on the Dashboard, so their pull requests and issues do
+  # not read as external. Maintained by hand: GitHub reveals private org membership only to a member's
+  # token, and the workflows run without any stored secret. Seed (2026-09-18): every tetherto member
+  # with a commit in a WDK repo. Add people when they join, remove them when they leave.
   team:
+    - AlonzoRicardo
+    - Annatar3
+    - Boka44
+    - Davi0kProgramsThings
+    - G9NCUE
+    - Jonathansoufer
+    - NirmalPatidar
+    - abdulhaseeb4239
+    - claudiovb
+    - eugeneglova
+    - foxtrotravi
+    - francesco-ubq
+    - gatteo
+    - hakaari
+    - harshit-cmd
+    - heyitsvi
+    - ihsraham
+    - itsdeka
+    - iveriatskureli
     - jonathunne
+    - kulwindertether
+    - mafintosh
+    - ndrkltsk
+    - nulllpc
+    - prdn
+    - quocle108
+    - raigal-r
+    - sontuphan
+    - tobi-legan
+    - vigan-abd
   # Org repos that are not modules; not reported as missing from the atlas. This list is about the map
   # only: bin/collect-metrics.mjs ignores it and tracks every public wdk-* repo, wdk-docs included.
   ignoreRepos:
