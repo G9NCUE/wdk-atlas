@@ -49,18 +49,9 @@ the next run drops the line. The `ATLAS_TOKEN` repository secret (a classic toke
 
 ## Security
 
-- Everything loads from the site's own origin. A Content Security Policy in `index.html` allows
-  scripts, styles and fonts from `'self'` only, no inline code; `el()` applies styles through the
-  CSSOM so no `style` attribute is ever parsed. Text from `atlas.yaml` and the metrics file is
-  rendered as text nodes; the two SVG charts escape every label they interpolate.
-- The metrics file names external contributors with GitHub's own label. Teammates are stored as
-  SHA-256 hashes of their login (`team`), so the public file never says who is an org member;
-  `audit.team` in `atlas.yaml` is the one place a login appears, by choice.
-- Workflows run with the minimum permissions and never on pull requests. The three actions they use
-  are pinned to commit SHAs, and `ATLAS_TOKEN` is passed only to the step that runs the script, so no
-  third-party action ever sees it. Dependabot refreshes the pins weekly. The token is read-only:
-  `read:org` and nothing else.
-- `NOTES.md` and `ATLAS_DEVELOPMENT.md` are working notes: git-ignored, never deployed.
+The site is static and loads nothing from third parties. The automation behind it runs with the
+least access it can, collects public data only, and never names org members. Please report anything
+you find to the maintainer rather than in an issue.
 
 ## Metrics
 
