@@ -8,7 +8,7 @@
 // Checks: repo links resolve; status agrees with npm; `requires` agrees with package.json both ways;
 // WDK repos in the org that the atlas does not mention; roadmap items name modules that exist.
 // The roadmap's own status is not checked here: that will come from wherever the roadmap ends up living.
-// Env: GITHUB_TOKEN (or ATLAS_TOKEN) raises the API rate limit and lets the check see private repos.
+// Env: GITHUB_TOKEN raises the API rate limit; private repos are visible only if that token can see them.
 // No dependencies: the YAML parser is the one the site already ships in vendor/.
 import { readFileSync } from "node:fs";
 import { createContext, runInContext } from "node:vm";
@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const TOKEN = process.env.ATLAS_TOKEN || process.env.GITHUB_TOKEN || "";
+const TOKEN = process.env.GITHUB_TOKEN || "";
 const JSON_OUT = process.argv.includes("--json");
 const RENDER = process.argv.indexOf("--render") >= 0 ? process.argv[process.argv.indexOf("--render") + 1] : null; // render a saved --json result, no fetches
 

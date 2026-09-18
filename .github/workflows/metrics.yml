@@ -22,10 +22,8 @@ jobs:
         with:
           node-version: 22
       - name: Collect today
-        # Secrets are scoped to this one step so the pinned third-party actions never see them.
-        # ATLAS_TOKEN: an org member's read-only token, used only to read the member list.
+        # The workflow token is the only credential: no stored secret. Teammates come from audit.team.
         env:
-          ATLAS_TOKEN: ${{ secrets.ATLAS_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
         run: node bin/collect-metrics.mjs
       - name: Commit the row

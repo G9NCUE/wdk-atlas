@@ -24,11 +24,8 @@ jobs:
         with:
           node-version: 22
       - name: Check the atlas
-        # Secrets are scoped to this one step so the pinned third-party actions never see them.
-        # ATLAS_TOKEN (optional secret): a read-only token; the check sees private repos only if it
-        # has that access. Without it the check runs with the workflow token and private repos look absent.
+        # The workflow token is the only credential: no stored secret. Private repos look absent.
         env:
-          ATLAS_TOKEN: ${{ secrets.ATLAS_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           node bin/check-atlas.mjs --json > report.json
