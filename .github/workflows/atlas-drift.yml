@@ -16,24 +16,27 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    env:
-      # ATLAS_TOKEN (optional secret): a read-only token that can see the org's private repos.
-      # Without it the check runs with the workflow token and private repos look absent.
-      ATLAS_TOKEN: ${{ secrets.ATLAS_TOKEN }}
-      GITHUB_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false # this job never pushes; keep the workflow token out of .git/config
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
       - name: Check the atlas
+        # Secrets are scoped to this one step so the pinned third-party actions never see them.
+        # ATLAS_TOKEN (optional secret): a read-only token; the check sees private repos only if it
+        # has that access. Without it the check runs with the workflow token and private repos look absent.
+        env:
+          ATLAS_TOKEN: ${{ secrets.ATLAS_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           node bin/check-atlas.mjs --json > report.json
           node bin/check-atlas.mjs --render report.json > report.md
           echo "total=$(node -p 'require("./report.json").total')" >> "$GITHUB_OUTPUT"
           cat report.md >> "$GITHUB_STEP_SUMMARY"
         id: check
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: atlas-drift-${{ github.run_number }}
           path: |

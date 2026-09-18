@@ -56,8 +56,10 @@ the next run drops the line. The `ATLAS_TOKEN` repository secret (a classic toke
 - The metrics file names external contributors with GitHub's own label. Teammates are stored as
   SHA-256 hashes of their login (`team`), so the public file never says who is an org member;
   `audit.team` in `atlas.yaml` is the one place a login appears, by choice.
-- Workflows run with the minimum permissions and never on pull requests. `ATLAS_TOKEN` is a classic
-  token with `read:org` only. Pinning the actions to commit SHAs is on the to-do list.
+- Workflows run with the minimum permissions and never on pull requests. The three actions they use
+  are pinned to commit SHAs, and `ATLAS_TOKEN` is passed only to the step that runs the script, so no
+  third-party action ever sees it. Dependabot refreshes the pins weekly. The token is read-only:
+  `read:org` and nothing else.
 - `NOTES.md` and `ATLAS_DEVELOPMENT.md` are working notes: git-ignored, never deployed.
 
 ## Metrics
