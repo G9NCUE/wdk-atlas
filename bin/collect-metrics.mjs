@@ -78,12 +78,24 @@ const SERIES_DAYS = 400;         // daily series kept this long (a year plus a m
 // retention window every run rather than the trailing 30 days. One request per package, self-healing,
 // and it backfills history the first time it runs.
 
-const gh = async (path) => {
+const gh = async (path, attempt = 0) => {
   const res = await fetch(`https://api.github.com${path}`, {
     headers: { accept: "application/vnd.github+json", "user-agent": "wdk-atlas-metrics", ...(TOKEN ? { authorization: `Bearer ${TOKEN}` } : {}) },
   });
   if (res.status === 404) return null;
   if (res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0") throw new Error("GitHub rate limit exhausted; set GITHUB_TOKEN");
+  if (res.status === 429 || res.status === 403) {
+    // Secondary rate limit (code search trips it easily): GitHub says how long to wait, in a header or
+    // in the message. Wait it out and retry twice; the job has hours, the data has one shot a day.
+    const text = await res.text();
+    const wait = Number(res.headers.get("retry-after")) || Number((/try again in (\d+)/.exec(text) || [])[1]) || 0;
+    if (wait && attempt < 2) {
+      console.error(`collect-metrics: GitHub ${res.status} on ${path.split("?")[0]}; waiting ${wait}s`);
+      await sleep(Math.min(wait, 900) * 1000 + 1000);
+      return gh(path, attempt + 1);
+    }
+    throw new Error(`GitHub ${res.status} on ${path}: ${text.slice(0, 120)}`);
+  }
   if (!res.ok) throw new Error(`GitHub ${res.status} on ${path}`);
   const text = await res.text();
   return text ? JSON.parse(text) : null;
@@ -205,7 +217,7 @@ try {
     const seen = new Set();
     for (let pageNo = 1; pageNo <= pages; pageNo += 1) {
       let body;
-      try { body = await gh(`/search/code?q=${encodeURIComponent(q)}&per_page=100&page=${pageNo}`); } catch { return null; }
+      try { body = await gh(`/search/code?q=${encodeURIComponent(q)}&per_page=100&page=${pageNo}`); } catch (e) { console.error(`collect-metrics: code search failed: ${e.message}`); return null; }
       if (!body || !Array.isArray(body.items)) return pageNo === 1 ? null : seen;
       for (const item of body.items) seen.add(item.repository.full_name);
       if (body.items.length < 100 || seen.size >= body.total_count) break;
