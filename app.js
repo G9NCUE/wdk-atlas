@@ -6,6 +6,8 @@ import { metricDef, mayShowChange } from "./lib/metrics-defs.mjs";
 import { metricCsv, metricJson, fileName } from "./lib/export.mjs";
 // Telling a chosen install from one the dependency graph dragged along.
 import { attribute } from "./lib/adoption.mjs";
+// One table of public endpoints, shared with the gate that checks it covers every measurement.
+import { originFor } from "./lib/origins.mjs";
 
 // WDK Atlas — one page per section of atlas.yaml, rendered in the browser with no build step.
 //
@@ -990,8 +992,6 @@ function readinessFact(field, repo, snap = latestSnapshot()) {
   return v === true;
 }
 const privateModules = () => (atlas.modules || []).filter((x) => x.private);
-// The public endpoint behind each readiness fact, shown on the first package in scope so a
-// reader can call one URL and see the fact rather than take our word for the whole set.
 // A link to the very file the page fetched. dataUrl gives an absolute address, and the link
 // allow-list refuses plain http, so a same-origin address is handed over as a path: the link
 // then works on the site, inside an embed, and on a local server alike.
@@ -1001,16 +1001,11 @@ const dataHref = (path) => {
   return url;
 };
 
-function originForField(field, repo) {
-  const org = orgName();
-  const pkg = repo && METRICS && METRICS.repos && METRICS.repos[repo] ? METRICS.repos[repo].package : null;
-  if (field === "stable") return pkg ? { label: "npm registry", href: `https://registry.npmjs.org/${pkg}` } : null;
-  if (field === "signer") return { label: "GitHub code search", href: `https://github.com/search?q=org%3A${org}+ISigner&type=code` };
-  if (!repo) return null;
-  if (field === "audits") return { label: "GitHub contents", href: `https://api.github.com/repos/${org}/${repo}/contents/` };
-  if (field === "ci") return { label: "GitHub Actions", href: `https://api.github.com/repos/${org}/${repo}/actions/runs?per_page=1&status=completed` };
-  if (field === "health") return { label: "GitHub community profile", href: `https://api.github.com/repos/${org}/${repo}/community/profile` };
-  return null;
+// The context the shared table needs to build a real address: the org, one package in scope as
+// a worked example, and the files this site serves.
+function originContext(repo) {
+  const info = repo && METRICS && METRICS.repos ? METRICS.repos[repo] : null;
+  return { org: orgName(), repo, pkg: info ? info.package : null, examplesUrl: examplesRepoUrl(), atlasUrl: dataHref("atlas.yaml") };
 }
 
 const examplesRepoUrl = () => `https://github.com/${orgName()}/${(atlas.audit && atlas.audit.examplesRepo) || "wdk-examples"}`;
@@ -1025,12 +1020,12 @@ function evaluateMetric(kr) {
   const out = { source: "Dashboard", link: "./?page=dashboard", origin: null, data: dataHref("data/metrics.json"), note: null, current: null, target: null, progress: null, unit: "", valueTitle: null };
   if (m.kind === "count" && m.source === "thirdPartyModules") {
     const n = (atlas.modules || []).filter((x) => x.publisher && x.publisher !== orgName() && x.status === "shipped").length;
-    Object.assign(out, { current: n, target: m.target, progress: m.target ? Math.min(100, Math.round((100 * n) / m.target)) : null, link: "./?page=map", source: "Map, third-party modules", origin: { label: "atlas.yaml", href: dataHref("atlas.yaml") }, data: dataHref("atlas.yaml") });
+    Object.assign(out, { current: n, target: m.target, progress: m.target ? Math.min(100, Math.round((100 * n) / m.target)) : null, link: "./?page=map", source: "Map, third-party modules", origin: originFor(m, originContext(null)), data: dataHref("atlas.yaml") });
     return out;
   }
   if (m.kind === "count" && m.source === "privateRepos") {
     const priv = privateModules();
-    Object.assign(out, { current: `${priv.length} private`, target: null, progress: priv.length ? 0 : 100, unit: priv.length ? "target none · hover the number for the repos" : "every repo in scope is public", link: "./?page=map", source: "Map, private repos", origin: { label: "GitHub repos", href: `https://api.github.com/orgs/${orgName()}/repos?type=public&per_page=100` }, data: dataHref("atlas.yaml"),
+    Object.assign(out, { current: `${priv.length} private`, target: null, progress: priv.length ? 0 : 100, unit: priv.length ? "target none · hover the number for the repos" : "every repo in scope is public", link: "./?page=map", source: "Map, private repos", origin: originFor(m, originContext(null)), data: dataHref("atlas.yaml"),
       valueTitle: priv.length ? priv.map((x) => `${x.title || x.id}${repoNameOf(x) ? ` (${repoNameOf(x)})` : ""}`).join("\n") : null });
     return out;
   }
@@ -1041,7 +1036,7 @@ function evaluateMetric(kr) {
     const scope = m.scope === "wallets" ? walletRepos() : publishedRepos();
     const scopeLabel = m.scope === "wallets" ? "first-party wallet packages" : "published packages";
     out.link = "./?page=dashboard#readiness"; out.source = "Dashboard, release readiness";
-    out.origin = originForField(m.field, scope[0]);
+    out.origin = originFor(m, originContext(scope[0]));
     if (m.field !== "stable" && (!snap || !snap[m.field])) { out.note = `Not collected yet (${m.field}); the next metrics run adds it.`; return out; }
     if (m.kind === "share") {
       const n = scope.filter((r) => readinessFact(m.field, r, snap) === true).length, total = scope.length;
@@ -1056,7 +1051,7 @@ function evaluateMetric(kr) {
   }
   if (m.kind === "count" && m.source === "examples") {
     const snap = latestSnapshot(); const n = snap ? snap.examples : null;
-    out.link = examplesRepoUrl(); out.source = "GitHub, examples repo"; out.origin = { label: "GitHub, examples repo", href: examplesRepoUrl() };
+    out.link = examplesRepoUrl(); out.source = "GitHub, examples repo"; out.origin = originFor(m, originContext(null));
     if (n == null) { out.note = "Not collected yet; the next metrics run adds it."; return out; }
     Object.assign(out, { current: n, target: m.target, progress: m.target ? Math.min(100, Math.round((100 * n) / m.target)) : null, unit: "example folders" });
     return out;
@@ -1067,7 +1062,7 @@ function evaluateMetric(kr) {
     const prevQ = previousQuarter(q), [pFrom, pTo] = quarterBounds(prevQ);
     const cur = sumSeries(D[m.series], qFrom, qTo);
     out.current = cur; out.unit = `so far in ${q}`; out.link = "./?page=dashboard&range=monthly";
-    out.origin = { label: "GitHub pull requests", href: `https://api.github.com/search/issues?q=org:${orgName()}+is:pr+is:merged` };
+    out.origin = originFor(m, originContext(null));
     if (!first || first > pFrom) {
       const firstFull = first && first === quarterBounds(quarterOf(first))[0] ? quarterOf(first) : nextQuarter(quarterOf(first || today));
       out.note = `Needs a full previous quarter of data. Data starts ${first || "today"}; the first full quarter is ${firstFull}, so the comparison becomes possible in ${nextQuarter(firstFull)}.`;
@@ -1093,7 +1088,7 @@ function evaluateMetric(kr) {
     }
     const total = answered + missed, days = Math.round(within / 24);
     const pct = total ? Math.round((100 * answered) / total) : null;
-    Object.assign(out, { current: pct == null ? null : `${pct}%`, target: `${m.target}%`, progress: pct == null ? null : Math.min(100, Math.round((100 * pct) / m.target)), unit: `${answered} of ${total} issues, last ${windowDays} days${pending ? `, ${pending} still within ${days} days` : ""}`, link: "./?page=dashboard&range=weekly", origin: { label: "GitHub issues", href: `https://api.github.com/search/issues?q=org:${orgName()}+is:issue` }, note: total ? null : "No issues opened in the window yet." });
+    Object.assign(out, { current: pct == null ? null : `${pct}%`, target: `${m.target}%`, progress: pct == null ? null : Math.min(100, Math.round((100 * pct) / m.target)), unit: `${answered} of ${total} issues, last ${windowDays} days${pending ? `, ${pending} still within ${days} days` : ""}`, link: "./?page=dashboard&range=weekly", origin: originFor(m, originContext(null)), note: total ? null : "No issues opened in the window yet." });
     return out;
   }
   out.note = `Unknown metric kind ${m.kind}.`; return out;

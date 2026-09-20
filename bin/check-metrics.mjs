@@ -15,6 +15,8 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { METRICS, REQUIRED, DEMOTED } from "../lib/metrics-defs.mjs";
 import { runGates as runQualityGates } from "./check-quality.mjs";
+import { loadAtlas } from "./lib/load-atlas.mjs";
+import { uncovered, metricsOf } from "../lib/origins.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => (existsSync(join(ROOT, rel)) ? readFileSync(join(ROOT, rel), "utf8") : null);
@@ -183,6 +185,28 @@ function m10() {
   return pass("every rendered figure carries its window, and every page its collection date");
 }
 
+// ---- M11 --------------------------------------------------------------------------------
+// A source column that links to our own pages is not a source column.
+//
+// This asks the table in lib/origins.mjs directly, rather than reading app.js and guessing.
+// The first wording did guess, with a regular expression over the page source, and a negative
+// test found it caught one regression out of three: it would have passed a page that had
+// stopped rendering the link at all. Sharing the table is what makes the question answerable.
+//
+// It covers whether every measurement has somewhere public to send a reader. That the page
+// renders the link is checked by loading the page, not here, and this gate does not claim it.
+function m11() {
+  let atlas;
+  try { atlas = loadAtlas(); } catch (e) { return notRun(`could not read atlas.yaml: ${e.message}`); }
+  const metrics = metricsOf(atlas.northStars);
+  if (!metrics.length) return notRun("no key result in atlas.yaml carries a metric block");
+  if (!/originFor\(/.test(APP)) return fail("the page does not use the shared table of public endpoints");
+  const missing = uncovered(metrics);
+  return missing.length
+    ? fail(`${missing.length} of ${metrics.length} measurements have no public endpoint: ${[...new Set(missing)].join(", ")}`)
+    : pass(`all ${metrics.length} measurements name a public endpoint`);
+}
+
 const GATES = [
   { id: "M1", what: "every rendered number has a registry entry", run: m1 },
   { id: "M2", what: "every entry names a decision, a window, a source and a definition", run: m2 },
@@ -194,6 +218,7 @@ const GATES = [
   { id: "M8", what: "the collector writes version currency for every published package", run: m8 },
   { id: "M9", what: "pages stay inside their compressed weight budget", run: m9 },
   { id: "M10", what: "every figure carries its collection date and window", run: m10 },
+  { id: "M11", what: "every key result names a public source, not one of our pages", run: m11 },
 ];
 
 export function runMetricGates() {
