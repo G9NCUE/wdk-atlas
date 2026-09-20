@@ -2016,7 +2016,9 @@ function renderPoster() {
   // Six pages once shared one tab title, so browser history and a pasted link said nothing
   // about where they led.
   document.title = `${heading.title} · WDK Atlas`;
-  document.body.classList.add(`page-${page}`);
+  // On the site this marks the body; embedded it marks Atlas's own frame, so a host page does
+  // not end up wearing a class that belongs to us. The stylesheet matches either.
+  (document.querySelector(".wdk-atlas-embed") || document.body).classList.add(`page-${page}`);
 
   for (const link of document.querySelectorAll(".nav a")) {
     link.toggleAttribute("aria-current", link.getAttribute("data-page") === page);
