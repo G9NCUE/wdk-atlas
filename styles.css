@@ -210,6 +210,30 @@ h1:empty,
   outline-offset: 2px;
 }
 
+/* Out of the way until someone tabs to it, then the first thing they meet. Without it a
+   keyboard reader crosses the whole navigation on every page before reaching the content. */
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -64px;
+  z-index: 100;
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--bg);
+  font: 600 14px/1 var(--font-sans);
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+
+.skip-link:focus {
+  top: 12px;
+}
+
+main:focus {
+  outline: none;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
