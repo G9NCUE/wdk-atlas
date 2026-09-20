@@ -1218,6 +1218,20 @@ roadmap:
     status: wip
     priority: P1
     modules: []
+  # Added 2026-09-20 on the PM's decision. The evidence is on the dashboard: the median package
+  # has 41% of its installs on the latest release, but wdk-wallet has 2%, wdk-wallet-evm 1% and
+  # wdk-failover-provider none at all, and those three are the ones everything else pins.
+  - id: caret-ranges
+    northStar: kit
+    label: Internal dependencies on caret ranges
+    summary: >-
+      WDK packages pin each other to exact versions, so a fix cannot reach anyone without
+      releasing every package above it. Caret ranges let a patch travel on its own.
+    quarter: 2026Q4
+    status: planned
+    priority: P1
+    modules: [wdk-wallet, wdk-failover-provider, wdk-wallet-evm, wdk-wallet-btc, wdk-wallet-solana, wdk-wallet-tron]
+
   - id: leave-beta
     northStar: kit
     label: Security audit, then 1.0.0

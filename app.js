@@ -1533,11 +1533,10 @@ function renderResults() {
       el("div", { class: "kr-lines" }, krs.map(krRow))
     );
   });
-  // The counted-versus-collected distinction is said here in plain sight as well as in the
-  // tallies' own tip, because one that exists only on hover is no distinction for a reader who
-  // never hovers. Kept to a line: the definitions themselves are a hover away on every row.
-  const note = el("p", { class: "results-note" }, "Draft, pending review. Figures are collected from npm and GitHub; tallies are counted from atlas.yaml.");
-  return el("div", { class: "results-page" }, strip, note, head, blocks);
+  // Removed at the PM's call on 2026-09-20. The counted-versus-collected distinction survives
+  // in the tip on every tally, and each row's source column names the public endpoint behind
+  // its number, which makes the point where a reader is already looking.
+  return el("div", { class: "results-page" }, strip, head, blocks);
 }
 
 // ---- Dashboard: public metrics from data/metrics.json, collected daily by the Metrics workflow.
