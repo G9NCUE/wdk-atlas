@@ -1633,10 +1633,14 @@ function groupedBars(categories, series, { height = 190 } = {}) {
 }
 
 // Horizontal bars, one series, direct value labels.
+// One line per row: the name and the number. A package already says what it is in its name, so
+// a second line repeating it in prose doubled the height of every chart to tell the reader
+// nothing they could act on. Whatever else is known about a row stays in the export, where a
+// column costs nothing and a reader has asked for the detail.
 function hBars(rows, { color = SERIES[0] } = {}) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   return el("div", { class: "hbars" }, rows.map((r) => el("div", { class: "hbar" },
-    el("span", { class: "hbar-label" }, r.label, r.hint ? el("small", { class: "hbar-hint" }, r.hint) : null),
+    el("span", { class: "hbar-label" }, r.label),
     el("span", { class: "hbar-track" }, el("span", { class: "hbar-fill", style: `width:${pct((100 * r.value) / max)}%;background:${color}` })),
     el("span", { class: "hbar-value" }, fmtNum(r.value)))));
 }
@@ -1915,7 +1919,7 @@ function buildDashboard(file, selected) {
     .map(([login, a]) => ({ label: login, hint: `${((file.authors || {})[login] || "").toLowerCase().replace(/_/g, " ")} · ${a.merged} merged`, value: a.opened }));
   const windowLabel = windowKeys.size ? `last ${windowKeys.size} ${unit}${windowKeys.size === 1 ? "" : "s"}` : "no complete period yet";
   const community = dashSection("Community & engagement", [
-    chartCard(defFor("external-authors"), `External contributors, ${windowLabel}`, String(Object.keys(authors).length), null, topAuthors.length ? hBars(topAuthors, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, windowKeys.size ? "No external pull requests in the window." : coverageNote(evCov)), "Top five by pull requests opened over the periods shown; hover for GitHub's label and merges. A teammate or a bot showing up here means the internal list needs a fix.",
+    chartCard(defFor("external-authors"), `External contributors, ${windowLabel}`, String(Object.keys(authors).length), null, topAuthors.length ? hBars(topAuthors, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, windowKeys.size ? "No external pull requests in the window." : coverageNote(evCov)), "Top five by pull requests opened over the periods shown. GitHub's label for each author and the number they had merged are in the export. A teammate or a bot showing up here means the internal list needs a fix.",
       { ...exportMeta, columns: ["author", "detail", "pull requests opened"], rows: topAuthors.map((r) => [r.label, r.hint, r.value]) }),
     chartCard(defFor("prs-flow"), `Pull requests per ${unit}`, lastTwo(prsO).now == null ? "—" : String(lastTwo(prsO).now), null, pr.cats.length ? groupedBars(pr.cats, [{ label: "Opened", values: pr.a }, { label: "Merged", values: pr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Complete periods only.", series2(pr.cats, pr.a, pr.b, "opened", "merged")),
     chartCard(defFor("external-prs-merged"), `External pull requests per ${unit}`, lastTwo(xO).now == null ? "—" : String(lastTwo(xO).now), null, xpr.cats.length ? groupedBars(xpr.cats, [{ label: "Opened", values: xpr.a }, { label: "Merged", values: xpr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Authors who are not members or collaborators of the org.", series2(xpr.cats, xpr.a, xpr.b, "opened", "merged")),
