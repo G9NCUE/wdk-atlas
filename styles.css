@@ -1102,6 +1102,80 @@ h1 {
   max-width: 1280px;
 }
 
+/* Three ways into the kit, above the catalogue. Cards rather than prose because a reader
+   arriving here is choosing a route, not reading a page. */
+.start-here {
+  margin: 0 0 32px;
+  padding: 0 16px;
+}
+
+.start-title {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 19px;
+  line-height: 24px;
+  color: var(--ink);
+}
+
+.start-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.start-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--card);
+}
+
+.start-card h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 20px;
+  color: var(--ink);
+}
+
+.start-card p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--secondary);
+}
+
+.start-code {
+  display: block;
+  padding: 8px 10px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink);
+  overflow-x: auto;
+}
+
+.start-note {
+  margin-top: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.start-note a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.start-note a:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .sections {
   display: contents;
 }
