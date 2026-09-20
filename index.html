@@ -10,9 +10,20 @@
       content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'; object-src 'none'; require-trusted-types-for 'script'"
     />
     <meta name="description" content="Where Tether's Wallet Development Kit stands: what ships, what is next, and the numbers behind it, all recomputed from npm and GitHub." />
+    <!-- What a pasted link shows in Slack, Notion or a chat. The image path is relative so a
+         fork previews its own copy; every scraper we care about resolves it against the page. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="WDK Atlas" />
+    <meta property="og:title" content="WDK Atlas: where the Wallet Development Kit stands" />
+    <meta property="og:description" content="What ships, what is next, and the numbers behind it. Every number recomputed from npm and GitHub." />
+    <meta property="og:image" content="assets/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="WDK Atlas: where the Wallet Development Kit stands." />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="icon" type="image/svg+xml" href="assets/wdk-logo.svg" />
-    <link rel="stylesheet" href="styles.css?v=56" />
+    <link rel="stylesheet" href="styles.css?v=57" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -72,6 +83,6 @@
     <footer id="site-foot" class="site-foot" hidden></footer>
 
     <script defer src="vendor/js-yaml.min.js"></script>
-    <script type="module" src="app.js?v=56"></script>
+    <script type="module" src="app.js?v=57"></script>
   </body>
 </html>
