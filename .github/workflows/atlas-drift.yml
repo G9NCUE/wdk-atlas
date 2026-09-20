@@ -7,15 +7,22 @@ on:
     - cron: "0 7 * * 1" # Mondays 07:00 UTC
   workflow_dispatch:
   push:
+    # The served branch only. A push to a working branch reported drift against a map that was
+    # not live yet, and the report went to the same rolling issue.
+    branches: [main]
     paths: [atlas.yaml, bin/check-atlas.mjs, .github/workflows/atlas-drift.yml]
 
-permissions:
-  contents: read
-  issues: write
+concurrency:
+  group: atlas-drift
+  cancel-in-progress: true
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:

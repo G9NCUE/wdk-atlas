@@ -7,13 +7,20 @@ on:
     - cron: "30 6 * * *" # daily 06:30 UTC
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pages: write # to request the Pages build after the push; the legacy builder does not always notice one
+# Two runs pushing to main at once would race on the rebase, and the daily collection has no
+# reason to overlap with itself. A run in flight finishes; it is not cancelled halfway through
+# a push.
+concurrency:
+  group: metrics
+  cancel-in-progress: false
 
 jobs:
   collect:
     runs-on: ubuntu-latest
+    timeout-minutes: 30 # the collector waits out GitHub's secondary rate limit, so it is not quick
+    permissions:
+      contents: write
+      pages: write # to request the Pages build after the push; the legacy builder does not always notice one
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -43,6 +50,12 @@ jobs:
           # since it was introduced: thirty commits to metrics.json against two to the summary,
           # which is what the Map and the Developer Resources pages read their date from.
           git add data/metrics.json data/summary.json
+          # Nothing to commit is a quiet day, not a failure: npm can report the same numbers
+          # twice, and a red cross on an unchanged day teaches everyone to ignore the crosses.
+          if git diff --cached --quiet; then
+            echo "no change in the collected data; nothing to commit"
+            exit 0
+          fi
           git commit -m "metrics: $(date -u +%F)"
           git pull --rebase origin main
           git push
