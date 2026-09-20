@@ -46,6 +46,12 @@ function safeHref(value) {
 // bar past its track or inject anything into the declaration.
 const pct = (n) => Math.max(0, Math.min(100, Number(n) || 0));
 
+// An explicit behavior option beats the scroll-behavior rule in the stylesheet, so the
+// preference has to be read here too. Checked at the moment of scrolling, because someone can
+// change the setting without reloading the page.
+const wantsLessMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const scrollTo = (node, options = {}) => node && node.scrollIntoView({ ...options, behavior: wantsLessMotion() ? "auto" : "smooth" });
+
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
   if (attrs) {
@@ -1070,7 +1076,7 @@ function spotlightTarget() {
   if (!card) return;
   const star = card.closest("details.star-row");
   if (star) star.open = true;
-  card.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+  scrollTo(card, { block: "center", inline: "nearest" });
   card.classList.remove("is-target");
   void card.offsetWidth; // restart the animation if the same card is targeted twice
   card.classList.add("is-target");
@@ -2067,7 +2073,7 @@ function openDrawer(id, anchor) {
   const section = anchor.closest("details");
   if (section && !anchor.closest("summary")) section.open = true;
   placeDrawer();
-  drawer.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  scrollTo(drawer, { block: "nearest" });
 
   if (location.hash !== `#${id}`) history.replaceState(null, "", `#${id}`);
 }
@@ -2084,7 +2090,7 @@ function onPosterClick(event) {
     if (!hit) return;
     const id = hit.getAttribute("data-section");
     pinBand(id);
-    if (step) poster.querySelector(`.xs > .band[data-section="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+    if (step) scrollTo(poster.querySelector(`.xs > .band[data-section="${CSS.escape(id)}"]`), { block: "start" });
     return;
   }
   if (target.closest("summary")) event.preventDefault();
@@ -2103,7 +2109,7 @@ function onDrawerClick(event) {
   const anchor = poster.querySelector(`[data-id="${CSS.escape(id)}"]`);
   if (anchor) {
     openDrawer(id, anchor);
-    anchor.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    scrollTo(anchor, { block: "nearest" });
     return;
   }
   const target = itemById(id);

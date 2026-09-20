@@ -714,6 +714,21 @@ details[open] > .star-head .star-title::after {
   }
 }
 
+/* Someone who has asked their system for less motion gets none of it here: no glides, no
+   fades, no sliding into place. Colour and outline changes stay, because those carry meaning
+   rather than movement. Durations go to almost nothing rather than zero so that anything
+   waiting on a transition to finish still hears about it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .roadmap-card.is-target {
     animation: none;
