@@ -1140,7 +1140,7 @@ function renderStarRow(star, items, byParent, quarters, now, index, mode = "time
   for (const item of items) { counts[item.status || "planned"] += 1; if (isLate(item)) counts.late += 1; }
   const tally = el(
     "ul",
-    { class: "star-tally" },
+    withTip({ class: "star-tally" }, countedTip(), "Counted from the atlas"),
     counts.done > 0 && el("li", { class: "done" }, el("strong", null, String(counts.done)), " done"),
     counts.wip > 0 && el("li", { class: "wip" }, el("strong", null, String(counts.wip)), " in progress"),
     counts.planned > 0 && el("li", { class: "planned" }, el("strong", null, String(counts.planned)), " planned"),
@@ -1376,7 +1376,7 @@ function renderRoadmap() {
     el("h2", { class: "mission-text" }, atlas.mission || ""),
     el(
       "p",
-      { class: "mission-sub" },
+      withTip({ class: "mission-sub" }, countedTip(), "Counted from the atlas"),
       `${stars.length} north stars · ${counts.done} shipped · ${counts.wip} in progress · ${counts.planned} planned`
     )
   );
@@ -1482,14 +1482,16 @@ function renderResults() {
       el("header", { class: "star-head static" },
         el("span", { class: "star-index" }, String(index + 1).padStart(2, "0")),
         el("div", { class: "star-text" }, el("h2", { class: "star-title plain" }, star.title), star.summary && el("p", { class: "star-summary" }, star.summary)),
-        el("ul", { class: "star-tally" },
+        el("ul", withTip({ class: "star-tally" }, countedTip(), "Counted from the atlas"),
           el("li", null, el("a", { href: `./?page=roadmap#star-${star.id}` }, el("strong", null, String(linked.length)), " initiatives")),
           counts.done > 0 && el("li", { class: "done" }, el("strong", null, String(counts.done)), " done"),
           counts.wip > 0 && el("li", { class: "wip" }, el("strong", null, String(counts.wip)), " in progress"))),
       el("div", { class: "kr-lines" }, krs.map(krRow))
     );
   });
-  const note = el("p", { class: "results-note" }, "Draft, pending review. Measured means a real number exists; nothing is estimated.");
+  // Said in plain sight as well as in the tip, because a distinction that only exists on hover
+  // is not a distinction for a reader who never hovers.
+  const note = el("p", { class: "results-note" }, "Draft, pending review. Measured means a real number exists; nothing is estimated. Figures beside each key result are collected from npm and GitHub. Tallies beside each north star are counted from atlas.yaml, and say what we have written down rather than what is true of the world.");
   return el("div", { class: "results-page" }, strip, note, head, blocks);
 }
 
@@ -1541,6 +1543,12 @@ function defFor(id) {
 
 // What a definition looks like to a reader: what is counted, where it came from, over what
 // window. Opens on hover and on keyboard focus, so it works without a mouse.
+// Counted, not collected. Rows in atlas.yaml say what we have written down; figures from npm
+// and GitHub say what is true of the world. They sit side by side on three pages, in the same
+// type, and nothing told a reader which was which. The registry already says why that matters,
+// so the warning comes from there rather than being written out again here.
+const countedTip = () => defTip(defFor("atlas-counts"));
+
 const defTip = (def) => `${def.definition}\nSource: ${def.source}\nWindow: ${def.window}`;
 
 function statTile(def, label, value, delta, hint, feeds) {
@@ -2091,7 +2099,7 @@ async function renderOverview() {
         el("a", { href: "./?page=results" }, "See how each result is measured"),
         ".")),
     el("div", { class: "brief-intro-side" },
-      el("p", { class: "mission-sub" }, `${stars.length} north stars · ${counts.done} initiatives shipped · ${counts.wip} in progress · ${counts.planned} planned`),
+      el("p", withTip({ class: "mission-sub" }, countedTip(), "Counted from the atlas"), `${stars.length} north stars · ${counts.done} initiatives shipped · ${counts.wip} in progress · ${counts.planned} planned`),
       file && el("p", { class: "mission-sub" }, `Atlas updated ${fmtDay(file.atlasUpdated)} · metrics collected ${fmtDay(file.updated)}`)));
   const starBlocks = stars.map((star, index) => {
     const linked = items.filter((item) => item.northStar === star.id);
@@ -2102,7 +2110,7 @@ async function renderOverview() {
       el("header", { class: "star-head static" },
         el("span", { class: "star-index" }, String(index + 1).padStart(2, "0")),
         el("div", { class: "star-text" }, el("h3", { class: "star-title plain" }, el("a", { href: `./?page=roadmap#star-${star.id}` }, star.title)), star.summary && el("p", { class: "star-summary" }, star.summary)),
-        el("ul", { class: "star-tally" },
+        el("ul", withTip({ class: "star-tally" }, countedTip(), "Counted from the atlas"),
           el("li", null, el("strong", null, String(linked.length)), " initiatives"),
           c.done > 0 && el("li", { class: "done" }, el("strong", null, String(c.done)), " done"),
           c.wip > 0 && el("li", { class: "wip" }, el("strong", null, String(c.wip)), " in progress"),
