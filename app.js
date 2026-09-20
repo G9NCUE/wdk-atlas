@@ -1977,8 +1977,67 @@ function renderPoster() {
     sections.append(renderSection(section, { collapsible: onPage.length > 1 }));
   }
 
-  poster.replaceChildren(el("div", { class: "atlas" }, sections));
+  const atlasNode = el("div", { class: "atlas" }, sections);
+  poster.replaceChildren(atlasNode);
   poster.hidden = false;
+  // The package name and its version come from the metrics file, which every page already
+  // fetches for the freshness stamp. Waiting for it costs nothing and keeps the install line
+  // true; the catalogue below is drawn first either way.
+  if (page === "dev") {
+    loadMetrics().then(() => {
+      const start = renderStartHere();
+      if (start) atlasNode.prepend(start);
+    });
+  }
+}
+
+// The Developer Resources page listed packages and left the reader to work out where to begin.
+// Three ways in, each one built from the data rather than written down here, so the package
+// name, its version and the number of examples cannot drift from what is actually published.
+function renderStartHere() {
+  const file = METRICS;
+  const assembler = (atlas.modules || []).find((m) => m.id === "wdk");
+  const published = file && file.repos && file.repos.wdk;
+  const pkg = published && published.package;
+  const version = published && published.version;
+  const examplesRepo = (atlas.modules || []).find((m) => m.id === "wdk-examples");
+  const snap = latestSnapshot();
+  const exampleCount = snap && typeof snap.examples === "number" ? snap.examples : null;
+  const starters = (atlas.modules || []).filter((m) => m.section === "app" && m.status === "shipped");
+
+  const cards = [];
+
+  if (pkg) {
+    cards.push(el("article", { class: "start-card" },
+      el("h3", null, "Install the kit"),
+      el("p", null, "One package creates every wallet and hands each protocol the account it works on."),
+      el("code", { class: "start-code" }, `npm i ${pkg}`),
+      el("p", { class: "start-note" },
+        version ? `Published as ${version}. ` : "",
+        isStableVersion(version) ? "" : "Still a beta release, as every package here is today. ",
+        assembler && assembler.repo ? el("a", { href: assembler.repo }, "Source on GitHub") : null)));
+  }
+
+  if (starters.length) {
+    cards.push(el("article", { class: "start-card" },
+      el("h3", null, "Start from a working app"),
+      el("p", null, `${starters.length === 1 ? "One reference app" : `${starters.length} reference apps`}, each a whole wallet you can run and read: ${starters.map((m) => m.title.replace(/^Starter app, /, "")).join(", ")}.`),
+      el("p", { class: "start-note" }, el("a", { href: "./?page=map#wdk-starter-react-native" }, "See them on the map"))));
+  }
+
+  if (examplesRepo && examplesRepo.repo) {
+    cards.push(el("article", { class: "start-card" },
+      el("h3", null, "Read the examples"),
+      el("p", null, exampleCount == null
+        ? "Short, self-contained recipes for one task at a time."
+        : `${exampleCount} short recipes, each self-contained and doing one thing.`),
+      el("p", { class: "start-note" }, el("a", { href: examplesRepo.repo }, "Open the examples repo"))));
+  }
+
+  if (!cards.length) return null;
+  return el("section", { class: "start-here" },
+    el("h2", { class: "start-title" }, "Start here"),
+    el("div", { class: "start-grid" }, cards));
 }
 
 let openAnchor = null;
