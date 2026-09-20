@@ -21,10 +21,17 @@ const KB = 1024;
 const MIN_FONT_PX = 12;
 const MIN_CONTRAST = 4.5;
 
-// js-yaml 4.1.0, the bundle the site serves. Recorded so a swapped file is noticed; update it
-// deliberately, in the same commit that changes the vendored file.
+// The bundles the site serves. Each hash was compared against the published package, not just
+// taken from the file on disk: js-yaml 4.1.0's dist/js-yaml.min.js from the npm registry has
+// this exact digest. Update a hash deliberately, in the commit that changes the file, and
+// check it against upstream again when you do.
 const VENDOR = {
-  "vendor/js-yaml.min.js": { version: "4.1.0", source: "https://github.com/nodeca/js-yaml", sha256: null },
+  "vendor/js-yaml.min.js": {
+    version: "4.1.0",
+    source: "https://registry.npmjs.org/js-yaml/-/js-yaml-4.1.0.tgz -> package/dist/js-yaml.min.js",
+    verified: "2026-09-20",
+    sha256: "45dc3dd03dc07a06705a2c2989b8c7f709013f04bd5386e3279d4e447f07ebd7",
+  },
 };
 
 // Uncompressed budget per page, excluding fonts. What a page fetches, not what the repo holds.
