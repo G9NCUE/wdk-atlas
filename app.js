@@ -1098,6 +1098,19 @@ function evaluateMetric(kr) {
     Object.assign(out, { target: `${goal} (+${m.targetPct}% vs ${prev} in ${prevQ})`, progress: goal ? Math.min(100, Math.round((100 * cur) / goal)) : null });
     return out;
   }
+  if (m.kind === "seriesTotal") {
+    // A count over a rolling window, where a percentage would have said more about the size of
+    // the base than about the work. The window is half open, like every other range here.
+    const days = Math.max(1, Number(m.days) || 30);
+    const to = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+    const from = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
+    const total = sumSeries(D[m.series], from, to);
+    out.origin = originFor(m, originContext(null));
+    Object.assign(out, { current: total, target: m.target, progress: m.target ? Math.min(100, Math.round((100 * total) / m.target)) : null,
+      unit: `merged in the last ${days} days`, link: "./?page=dashboard&range=weekly" });
+    if (METRICS && METRICS.since && METRICS.since > from) out.note = `Collection starts ${METRICS.since}, so the window is not yet full.`;
+    return out;
+  }
   if (m.kind === "currency") {
     const snap = latestSnapshot();
     out.origin = originFor(m, originContext(publishedRepos()[0]));

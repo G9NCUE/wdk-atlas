@@ -139,10 +139,17 @@ northStars:
         label: "Twelve or more WDK-compatible modules or integrations published"
         metric: { kind: count, source: thirdPartyModules, target: 12 }
         note: Counted as third-party modules on the map, live status. First-party packages are on the dashboard.
+      # Was "up by 50% in the quarter" until 2026-09-20. Between zero and three land in most
+      # weeks, so a percentage against that base said more about the base than about anyone's
+      # work, and the comparison needed a full previous quarter that does not exist before
+      # 2026Q4. A rolling count is measurable today and still falls when contribution dries up.
       - id: external-prs
-        label: "External pull requests merged up by 50% in the quarter"
-        metric: { kind: quarterGrowth, series: externalPrsMerged, targetPct: 50 }
-        note: Tether team members are excluded, whatever account they use.
+        label: "Twenty external pull requests merged in a month"
+        metric: { kind: seriesTotal, series: externalPrsMerged, days: 30, target: 20 }
+        note: >-
+          Merged in the last 30 days, by authors who are not members or collaborators of the
+          org, whatever account they use. Seventeen on 2026-09-20, though one week of the four
+          carried ten of them. The target of twenty is a first bar and wants confirming.
       - id: health
         label: "Community health above 80% on every repo"
         metric: { kind: average, field: health, scope: published, target: 80 }
