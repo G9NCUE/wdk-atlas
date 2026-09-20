@@ -1,7 +1,7 @@
 // Calendar arithmetic lives in lib/quarters.mjs so Node can test it without a DOM.
 import { quarterOf, quarterBounds, nextQuarter, previousQuarter, sumSeries } from "./lib/quarters.mjs";
 // Definitions live in lib/metrics-defs.mjs, so the page, the export and the gates read one copy.
-import { metricDef } from "./lib/metrics-defs.mjs";
+import { metricDef, mayShowChange } from "./lib/metrics-defs.mjs";
 
 // WDK Atlas — one page per section of atlas.yaml, rendered in the browser with no build step.
 //
@@ -1475,10 +1475,13 @@ function renderResults() {
 const SERIES = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)"];
 const fmtNum = (n) => (n == null ? "—" : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${Math.round(n / 1e3)}K` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(n));
 
-function deltaPill(now, before, { invert = false, note = "" } = {}) {
+// A change indicator, guarded by the floor recorded for the metric. Below the floor the reader
+// gets the count and nothing else: a rise from one merged pull request to ten is "+9", not
+// "+900%", because the percentage says more about the size of the base than about the work.
+function deltaPill(id, now, before, { invert = false, note = "" } = {}) {
   if (before == null || now == null) return el("span", { class: "delta none" }, "no prior data");
   const diff = now - before;
-  const pct = before ? Math.round((1000 * diff) / before) / 10 : null;
+  const pct = before && mayShowChange(id, before) ? Math.round((1000 * diff) / before) / 10 : null;
   const dir = diff > 0 ? "up" : diff < 0 ? "down" : "flat";
   const good = invert ? dir === "down" : dir === "up";
   const arrow = dir === "up" ? "↑" : dir === "down" ? "↓" : "→";
@@ -1488,14 +1491,14 @@ function deltaPill(now, before, { invert = false, note = "" } = {}) {
 
 // Trend against the average of the previous four periods, which is what a reader means by "is it up".
 // Falls back to the previous period while fewer than five exist.
-function trendPill(pts, { invert = false } = {}) {
+function trendPill(id, pts, { invert = false } = {}) {
   const short = { daily: "day", weekly: "wk", monthly: "mo" }[grain];
   if (pts.length >= 5) {
     const last = pts[pts.length - 1].y, base = pts.slice(-5, -1).reduce((a, p) => a + p.y, 0) / 4;
-    return deltaPill(last, Math.round(base), { invert, note: `vs 4-${short} avg` });
+    return deltaPill(id, last, Math.round(base), { invert, note: `vs 4-${short} avg` });
   }
   const { now, prev } = lastTwo(pts);
-  return deltaPill(now, prev, { invert, note: prev == null ? "" : `vs prev ${short}` });
+  return deltaPill(id, now, prev, { invert, note: prev == null ? "" : `vs prev ${short}` });
 }
 
 // The one way a page is allowed to reach a definition. A figure with no entry behind it is a
@@ -1776,11 +1779,11 @@ function buildDashboard(file, selected) {
   const feeds = (id) => { const kr = krs.get(id); return kr ? { id, label: `${kr.label}${kr.target != null ? ` · target ${kr.target}` : ""}` } : null; };
 
   const tiles = el("div", { class: "tiles" },
-    statTile(defFor("downloads"), `npm downloads, last full ${unit}`, dlLast.now == null ? "—" : fmtNum(dlLast.now), trendPill(dl), dlLast.key ? `${dlLast.key} · ${withPkg} packages` : coverageNote(dlCov)),
-    statTile(defFor("stars"), "GitHub stars", fmtNum(sum(latest.stars)), trendPill(starsSeries), `${selected.length} repos · ${fmtNum(sum(latest.forks))} forks${snapDays.length < 2 ? "" : ` · counted daily since ${snapDays[0]}`}`),
-    statTile(defFor("external-prs-merged"), `External pull requests merged, last ${unit}`, lastTwo(xM).now == null ? "—" : String(lastTwo(xM).now), trendPill(xM), lastTwo(xM).now == null ? coverageNote(evCov) : `${lastTwo(xO).now ?? 0} opened · Tether team excluded`, feeds("external-prs")),
-    statTile(defFor("contributors"), "Contributors", String(people), trendPill(contribSeries), "people with commits, bots excluded, unique across the selection"),
-    statTile(defFor("open-issues"), "Open issues", String(sum(latest.openIssues)), trendPill(backlogSeries, { invert: true }), lastTwo(isO).now == null ? coverageNote(evCov) : `${lastTwo(isO).now} opened · ${lastTwo(isC).now ?? 0} closed · last ${unit}`, feeds("issue-response")),
+    statTile(defFor("downloads"), `npm downloads, last full ${unit}`, dlLast.now == null ? "—" : fmtNum(dlLast.now), trendPill("downloads", dl), dlLast.key ? `${dlLast.key} · ${withPkg} packages` : coverageNote(dlCov)),
+    statTile(defFor("stars"), "GitHub stars", fmtNum(sum(latest.stars)), trendPill("stars", starsSeries), `${selected.length} repos · ${fmtNum(sum(latest.forks))} forks${snapDays.length < 2 ? "" : ` · counted daily since ${snapDays[0]}`}`),
+    statTile(defFor("external-prs-merged"), `External pull requests merged, last ${unit}`, lastTwo(xM).now == null ? "—" : String(lastTwo(xM).now), trendPill("external-prs-merged", xM), lastTwo(xM).now == null ? coverageNote(evCov) : `${lastTwo(xO).now ?? 0} opened · Tether team excluded`, feeds("external-prs")),
+    statTile(defFor("contributors"), "Contributors", String(people), trendPill("contributors", contribSeries), "people with commits, bots excluded, unique across the selection"),
+    statTile(defFor("open-issues"), "Open issues", String(sum(latest.openIssues)), trendPill("open-issues", backlogSeries, { invert: true }), lastTwo(isO).now == null ? coverageNote(evCov) : `${lastTwo(isO).now} opened · ${lastTwo(isC).now ?? 0} closed · last ${unit}`, feeds("issue-response")),
     statTile(defFor("packages-published"), "Packages published", String(published), el("span", { class: "delta none" }, `${stable} stable · ${published - stable} in beta`), `${(atlas.modules || []).filter((m) => m.publisher && m.publisher !== file.org && m.status === "shipped").length} more by third parties, not in this count`, feeds("stable")),
     latest.dependents != null && statTile(defFor("dependents"), "Projects depending on WDK", fmtNum(latest.dependents), el("span", { class: "delta none" }, "public repos outside the org"), "repos whose package.json names a WDK package, from GitHub code search")
   );
@@ -1789,7 +1792,7 @@ function buildDashboard(file, selected) {
   const byStars = selected.map((r) => ({ label: r, hint: file.repos[r].title !== r ? file.repos[r].title : "", value: (latest.stars || {})[r] || 0 })).sort((a, b) => b.value - a.value).slice(0, 8);
 
   const adoption = dashSection("Adoption & growth", [
-    chartCard(defFor("downloads"), `npm downloads per ${unit}`, fmtNum(dlLast.now), trendPill(dl), dl.length ? lineChart(dl, { marks: releaseMarks(file, selected) }) : el("p", { class: "chart-foot" }, coverageNote(dlCov)), "Selected packages summed. npm reports a few days late, so the current period is left out. Ticks mark npm releases; hover for the versions."),
+    chartCard(defFor("downloads"), `npm downloads per ${unit}`, fmtNum(dlLast.now), trendPill("downloads", dl), dl.length ? lineChart(dl, { marks: releaseMarks(file, selected) }) : el("p", { class: "chart-foot" }, coverageNote(dlCov)), "Selected packages summed. npm reports a few days late, so the current period is left out. Ticks mark npm releases; hover for the versions."),
     chartCard(defFor("downloads"), `Downloads by package, last full ${unit}`, null, null, hBars(byPackage, { color: SERIES[1] }), "Top eight of the selection."),
     chartCard(defFor("stars"), "Stars by repository", fmtNum(sum(latest.stars)), null, hBars(byStars, { color: SERIES[2] }), "Top eight of the selection."),
   ]);
@@ -1807,7 +1810,7 @@ function buildDashboard(file, selected) {
     chartCard(defFor("external-prs-merged"), `External pull requests per ${unit}`, lastTwo(xO).now == null ? "—" : String(lastTwo(xO).now), null, xpr.cats.length ? groupedBars(xpr.cats, [{ label: "Opened", values: xpr.a }, { label: "Merged", values: xpr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Authors who are not members or collaborators of the org."),
   ]);
   const support = dashSection("Support & responsiveness", [
-    chartCard(defFor("issues-flow"), `Issues opened and closed per ${unit}`, String(sum(latest.openIssues)), deltaPill(lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), iss.cats.length ? groupedBars(iss.cats, [{ label: "Opened", values: iss.a }, { label: "Closed", values: iss.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Headline is the open backlog today."),
+    chartCard(defFor("issues-flow"), `Issues opened and closed per ${unit}`, String(sum(latest.openIssues)), deltaPill("open-issues", lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), iss.cats.length ? groupedBars(iss.cats, [{ label: "Opened", values: iss.a }, { label: "Closed", values: iss.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Headline is the open backlog today."),
   ]);
   const readiness = renderReadiness(file, selected, latest);
   const note = el("p", { class: "dash-note" }, `Public sources only: the npm registry and the GitHub API. ${selected.length} of ${Object.keys(file.repos).length} public WDK repos selected. Daily series cover the last 30 days and grow by one day per run; stars, contributors and open counts are daily snapshots, the first taken ${snapDays[0]}. Last collected ${String(file.updated).slice(0, 10)}. Community, newsletter and website figures are not public and are not shown.`);
@@ -1927,10 +1930,10 @@ function briefTiles(file) {
   const people = new Set(all.flatMap((r) => (file.contributors || {})[r] || [])).size;
   const unit = { daily: "day", weekly: "week", monthly: "month" }[grain];
   return el("div", { class: "tiles brief-tiles" },
-    statTile(defFor("downloads"), `npm downloads, last full ${unit}`, dl.length ? fmtNum(dl[dl.length - 1].y) : "—", trendPill(dl), `${published.length} packages`),
+    statTile(defFor("downloads"), `npm downloads, last full ${unit}`, dl.length ? fmtNum(dl[dl.length - 1].y) : "—", trendPill("downloads", dl), `${published.length} packages`),
     statTile(defFor("packages-published"), "Packages published", String(published.length), el("span", { class: "delta none" }, `${stable} stable · ${published.length - stable} in beta`), "on npm, first party"),
     statTile(defFor("contributors"), "Contributors", String(people), null, "people with commits, bots excluded"),
-    statTile(defFor("external-prs-merged"), `External pull requests merged, last 4 ${unit}s`, xM.length ? String(sum4(xM)) : "—", deltaPill(xM.length ? sum4(xM) : null, prev4(xM), { note: "vs prev 4" }), "Tether team excluded"),
+    statTile(defFor("external-prs-merged"), `External pull requests merged, last 4 ${unit}s`, xM.length ? String(sum4(xM)) : "—", deltaPill("external-prs-merged", xM.length ? sum4(xM) : null, prev4(xM), { note: "vs prev 4" }), "Tether team excluded"),
     latest.dependents != null && statTile(defFor("dependents"), "Projects depending on WDK", fmtNum(latest.dependents), null, "public repos outside the org"),
     statTile(defFor("stars"), "GitHub stars", fmtNum(all.reduce((n, r) => n + ((latest.stars || {})[r] || 0), 0)), null, `${all.length} public repos`)
   );
