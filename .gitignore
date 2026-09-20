@@ -1,2 +1,11 @@
 ATLAS_DEVELOPMENT.md
 NOTES.md
+
+# Never commit: local secrets, keys, and the drift job's generated output.
+.env
+.env.*
+*.key
+*.pem
+report.json
+report.md
+.DS_Store

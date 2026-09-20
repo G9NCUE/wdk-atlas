@@ -38,6 +38,11 @@ function safeHref(value) {
   return null;
 }
 
+// A percentage on its way into a style attribute. Anything that is not a finite number becomes
+// zero, and the result is held between 0 and 100, so a stray value in the data cannot widen a
+// bar past its track or inject anything into the declaration.
+const pct = (n) => Math.max(0, Math.min(100, Number(n) || 0));
+
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
   if (attrs) {
@@ -478,7 +483,7 @@ function bandStrips(modules) {
         { class: `strip ${item.status || "planned"}`, href: `./?page=roadmap#${item.id}` },
         el("span", { class: "strip-label" }, item.label),
         el("span", { class: "strip-who" }, `touches ${touched.length} of ${modules.length} · ${quarterLabel(item.quarter)}`),
-        percent != null && el("span", { class: "strip-bar", "aria-hidden": "true" }, el("i", { style: `width:${percent}%` })),
+        percent != null && el("span", { class: "strip-bar", "aria-hidden": "true" }, el("i", { style: `width:${pct(percent)}%` })),
         percent != null && el("span", { class: "strip-pct" }, `${percent}%`)
       )
     );
@@ -1000,7 +1005,7 @@ function renderKrChip(kr, starId) {
     { class: `kr${measured ? "" : " unmeasured"}`, href: `./?page=results#${starId}`, title: kr.label },
     el("span", { class: "kr-label" }, kr.label),
     measured
-      ? el("span", { class: "kr-meter", "aria-label": `${kr.progress}%` }, el("span", { class: "kr-bar" }, el("span", { style: `width:${kr.progress}%` })), el("span", { class: "kr-pct" }, `${kr.progress}%`))
+      ? el("span", { class: "kr-meter", "aria-label": `${kr.progress}%` }, el("span", { class: "kr-bar" }, el("span", { style: `width:${pct(kr.progress)}%` })), el("span", { class: "kr-pct" }, `${kr.progress}%`))
       : el("span", { class: "kr-none" }, "not measured")
   );
 }
@@ -1317,7 +1322,7 @@ function krRow(kr) {
     el("div", { class: "kr-main" }, el("div", { class: "kr-title" }, kr.label), (kr.unit || kr.note) && el("div", { class: "kr-sub" }, [kr.unit, kr.note].filter(Boolean).join(" · "))),
     el("div", { class: "kr-col kr-col-status" }, el("span", { class: `status-pill ${st.key}` }, st.label)),
     el("div", { class: "kr-col kr-col-value" }, krValue(kr)),
-    el("div", { class: "kr-col kr-col-progress" }, el("span", { class: "kr-bar" }, el("span", { style: `width:${kr.progress ?? 0}%` })), el("span", { class: "kr-pct" }, kr.progress == null ? "—" : `${kr.progress}%`)),
+    el("div", { class: "kr-col kr-col-progress" }, el("span", { class: "kr-bar" }, el("span", { style: `width:${pct(kr.progress)}%` })), el("span", { class: "kr-pct" }, kr.progress == null ? "—" : `${kr.progress}%`)),
     el("div", { class: "kr-col kr-col-source" }, kr.sourceLink ? el("a", { href: kr.sourceLink }, kr.source.split(",")[0]) : kr.source ? el("span", null, kr.source) : el("span", { class: "kr-none" }, "to define"))
   );
 }
@@ -1476,7 +1481,7 @@ function hBars(rows, { color = SERIES[0] } = {}) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   return el("div", { class: "hbars" }, rows.map((r) => el("div", { class: "hbar", title: `${r.hint ? r.hint + " · " : ""}${r.label}: ${r.value.toLocaleString()}` },
     el("span", { class: "hbar-label" }, r.label),
-    el("span", { class: "hbar-track" }, el("span", { class: "hbar-fill", style: `width:${(100 * r.value) / max}%;background:${color}` })),
+    el("span", { class: "hbar-track" }, el("span", { class: "hbar-fill", style: `width:${pct((100 * r.value) / max)}%;background:${color}` })),
     el("span", { class: "hbar-value" }, fmtNum(r.value)))));
 }
 
@@ -1858,7 +1863,7 @@ async function renderOverview() {
         el("a", { class: "brief-kr-label", href: `./?page=results#${kr.id}` }, kr.label),
         kr.progress == null
           ? el("span", { class: "kr-none" }, "not measured")
-          : el("span", { class: "brief-kr-meter" }, el("span", { class: "kr-bar" }, el("span", { style: `width:${kr.progress}%` })), (() => { const text = `${kr.current}${kr.target != null && String(kr.target) !== String(kr.current) ? ` / ${kr.target}` : ""}`; const a = tipAttrs(kr.valueTitle, text); return el("span", { ...a, class: `brief-kr-value${a.class ? " has-tip" : ""}` }, text); })())))));
+          : el("span", { class: "brief-kr-meter" }, el("span", { class: "kr-bar" }, el("span", { style: `width:${pct(kr.progress)}%` })), (() => { const text = `${kr.current}${kr.target != null && String(kr.target) !== String(kr.current) ? ` / ${kr.target}` : ""}`; const a = tipAttrs(kr.valueTitle, text); return el("span", { ...a, class: `brief-kr-value${a.class ? " has-tip" : ""}` }, text); })())))));
   });
   const quarter = el("section", { class: "brief-quarter" },
     el("h2", { class: "brief-h" }, `This quarter, ${quarterLabel(now)}`),
