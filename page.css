@@ -18,3 +18,23 @@ body {
 body {
   background-color: var(--bg);
 }
+
+/* Typography for the site's own pages. Atlas's frame carries its own copy, so an embedding
+   host keeps the type it already had. */
+body {
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The top bar folds its navigation behind a button on a narrow screen. Only this site has one. */
+@media (max-width: 1024px) {
+  body.menu-open #primary-nav { display: block; }
+  body.menu-open .topbar { background: var(--bg); border-bottom-color: var(--line); }
+}
+
+@media print {
+  body { background: #fff; }
+}

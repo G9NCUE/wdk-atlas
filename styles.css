@@ -98,11 +98,9 @@
   --module-width: 196px;
 }
 
-/* Everything Atlas paints lives under one of these two roots: the site's own body, or the
-   frame Atlas builds for itself inside a host page. Nothing below reaches a host's own
-   elements. The rules that do belong to a whole page, the box model, the colour scheme and
-   the body reset, are in page.css, which only index.html loads. */
-body,
+/* Atlas's own frame. Typography for the site's body is in page.css, which only index.html
+   loads: naming body here would have set the type of any page that merely included Atlas,
+   which is the thing this split exists to prevent. */
 .wdk-atlas-embed {
   color: var(--ink);
   font-family: var(--font-sans);
@@ -2698,8 +2696,6 @@ table.ready .owners { white-space: normal; }
   .nav-toggle[aria-expanded="true"] .nav-toggle-bar::before { transform: translateY(6px) rotate(45deg); }
   .nav-toggle[aria-expanded="true"] .nav-toggle-bar::after { transform: translateY(-6px) rotate(-45deg); }
   #primary-nav { display: none; position: absolute; top: 100%; right: 0; left: 0; padding: 6px 16px 14px; border-bottom: 1px solid var(--line); background: var(--bg); box-shadow: var(--shadow-pop); }
-  body.menu-open #primary-nav { display: block; }
-  body.menu-open .topbar { background: var(--bg); border-bottom-color: var(--line); }
   .nav { flex-direction: column; align-items: stretch; gap: 2px; }
   .nav a { height: 44px; padding: 0 12px; font-size: 16px; }
 }
@@ -2752,6 +2748,9 @@ table.ready .owners { white-space: normal; }
    at its screen value measures 3.34:1 there and the greens and greys are worse.
    ========================================================================================== */
 @media print {
+  /* Deliberately on the root: an embedded Atlas inherits these, which is what lets it print
+     on white inside a host page. The names are Atlas's own, so a host defining the same ones
+     would be overridden while printing; that trade is worth it for a readable page. */
   :root {
     --bg: #fff;
     --surface: #fff;
@@ -2791,7 +2790,8 @@ table.ready .owners { white-space: normal; }
   .grain-switch,
   .view-toggle { display: none !important; }
 
-  body { background: #fff; }
+  /* The site's own white page is set in page.css; here only Atlas's frame. */
+  .wdk-atlas-embed { background: #fff; }
   .poster { padding: 0; }
 
   /* Keep a card, a row or a chart whole rather than split across two sheets. */
@@ -2804,9 +2804,12 @@ table.ready .owners { white-space: normal; }
   .band { break-inside: avoid; page-break-inside: avoid; }
 
   .site-header,
-  h1,
-  h2,
-  h3 { break-after: avoid; page-break-after: avoid; }
+  .atlas h1,
+  .atlas h2,
+  .atlas h3,
+  .wdk-atlas-embed h1,
+  .wdk-atlas-embed h2,
+  .wdk-atlas-embed h3 { break-after: avoid; page-break-after: avoid; }
 
   /* Where a link goes is invisible on paper. Only an address that leaves the site is worth
      printing: "(./?page=dashboard)" beside a word that already says Dashboard is clutter. */

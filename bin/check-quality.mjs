@@ -349,6 +349,58 @@ const GATES = [
       const missing = ["*.env", ".env", "*.key", "report.json", "report.md"].filter((p) => !ignore.includes(p.replace("*", "")));
       return { pass: missing.length === 0, detail: missing.length ? `not ignored: ${missing.join(", ")}` : "secrets and build output are ignored" };
     } },
+  { id: "P7.1", what: "the script leaks no globals",
+    run: () => {
+      // A module has its own scope, so nothing it declares reaches a host page. What would
+      // leak is an explicit assignment to window or globalThis.
+      const isModule = /<script[^>]*type="module"[^>]*app\.js/.test(html);
+      const assigns = [...js.matchAll(/\b(?:window|globalThis)\.([\w$]+)\s*=/g)].map((m) => m[1]);
+      const problems = [];
+      if (!isModule) problems.push("app.js is not loaded as a module, so everything it declares is global");
+      if (assigns.length) problems.push(`assigns to ${[...new Set(assigns)].join(", ")}`);
+      return { pass: problems.length === 0, detail: problems.join("; ") || "a module, and nothing is written to the global object" };
+    } },
+  { id: "P7.2", what: "styling cannot reach a host page",
+    run: () => {
+      // Rules for a whole page belong in page.css, which only this site loads. Anything in
+      // styles.css that selects html, body or a bare element would follow Atlas into a host.
+      const page = read("page.css");
+      if (!page) return { pass: false, detail: "page.css is missing, so the page-level rules are still in styles.css" };
+      const source = css.replace(/\/\*[\s\S]*?\*\//g, "");
+      const bleeding = [];
+      for (const [, selector] of source.matchAll(/([^{}]+)\{[^{}]*\}/g)) {
+        for (const one of selector.split(",")) {
+          const sel = one.trim();
+          if (!sel || sel.startsWith("@") || sel.startsWith("%")) continue;
+          if (/^(?:html|body|\*)\b(?![\w-])/.test(sel)) { bleeding.push(sel); continue; }
+          // A bare element selector with no class anywhere in it restyles the host's own markup.
+          if (/^[a-z][a-z0-9]*(?:\s*[,>+~]\s*[a-z][a-z0-9]*)*$/i.test(sel) && !/[.#\[]/.test(sel)) bleeding.push(sel);
+        }
+      }
+      const unique = [...new Set(bleeding)];
+      return { pass: unique.length === 0, detail: unique.length ? `${unique.length} rule(s) in styles.css reach past Atlas: ${unique.slice(0, 6).join(", ")}` : "every rule in styles.css is reached through Atlas's own root" };
+    } },
+  { id: "P7.3", what: "the data path is configurable",
+    run: () => ({ pass: /import\.meta\.url/.test(js) && /searchParams\.get\("base"\)/.test(js),
+      detail: "data is not resolved against this module with a base that can be overridden" }) },
+  { id: "P7.5", what: "an embedding page needs one script tag",
+    run: () => {
+      const example = read("examples/embed.html");
+      const problems = [];
+      if (!example) problems.push("examples/embed.html is missing");
+      else {
+        if (example.includes("page.css")) problems.push("the example loads page.css, which belongs to this site alone");
+        const tags = [...example.matchAll(/<script[^>]*src="([^"]+)"/g)].map((m) => m[1]);
+        if (tags.length !== 1) problems.push(`the example loads ${tags.length} scripts; one is the point`);
+        if (!/function mount\(/.test(js)) problems.push("app.js does not build its own markup when a page has none");
+      }
+      return { pass: problems.length === 0, detail: problems.join("; ") || "one script tag, its own markup, and no page-level styling" };
+    } },
+  { id: "P7.6", what: "the README says how to embed it",
+    run: () => {
+      const readme = read("README.md");
+      return { pass: /##\s*Embed/i.test(readme), detail: "the README has no section on embedding Atlas in another site" };
+    } },
   { id: "P6.1", what: "nothing blocks the first paint", run: fontPreloadGate },
   { id: "P6.3", what: "pages stay inside their weight budget, compressed", run: pageWeightGate },
 ];
