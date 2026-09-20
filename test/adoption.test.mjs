@@ -2,7 +2,7 @@
 // cases below are the ones where getting it wrong would still look plausible on a chart.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { internalDeps, attribute, currency, latestShare, publishDates } from "../lib/adoption.mjs";
+import { internalDeps, attribute, currency, latestShare, publishDates, weightedCurrency } from "../lib/adoption.mjs";
 
 const KNOWN = new Set(["@tetherto/wdk-wallet", "@tetherto/wdk-failover-provider", "@tetherto/wdk"]);
 
@@ -90,4 +90,21 @@ test("the latest share isolates upgrading from our own release cadence", () => {
 test("the latest share has no answer without a latest, or without downloads", () => {
   assert.equal(latestShare({ a: 5 }, null), null);
   assert.equal(latestShare({}, "1.0.0"), null);
+});
+
+test("currency is weighted by chosen installs, not by all of them", () => {
+  // a big package stuck on an old version outweighs a small one that is up to date
+  const onLatest = { big: 1, small: 100 };
+  assert.equal(weightedCurrency(onLatest, { big: 9000, small: 1000 }), 11);
+  assert.equal(weightedCurrency(onLatest, { big: 1000, small: 1000 }), 51);
+});
+
+test("a package with no chosen installs does not vote", () => {
+  assert.equal(weightedCurrency({ a: 100, b: 0 }, { a: 10, b: 0 }), 100);
+  assert.equal(weightedCurrency({ a: 100 }, {}), null, "nothing chosen is no answer, not nought");
+  assert.equal(weightedCurrency({}, { a: 10 }), null);
+});
+
+test("an unreadable share or weight is skipped", () => {
+  assert.equal(weightedCurrency({ a: 100, b: null, c: "x" }, { a: 10, b: 10, c: 10 }), 100);
 });

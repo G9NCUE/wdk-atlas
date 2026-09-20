@@ -5,7 +5,7 @@ import { metricDef, mayShowChange } from "./lib/metrics-defs.mjs";
 // Building the files a reader takes away; pure, so Node tests them without a DOM.
 import { metricCsv, metricJson, fileName } from "./lib/export.mjs";
 // Telling a chosen install from one the dependency graph dragged along.
-import { attribute } from "./lib/adoption.mjs";
+import { attribute, weightedCurrency } from "./lib/adoption.mjs";
 // One table of public endpoints, shared with the gate that checks it covers every measurement.
 import { originFor } from "./lib/origins.mjs";
 // One answer-rate calculation, shared by the dashboard tile and the key result.
@@ -1014,6 +1014,29 @@ const examplesRepoUrl = () => `https://github.com/${orgName()}/${(atlas.audit &&
 
 // A key result with `metric` reads its current value and progress from public data: the atlas, npm and GitHub
 // through the metrics file. It never reads a number typed by hand.
+// Chosen installs per repo for the last complete period: the download total minus whatever
+// another WDK package pinned. One copy, because the dashboard and the key result quoting
+// different numbers from the same data is exactly the fault this loop keeps finding.
+function splitInstalls(file, repos) {
+  const D = (file && file.daily) || {};
+  const cov = coverageOf(D.downloads, file, false);
+  const withPackages = repos.filter((r) => file.repos[r] && file.repos[r].package);
+  const totals = Object.fromEntries(withPackages.map((r) => [r, lastTwo(seriesBuckets({ [r]: (D.downloads || {})[r] }, [r], { coverage: cov })).now || 0]));
+  const repoOfPackage = new Map(Object.entries(file.repos).map(([name, info]) => [info.package, name]));
+  const edges = {};
+  for (const [name, pkgs] of Object.entries(file.deps || {})) {
+    const inner = (pkgs || []).map((pkg) => repoOfPackage.get(pkg)).filter((r) => r && totals[r] != null);
+    if (inner.length && totals[name] != null) edges[name] = inner;
+  }
+  return { withPackages, split: attribute(totals, edges), edges };
+}
+
+/** Just the chosen part, keyed by repo, for weighting. */
+const chosenInstalls = (file, repos) => {
+  const { withPackages, split } = splitInstalls(file, repos);
+  return Object.fromEntries(withPackages.map((r) => [r, split[r] ? split[r].direct : 0]));
+};
+
 function evaluateMetric(kr) {
   const m = kr.metric; if (!m) return null;
   // `origin` is the public endpoint a stranger can call to check the row for themselves, and
@@ -1073,6 +1096,18 @@ function evaluateMetric(kr) {
     const prev = sumSeries(D[m.series], pFrom, pTo);
     const goal = Math.ceil(prev * (1 + m.targetPct / 100));
     Object.assign(out, { target: `${goal} (+${m.targetPct}% vs ${prev} in ${prevQ})`, progress: goal ? Math.min(100, Math.round((100 * cur) / goal)) : null });
+    return out;
+  }
+  if (m.kind === "currency") {
+    const snap = latestSnapshot();
+    out.origin = originFor(m, originContext(publishedRepos()[0]));
+    out.data = dataHref("data/metrics.json");
+    if (!snap || !snap.onLatest) { out.note = "Not collected yet; the next metrics run adds it."; return out; }
+    const pct = weightedCurrency(snap.onLatest, chosenInstalls(METRICS, Object.keys(METRICS.repos || {})));
+    if (pct == null) { out.note = "No chosen installs in the window yet."; return out; }
+    const counted = Object.keys(snap.onLatest).length;
+    Object.assign(out, { current: `${pct}%`, target: `${m.target}%`, progress: Math.min(100, Math.round((100 * pct) / m.target)),
+      unit: `of chosen installs, across ${counted} published packages`, link: "./?page=dashboard&range=weekly", source: "Dashboard, adoption" });
     return out;
   }
   if (m.kind === "issueResponse") {
@@ -1849,16 +1884,7 @@ function buildDashboard(file, selected) {
   // something else pins is attributable to whatever pinned it. Induced is an upper bound,
   // because a cache means a dependent install does not always fetch the dependency again;
   // chosen is therefore a lower bound. Both are bounds, and the page says so.
-  const periodTotal = (r) => lastTwo(seriesBuckets({ [r]: (D.downloads || {})[r] }, [r], { coverage: dlCov })).now || 0;
-  const withPackages = selected.filter((r) => file.repos[r].package);
-  const totalsByRepo = Object.fromEntries(withPackages.map((r) => [r, periodTotal(r)]));
-  const repoOfPackage = new Map(Object.entries(file.repos).map(([name, r]) => [r.package, name]));
-  const edges = {};
-  for (const [name, pkgs] of Object.entries(file.deps || {})) {
-    const inner = (pkgs || []).map((pkg) => repoOfPackage.get(pkg)).filter((r) => r && totalsByRepo[r] != null);
-    if (inner.length && totalsByRepo[name] != null) edges[name] = inner;
-  }
-  const split = attribute(totalsByRepo, edges);
+  const { withPackages, split, edges } = splitInstalls(file, selected);
   const partOf = (r, part) => (split[r] ? split[r][part] : 0);
   const chosenTotal = withPackages.reduce((n, r) => n + partOf(r, "direct"), 0);
   const inducedTotal = withPackages.reduce((n, r) => n + partOf(r, "induced"), 0);
