@@ -891,7 +891,7 @@ modules:
     publisher: tetherto
     summary: 'The iOS and macOS side of the kit: a Swift package that starts the worklet and exposes wallet operations to an Apple app.'
     notes:
-      - Repo made public 2026-09-16. To be published on Swift Package Manager (Jonathan, 2026-09-06)
+      - Repo made public 2026-09-16. To be published on Swift Package Manager (agreed 2026-09-06)
     repo: https://github.com/tetherto/wdk-core-swift
 
 
@@ -1535,7 +1535,7 @@ roadmap:
     northStar: ecosystem
     label: Flutter host binding, through a grant
     partners: [the ecosystem, under a grant]
-    summary: A Flutter binding to the worklet, built by the ecosystem under the existing grant template rather than by the core team; a proof of concept exists. Owner to confirm with Raquel.
+    summary: A Flutter binding to the worklet, built by the ecosystem under the existing grant template rather than by the core team; a proof of concept exists. Owner still to confirm.
     quarter: 2027Q2
     status: planned
     priority: P2
@@ -1567,14 +1567,14 @@ roadmap:
   - id: repo-cleanup
     northStar: ecosystem
     label: Repository cleanup across the org
-    summary: Delete twelve empty scaffolds, archive the superseded protocol, backup and fork repos, and deprecate their npm packages. Agreed with Jonathan on 2026-09-06; tracked in Asana.
+    summary: Delete twelve empty scaffolds, archive the superseded protocol, backup and fork repos, and deprecate their npm packages. Agreed 2026-09-06.
     quarter: 2026Q4
     status: wip
     priority: P1
   - id: publish-indexer-npm
     northStar: dx
     label: Publish the indexer client to npm
-    summary: The client is on the map as live but has never been published, so the open indexer API has no installable client. Jonathan offered to help.
+    summary: The client is on the map as live but has never been published, so the open indexer API has no installable client. Help has been offered.
     quarter: 2026Q4
     status: planned
     priority: P1
