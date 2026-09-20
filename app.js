@@ -1003,11 +1003,18 @@ function keyResultsOf(star) {
   });
 }
 
+// The definition the Key results page prints under every row: what is counted, what the target
+// is, and how it is judged. It is what turns "0 of 35" from a failure into a stated position,
+// so the Roadmap and the Overview show it too rather than leaving it one page away.
+const krExplain = (kr) => [kr.unit, kr.note].filter(Boolean).join(" · ");
+
 function renderKrChip(kr, starId) {
   const measured = kr.progress != null;
   return el(
     "a",
-    { class: `kr${measured ? "" : " unmeasured"}`, href: `./?page=results#${starId}`, title: kr.label },
+    // The tip goes on the link, not inside it: a focusable span within a link would give one
+    // chip two tab stops.
+    { ...tipAttrs(krExplain(kr), kr.label), class: `kr${measured ? "" : " unmeasured"}${krExplain(kr) ? " has-tip" : ""}`, href: `./?page=results#${starId}` },
     el("span", { class: "kr-label" }, kr.label),
     measured
       ? el("span", { class: "kr-meter", "aria-label": `${kr.progress}%` }, el("span", { class: "kr-bar" }, el("span", { style: `width:${pct(kr.progress)}%` })), el("span", { class: "kr-pct" }, `${kr.progress}%`))
@@ -1872,7 +1879,7 @@ async function renderOverview() {
           c.wip > 0 && el("li", { class: "wip" }, el("strong", null, String(c.wip)), " in progress"),
           c.late > 0 && el("li", { class: "late" }, el("strong", null, String(c.late)), " late"))),
       el("ul", { class: "brief-krs" }, krs.map((kr) => el("li", { class: kr.progress == null ? "unmeasured" : "" },
-        el("a", { class: "brief-kr-label", href: `./?page=results#${kr.id}` }, kr.label),
+        el("a", { ...tipAttrs(krExplain(kr), kr.label), class: `brief-kr-label${krExplain(kr) ? " has-tip" : ""}`, href: `./?page=results#${kr.id}` }, kr.label),
         kr.progress == null
           ? el("span", { class: "kr-none" }, "not measured")
           : el("span", { class: "brief-kr-meter" }, el("span", { class: "kr-bar" }, el("span", { style: `width:${pct(kr.progress)}%` })), (() => { const text = `${kr.current}${kr.target != null && String(kr.target) !== String(kr.current) ? ` / ${kr.target}` : ""}`; const a = tipAttrs(kr.valueTitle, text); return el("span", { ...a, class: `brief-kr-value${a.class ? " has-tip" : ""}` }, text); })())))));
