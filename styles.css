@@ -2722,3 +2722,75 @@ table.ready .owners { white-space: normal; }
   .status-toggle { padding: 0 10px; }
   .section-why { height: auto; min-height: 36px; padding-top: 6px; padding-bottom: 6px; white-space: normal; text-align: left; }
 }
+
+/* ==========================================================================================
+   Print
+   The design system is dark only, so printing it as it stands wastes a cartridge and prints
+   grey text on a black field. Rather than restate every rule for paper, the tokens are
+   redefined: the layout, the spacing and the hierarchy all carry over, and only the colours
+   change. Hues are kept and lightness lowered until each one reads on white, since the orange
+   at its screen value measures 3.34:1 there and the greens and greys are worse.
+   ========================================================================================== */
+@media print {
+  :root {
+    --bg: #fff;
+    --surface: #fff;
+    --card: #fff;
+    --card-elevated: #fff;
+    --ink: #000;
+    --secondary: hsl(37 10% 30%);
+    --text-muted: hsl(37 8% 35%);
+    --muted: hsl(37 8% 45%);
+    --line: hsl(37 8% 80%);
+    --line-subtle: hsl(37 8% 88%);
+    --accent: hsl(18 100% 32%);
+    --accent-hover: hsl(18 100% 32%);
+    --success: hsl(145 100% 26%);
+    --warning: hsl(41 100% 30%);
+    --error: hsl(0 100% 38%);
+    --purple: hsl(266 60% 40%);
+    --chart-1: hsl(170 82% 28%);
+    --chart-2: hsl(41 100% 32%);
+    --chart-3: hsl(151 64% 28%);
+    --shadow-pop: none;
+    --white-5: hsl(37 8% 94%);
+    --white-8: hsl(37 8% 92%);
+  }
+
+  /* Ask the printer for the fills: a bar chart with its bars dropped is not a chart. */
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* Controls cannot be operated on paper, and the drawer is a response to a click. */
+  .topbar,
+  .skip-link,
+  .header-side,
+  .drawer,
+  .nav-toggle,
+  .search,
+  .repo-panel,
+  .grain-switch,
+  .view-toggle { display: none !important; }
+
+  body { background: #fff; }
+  .poster { padding: 0; }
+
+  /* Keep a card, a row or a chart whole rather than split across two sheets. */
+  .roadmap-card,
+  .kr-line,
+  .chart-card,
+  .start-card,
+  .tile,
+  .brief-star,
+  .band { break-inside: avoid; page-break-inside: avoid; }
+
+  .site-header,
+  h1,
+  h2,
+  h3 { break-after: avoid; page-break-after: avoid; }
+
+  /* Where a link goes is invisible on paper. Only an address that leaves the site is worth
+     printing: "(./?page=dashboard)" beside a word that already says Dashboard is clutter. */
+  a[href^="https://"]::after { content: " (" attr(href) ")"; font-size: 12px; color: var(--text-muted); word-break: break-all; }
+
+  .site-foot { display: block !important; border-top: 1px solid var(--line); }
+}
