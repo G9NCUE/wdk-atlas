@@ -38,12 +38,16 @@ const VENDOR = {
 // What a reader actually downloads for a page, compressed, excluding fonts. GitHub Pages
 // serves these gzipped, so measuring the raw bytes overstated every page by three or four
 // times and turned a respectable site into six failures.
-// Raised from 100/140 on 2026-09-20, and the reason is a counting change rather than bloat:
-// the gate had been measuring five files while the browser fetched twelve, so the old numbers
-// were about 12 KB short of what a reader actually paid. Measured after the correction: light
-// pages 100.2 KB, heavy pages 141.3 KB. These bars are those figures with headroom, and they
-// are deliberately tight: the next thing added to the shell should have to argue for itself.
-const BUDGET_KB = { map: 105, dev: 105, overview: 150, roadmap: 150, results: 150, dashboard: 150 };
+// The light bars are the originals. The heavy ones moved by 2 KB on 2026-09-20, and the reason
+// is a counting change rather than bloat: the gate had been measuring five files while the
+// browser fetched twelve, about 12 KB short of what a reader actually paid.
+//
+// Measured at the correction, light pages were 100.3 and heavy 141.3, and I raised the bars to
+// 105 and 150. That was far more slack than the overage argued for, and the deletions in the
+// next commit then cut the bytes I had said could not be cut. Re-measured: 99.6 and 140.7. So
+// light needs no raise at all, and heavy needs two, which is where these sit. The next thing
+// added to the shell should have to argue for itself.
+const BUDGET_KB = { map: 100, dev: 100, overview: 142, roadmap: 142, results: 142, dashboard: 142 };
 
 // ---------------------------------------------------------------- colour
 // WCAG relative luminance and contrast, from hsl() as the tokens are written.
@@ -208,9 +212,14 @@ const gz = (rel) => (existsSync(join(ROOT, rel)) ? gzipSync(readFileSync(join(RO
 // Every module app.js pulls in. They are separate requests a reader pays for, and until this
 // was added the budget counted five files while the browser fetched twelve: six ES modules and
 // page.css, 12 KB compressed, invisible to the gate that exists to notice exactly that.
+//
+// Deduplicated, both quote styles, any depth under lib/. The first version of this matched only
+// double quotes and a flat lower-case name, so a module imported with single quotes or from a
+// subdirectory went uncounted, and gz() answers 0 for a path it cannot find rather than
+// throwing — which is the same silent under-counting this function exists to end.
 function shippedModules() {
   const src = existsSync(join(ROOT, "app.js")) ? readFileSync(join(ROOT, "app.js"), "utf8") : "";
-  return [...src.matchAll(/from "\.\/(lib\/[a-z0-9-]+\.mjs)"/g)].map((m) => m[1]);
+  return [...new Set([...src.matchAll(/from ["']\.\/(lib\/[\w./-]+\.mjs)["']/g)].map((m) => m[1]))];
 }
 
 function pageWeightGate() {
@@ -232,7 +241,7 @@ function pageWeightGate() {
   return {
     pass: over.length === 0,
     detail: over.length ? over.map((r) => `${r.page} ${r.kb}KB over ${r.budget}KB`).join(", ")
-      : `${rows.map((r) => `${r.page} ${r.kb}KB`).join(", ")} · shell includes ${modules.length} modules`,
+      : rows.map((r) => `${r.page} ${r.kb}KB`).join(", "),
   };
 }
 

@@ -957,9 +957,9 @@ let METRICS = null;
 // in one day, so a versioned URL is not enough: revalidate every load. The server answers 304 when the
 // file has not changed, so this costs a round trip, not a download.
 // The fetch in flight is remembered, not just its result. Two callers start before either
-// resolves — renderPoster asks for the file, and the freshness stamp asks for it on the next
-// line without awaiting — so remembering only the result fetched 445 KB twice on every visit
-// to the dashboard and the overview.
+// resolves — the page renderer that renderPoster dispatches to asks for the file, and the
+// freshness stamp asks again three lines later without awaiting — so remembering only the
+// result fetched 445 KB twice on every visit to the dashboard and the overview.
 let METRICS_FETCH = null;
 function loadMetrics() {
   if (METRICS) return Promise.resolve(METRICS);
