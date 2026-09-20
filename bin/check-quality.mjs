@@ -47,7 +47,21 @@ const VENDOR = {
 // next commit then cut the bytes I had said could not be cut. Re-measured: 99.6 and 140.7. So
 // light needs no raise at all, and heavy needs two, which is where these sit. The next thing
 // added to the shell should have to argue for itself.
-const BUDGET_KB = { map: 100, dev: 100, overview: 142, roadmap: 142, results: 142, dashboard: 142 };
+//
+// 2026-09-20, light 100 -> 102. What bought it, measured at 101.35: the not-found page (P1.9),
+// a description per page rather than one for all six (P1.1), and the drawer taking the focus
+// and becoming a sheet on a phone (P2.4). 1.9 KB before trimming, 0.9 after.
+//
+// 2026-09-20, light 102 -> 104 and heavy 142 -> 144. What bought it: the chain filter, the
+// planned toggle, the search text and the dashboard's repository selection all moved into the
+// address (P2.6), so a link reproduces what the sender was looking at. A copy-link control went
+// in beside it and came straight back out at the PM's call, which is why the measurement below
+// is under the bar rather than against it: 102.66 and 142.73.
+//
+// The 1.3 KB of slack is deliberate and is the only slack here: atlas.yaml sits in the shell and
+// grows every time the roadmap does, and a content edit should not fail a performance gate.
+// Anything else added has to argue for itself and move these numbers in its own commit.
+const BUDGET_KB = { map: 104, dev: 104, overview: 144, roadmap: 144, results: 144, dashboard: 144 };
 
 // ---------------------------------------------------------------- colour
 // WCAG relative luminance and contrast, from hsl() as the tokens are written.
