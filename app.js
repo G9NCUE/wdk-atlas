@@ -4,6 +4,8 @@ import { quarterOf, quarterBounds, nextQuarter, previousQuarter, sumSeries } fro
 import { metricDef, mayShowChange } from "./lib/metrics-defs.mjs";
 // Building the files a reader takes away; pure, so Node tests them without a DOM.
 import { metricCsv, metricJson, fileName } from "./lib/export.mjs";
+// Telling a chosen install from one the dependency graph dragged along.
+import { attribute } from "./lib/adoption.mjs";
 
 // WDK Atlas — one page per section of atlas.yaml, rendered in the browser with no build step.
 //
@@ -1840,8 +1842,39 @@ function buildDashboard(file, selected) {
   const krs = new Map((atlas.northStars || []).flatMap((star) => keyResultsOf(star)).map((kr) => [kr.id, kr]));
   const feeds = (id) => { const kr = krs.get(id); return kr ? { id, label: `${kr.label}${kr.target != null ? ` · target ${kr.target}` : ""}` } : null; };
 
+  // Downloads for the last complete period, per package, then split.
+  //
+  // Internal dependencies are pinned to an exact version, so an install of a package that
+  // something else pins is attributable to whatever pinned it. Induced is an upper bound,
+  // because a cache means a dependent install does not always fetch the dependency again;
+  // chosen is therefore a lower bound. Both are bounds, and the page says so.
+  const periodTotal = (r) => lastTwo(seriesBuckets({ [r]: (D.downloads || {})[r] }, [r], { coverage: dlCov })).now || 0;
+  const withPackages = selected.filter((r) => file.repos[r].package);
+  const totalsByRepo = Object.fromEntries(withPackages.map((r) => [r, periodTotal(r)]));
+  const repoOfPackage = new Map(Object.entries(file.repos).map(([name, r]) => [r.package, name]));
+  const edges = {};
+  for (const [name, pkgs] of Object.entries(file.deps || {})) {
+    const inner = (pkgs || []).map((pkg) => repoOfPackage.get(pkg)).filter((r) => r && totalsByRepo[r] != null);
+    if (inner.length && totalsByRepo[name] != null) edges[name] = inner;
+  }
+  const split = attribute(totalsByRepo, edges);
+  const partOf = (r, part) => (split[r] ? split[r][part] : 0);
+  const chosenTotal = withPackages.reduce((n, r) => n + partOf(r, "direct"), 0);
+  const inducedTotal = withPackages.reduce((n, r) => n + partOf(r, "induced"), 0);
+  const rank = (part) => withPackages
+    .map((r) => ({ label: unscoped(file.repos[r].package), hint: file.repos[r].title !== r ? file.repos[r].title : "", value: partOf(r, part) }))
+    .filter((row) => row.value > 0).sort((a, b) => b.value - a.value).slice(0, 8);
+  const byPackage = rank("direct");
+  const byInduced = rank("induced");
+  const splitHint = Object.keys(edges).length
+    ? el("span", null,
+        el("span", withTip({ class: "split-part" }, defTip(defFor("downloads-direct")), "chosen"), `${fmtNum(chosenTotal)} or more chosen`),
+        " · ",
+        el("span", withTip({ class: "split-part" }, defTip(defFor("downloads-induced")), "pulled in"), `${fmtNum(inducedTotal)} or fewer pulled in`))
+    : null;
+
   const tiles = el("div", { class: "tiles" },
-    statTile(defFor("downloads"), `npm downloads, last full ${unit}`, dlLast.now == null ? "—" : fmtNum(dlLast.now), trendPill("downloads", dl), dlLast.key ? `${dlLast.key} · ${withPkg} packages` : coverageNote(dlCov)),
+    statTile(defFor("downloads"), `npm downloads, last full ${unit}`, dlLast.now == null ? "—" : fmtNum(dlLast.now), trendPill("downloads", dl), splitHint || (dlLast.key ? `${dlLast.key} · ${withPkg} packages` : coverageNote(dlCov))),
     statTile(defFor("stars"), "GitHub stars", fmtNum(sum(latest.stars)), trendPill("stars", starsSeries), `${selected.length} repos · ${fmtNum(sum(latest.forks))} forks${snapDays.length < 2 ? "" : ` · counted daily since ${snapDays[0]}`}`),
     statTile(defFor("external-prs-merged"), `External pull requests merged, last ${unit}`, lastTwo(xM).now == null ? "—" : String(lastTwo(xM).now), trendPill("external-prs-merged", xM), lastTwo(xM).now == null ? coverageNote(evCov) : `${lastTwo(xO).now ?? 0} opened · Tether team excluded`, feeds("external-prs")),
     statTile(defFor("contributors"), "Contributors", String(people), trendPill("contributors", contribSeries), "people with commits, bots excluded, unique across the selection"),
@@ -1850,7 +1883,6 @@ function buildDashboard(file, selected) {
     latest.dependents != null && statTile(defFor("dependents"), "Projects depending on WDK", fmtNum(latest.dependents), el("span", { class: "delta none" }, "public repos outside the org"), "repos whose package.json names a WDK package, from GitHub code search")
   );
 
-  const byPackage = selected.filter((r) => file.repos[r].package).map((r) => { const pts = seriesBuckets({ [r]: (D.downloads || {})[r] }, [r], { coverage: dlCov }); return { label: unscoped(file.repos[r].package), hint: file.repos[r].title !== r ? file.repos[r].title : "", value: lastTwo(pts).now || 0 }; }).sort((a, b) => b.value - a.value).slice(0, 8);
   const byStars = selected.map((r) => ({ label: r, hint: file.repos[r].title !== r ? file.repos[r].title : "", value: (latest.stars || {})[r] || 0 })).sort((a, b) => b.value - a.value).slice(0, 8);
 
   // Every export says which day the numbers were collected and how much of the org they cover.
@@ -1860,8 +1892,10 @@ function buildDashboard(file, selected) {
   const adoption = dashSection("Adoption & growth", [
     chartCard(defFor("downloads"), `npm downloads per ${unit}`, fmtNum(dlLast.now), trendPill("downloads", dl), dl.length ? lineChart(dl, { marks: releaseMarks(file, selected) }) : el("p", { class: "chart-foot" }, coverageNote(dlCov)), "Selected packages summed. npm reports a few days late, so the current period is left out. Ticks mark npm releases; hover for the versions.",
       { ...exportMeta, columns: ["period", "downloads"], rows: dl.map((p) => [p.key, p.y]) }),
-    chartCard(defFor("downloads"), `Downloads by package, last full ${unit}`, null, null, hBars(byPackage, { color: SERIES[1] }), "Top eight of the selection.",
-      { ...exportMeta, columns: ["package", "title", "downloads"], rows: byPackage.map((r) => [r.label, r.hint, r.value]) }),
+    chartCard(defFor("downloads-direct"), `Chosen installs by package, last full ${unit}`, fmtNum(chosenTotal), null, hBars(byPackage, { color: SERIES[1] }), "Downloads left after subtracting those another WDK package pinned. A lower bound: a cache means a dependent install does not always fetch its dependency again.",
+      { ...exportMeta, columns: ["package", "title", "chosen installs, at least"], rows: byPackage.map((r) => [r.label, r.hint, r.value]) }),
+    byInduced.length ? chartCard(defFor("downloads-induced"), `Pulled in as a dependency, last full ${unit}`, fmtNum(inducedTotal), null, hBars(byInduced, { color: SERIES[2] }), "Attributable to another WDK package pinning this exact version. Nobody chose these; they arrive with something else.",
+      { ...exportMeta, columns: ["package", "title", "pulled in, at most"], rows: byInduced.map((r) => [r.label, r.hint, r.value]) }) : null,
     chartCard(defFor("stars"), "Stars by repository", fmtNum(sum(latest.stars)), null, hBars(byStars, { color: SERIES[2] }), "Top eight of the selection.",
       { ...exportMeta, columns: ["repo", "title", "stars"], rows: byStars.map((r) => [r.label, r.hint, r.value]) }),
   ]);
