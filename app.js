@@ -1404,7 +1404,11 @@ function renderResults() {
 // Public metrics from data/metrics.json. Charts are inline SVG; no charting library.
 // ==========================================================================================================
 
-const SERIES = ["#3987e5", "#199e70", "#c98500"]; // categorical, fixed order, validated for the dark surface
+// Read from the stylesheet so the palette lives in one place and stays the design system's.
+// Resolved once: the stylesheet is a blocking link in the head, so these are computed by the
+// time this module runs.
+const cssColour = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const SERIES = ["--chart-1", "--chart-2", "--chart-3"].map(cssColour);
 const fmtNum = (n) => (n == null ? "—" : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${Math.round(n / 1e3)}K` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(n));
 
 function deltaPill(now, before, { invert = false, note = "" } = {}) {
