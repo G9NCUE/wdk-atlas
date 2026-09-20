@@ -956,13 +956,20 @@ let METRICS = null;
 // The Metrics workflow rewrites this file daily without touching the asset version, and can push twice
 // in one day, so a versioned URL is not enough: revalidate every load. The server answers 304 when the
 // file has not changed, so this costs a round trip, not a download.
-async function loadMetrics() {
-  if (METRICS) return METRICS;
-  try {
-    const res = await fetch(dataUrl("data/metrics.json"), { cache: "no-cache" });
-    METRICS = res.ok ? await res.json() : null;
-  } catch { METRICS = null; }
-  return METRICS;
+// The fetch in flight is remembered, not just its result. Two callers start before either
+// resolves — renderPoster asks for the file, and the freshness stamp asks for it on the next
+// line without awaiting — so remembering only the result fetched 445 KB twice on every visit
+// to the dashboard and the overview.
+let METRICS_FETCH = null;
+function loadMetrics() {
+  if (METRICS) return Promise.resolve(METRICS);
+  if (!METRICS_FETCH) {
+    METRICS_FETCH = fetch(dataUrl("data/metrics.json"), { cache: "no-cache" })
+      .then((res) => (res.ok ? res.json() : null))
+      .catch(() => null)
+      .then((file) => { METRICS = file; METRICS_FETCH = null; return file; });
+  }
+  return METRICS_FETCH;
 }
 
 // The Map and the Developer Resources pages need four values: two dates for the footer stamp,

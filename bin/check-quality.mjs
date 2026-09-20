@@ -38,7 +38,12 @@ const VENDOR = {
 // What a reader actually downloads for a page, compressed, excluding fonts. GitHub Pages
 // serves these gzipped, so measuring the raw bytes overstated every page by three or four
 // times and turned a respectable site into six failures.
-const BUDGET_KB = { map: 100, dev: 100, overview: 140, roadmap: 140, results: 140, dashboard: 140 };
+// Raised from 100/140 on 2026-09-20, and the reason is a counting change rather than bloat:
+// the gate had been measuring five files while the browser fetched twelve, so the old numbers
+// were about 12 KB short of what a reader actually paid. Measured after the correction: light
+// pages 100.2 KB, heavy pages 141.3 KB. These bars are those figures with headroom, and they
+// are deliberately tight: the next thing added to the shell should have to argue for itself.
+const BUDGET_KB = { map: 105, dev: 105, overview: 150, roadmap: 150, results: 150, dashboard: 150 };
 
 // ---------------------------------------------------------------- colour
 // WCAG relative luminance and contrast, from hsl() as the tokens are written.
@@ -200,8 +205,18 @@ function fontFloorGate() {
 
 const gz = (rel) => (existsSync(join(ROOT, rel)) ? gzipSync(readFileSync(join(ROOT, rel)), { level: 9 }).length : 0);
 
+// Every module app.js pulls in. They are separate requests a reader pays for, and until this
+// was added the budget counted five files while the browser fetched twelve: six ES modules and
+// page.css, 12 KB compressed, invisible to the gate that exists to notice exactly that.
+function shippedModules() {
+  const src = existsSync(join(ROOT, "app.js")) ? readFileSync(join(ROOT, "app.js"), "utf8") : "";
+  return [...src.matchAll(/from "\.\/(lib\/[a-z0-9-]+\.mjs)"/g)].map((m) => m[1]);
+}
+
 function pageWeightGate() {
-  const shell = gz("index.html") + gz("styles.css") + gz("app.js") + gz("vendor/js-yaml.min.js") + gz("atlas.yaml");
+  const modules = shippedModules();
+  const shell = gz("index.html") + gz("page.css") + gz("styles.css") + gz("app.js") + gz("vendor/js-yaml.min.js") + gz("atlas.yaml")
+    + modules.reduce((n, rel) => n + gz(rel), 0);
   const metrics = gz("data/metrics.json");
   const summary = gz("data/summary.json");
   // Only the Map and Developer Resources can be served by the small file; every other page
@@ -217,7 +232,7 @@ function pageWeightGate() {
   return {
     pass: over.length === 0,
     detail: over.length ? over.map((r) => `${r.page} ${r.kb}KB over ${r.budget}KB`).join(", ")
-      : rows.map((r) => `${r.page} ${r.kb}KB`).join(", "),
+      : `${rows.map((r) => `${r.page} ${r.kb}KB`).join(", ")} · shell includes ${modules.length} modules`,
   };
 }
 
