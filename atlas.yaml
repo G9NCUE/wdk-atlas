@@ -95,26 +95,15 @@ audit:
 #   quarterGrowth (series, targetPct: growth vs the previous calendar quarter), issueResponse (withinHours, target %).
 # Rewritten 2026-09-13 from the Q3 2026 OKR sheet so every result is public and checkable; pending review.
 northStars:
+  # A stable release, a published audit, green CI and the shared signer interface were key
+  # results here until 2026-09-20. They are gates on a checklist, not results: each is binary,
+  # three of them read 0% and would have kept reading 0% until a release landed, which teaches
+  # a reader that the page does not move. Every one of those facts is on the release readiness
+  # table, per package, and the 1.0.0 initiative on the roadmap carries the work.
   - id: kit
     title: WDK is a production-grade kit for every platform
     summary: Secure, audited, out of beta, with the same SDK on iOS, Android, desktop and Node.
     keyResults:
-      - id: stable
-        label: "Every published package at a stable release, out of beta"
-        metric: { kind: share, field: stable, scope: published }
-        note: The npm latest tag carries no beta, alpha or rc suffix.
-      - id: audit
-        label: "Every published package with a published security audit"
-        metric: { kind: share, field: audits, scope: published }
-        note: An audit folder or file at the root of the repo.
-      - id: signer-interface
-        label: "One signer interface on every wallet package"
-        metric: { kind: share, field: signer, scope: wallets }
-        note: First-party wallet repos whose code references ISigner, the shared signer interface.
-      - id: ci-green
-        label: "Green CI on the main branch of every package"
-        metric: { kind: share, field: ci, scope: published }
-        note: Newest completed workflow run on the default branch, whatever the workflow; a stricter test-only check is an open question.
       - id: public
         label: "No private repo in the WDK namespace"
         metric: { kind: count, source: privateRepos, target: 0 }
