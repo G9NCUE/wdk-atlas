@@ -1,0 +1,28 @@
+# Findings from bin/check-public.mjs that a human has reviewed and decided, as fingerprints
+# only. The reasoning beside each one is kept out of the repo; this file exists so the gate
+# can run in CI, where the reviewer's notes are not available.
+#
+# A fingerprint is sha256(category, file, text) truncated, so it changes the moment the text
+# does: editing a reviewed line makes it a new finding and the gate asks again.
+# 21 decided on 2026-09-20 by the WDK PM.
+f04ec40ebc18
+4a9cfb91f7f5
+99ab429a75ba
+7b22323e8e56
+d2cf245f82f7
+3e4006cbf391
+7bdfe863f536
+1a75d5fbb510
+4086b489028f
+efc720e83c88
+8ff6e49aebfe
+6412f990dbc4
+d9759e7d5bbb
+7d5d56ccc65b
+5576469d2472
+a7cc8e91865c
+37192775025b
+c2de225b0e59
+7375cf1f5eb5
+28bce35db1ca
+8729a4e581d1

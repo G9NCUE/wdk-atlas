@@ -26,11 +26,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node bin/collect-metrics.mjs
+      # Nothing checked this before committing, so a bad collection reached the site and the
+      # Pages build was requested for it. These are the same commands the Checks workflow runs.
+      - name: Check before committing
+        run: |
+          node bin/validate-atlas.mjs
+          node --test test/*.test.mjs
+          node bin/check-quality.mjs
+          node bin/check-metrics.mjs
+          node bin/check-public.mjs
       - name: Commit the row
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/metrics.json
+          # Both files, because the collector writes both. data/summary.json had been left out
+          # since it was introduced: thirty commits to metrics.json against two to the summary,
+          # which is what the Map and the Developer Resources pages read their date from.
+          git add data/metrics.json data/summary.json
           git commit -m "metrics: $(date -u +%F)"
           git pull --rebase origin main
           git push
