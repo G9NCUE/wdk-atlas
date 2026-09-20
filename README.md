@@ -63,6 +63,14 @@ GITHUB_TOKEN=$(gh auth token) node bin/collect-metrics.mjs --dry
 and roadmap items. Its header comment documents every field. After changing it, `app.js` or
 `styles.css`, bump the `?v=N` suffixes in `index.html` so GitHub Pages stops serving cached copies.
 
+The image a shared link shows is `assets/og.png`, drawn from `og-source.html` with the site's own
+stylesheet so it cannot drift from the design. To redraw it after editing that file, serve the repo
+and screenshot the page at its own size:
+
+```
+chrome --headless=new --window-size=1200,630 --screenshot=assets/og.png http://localhost:4173/og-source.html
+```
+
 ## Security
 
 The site is static and loads nothing from third parties. The automation behind it runs with the

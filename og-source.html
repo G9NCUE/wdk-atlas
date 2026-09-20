@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- Source for assets/og.png, the image a shared link shows. Rendered at 1200x630 with the
+         site's own stylesheet, so the card cannot drift from the design system. Regenerate with
+         the command in the README after changing it. -->
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      html, body { margin: 0; padding: 0; }
+      body { width: 1200px; height: 630px; overflow: hidden; }
+      .og {
+        box-sizing: border-box;
+        width: 1200px; height: 630px;
+        display: flex; flex-direction: column; justify-content: space-between;
+        padding: 72px 80px;
+        background: var(--bg);
+      }
+      .og-logo { width: 240px; height: auto; }
+      .og-title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: 62px; line-height: 1.1; letter-spacing: -0.01em;
+        color: var(--ink);
+        max-width: 22ch;
+      }
+      .og-promise {
+        margin: 24px 0 0;
+        padding-left: 18px;
+        border-left: 3px solid var(--accent);
+        font-family: var(--font-sans);
+        font-size: 24px; line-height: 1.45;
+        color: var(--secondary);
+        max-width: 46ch;
+      }
+      .og-foot {
+        display: flex; align-items: baseline; gap: 14px;
+        font-family: var(--font-mono);
+        font-size: 20px; letter-spacing: 0.04em; text-transform: uppercase;
+        color: var(--text-muted);
+      }
+      .og-foot b { color: var(--accent); font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <div class="og">
+      <img class="og-logo" src="assets/wdk-logo.svg" alt="" />
+      <div>
+        <h1 class="og-title">Where the Wallet Development Kit stands.</h1>
+        <p class="og-promise">What ships, what is next, and the numbers behind it. Every number recomputed from npm and GitHub.</p>
+      </div>
+      <p class="og-foot"><b>WDK Atlas</b> <span>Public sources only</span></p>
+    </div>
+  </body>
+</html>
