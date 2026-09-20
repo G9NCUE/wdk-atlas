@@ -22,7 +22,6 @@ const METRIC = {
   share: [["field", "scope"], ["target"]],
   average: [["field", "scope"], ["target"]],
   count: [["source"], ["target"]],
-  quarterGrowth: [["series", "targetPct"], []],
   issueResponse: [["withinHours"], ["target"]],
   currency: [["target"], []],
   seriesTotal: [["series", "days", "target"], []],
