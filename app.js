@@ -1,5 +1,5 @@
 // Calendar arithmetic lives in lib/quarters.mjs so Node can test it without a DOM.
-import { quarterOf, quarterBounds, nextQuarter, previousQuarter, sumSeries } from "./lib/quarters.mjs";
+import { nextQuarter, sumSeries } from "./lib/quarters.mjs";
 // Definitions live in lib/metrics-defs.mjs, so the page, the export and the gates read one copy.
 import { metricDef, mayShowChange } from "./lib/metrics-defs.mjs";
 // Building the files a reader takes away; pure, so Node tests them without a DOM.
@@ -1086,23 +1086,6 @@ function evaluateMetric(kr) {
     out.link = examplesRepoUrl(); out.source = "GitHub, examples repo"; out.origin = originFor(m, originContext(null));
     if (n == null) { out.note = "Not collected yet; the next metrics run adds it."; return out; }
     Object.assign(out, { current: n, target: m.target, progress: m.target ? Math.min(100, Math.round((100 * n) / m.target)) : null, unit: "example folders" });
-    return out;
-  }
-  if (m.kind === "quarterGrowth") {
-    const first = METRICS.since || Object.values(D[m.series] || {}).flatMap((x) => Object.keys(x)).sort()[0] || null, today = new Date().toISOString().slice(0, 10);
-    const q = quarterOf(today), [qFrom, qTo] = quarterBounds(q);
-    const prevQ = previousQuarter(q), [pFrom, pTo] = quarterBounds(prevQ);
-    const cur = sumSeries(D[m.series], qFrom, qTo);
-    out.current = cur; out.unit = `so far in ${q}`; out.link = "./?page=dashboard&range=monthly";
-    out.origin = originFor(m, originContext(null));
-    if (!first || first > pFrom) {
-      const firstFull = first && first === quarterBounds(quarterOf(first))[0] ? quarterOf(first) : nextQuarter(quarterOf(first || today));
-      out.note = `Needs a full previous quarter of data. Data starts ${first || "today"}; the first full quarter is ${firstFull}, so the comparison becomes possible in ${nextQuarter(firstFull)}.`;
-      out.target = `+${m.targetPct}% vs ${prevQ}`; return out;
-    }
-    const prev = sumSeries(D[m.series], pFrom, pTo);
-    const goal = Math.ceil(prev * (1 + m.targetPct / 100));
-    Object.assign(out, { target: `${goal} (+${m.targetPct}% vs ${prev} in ${prevQ})`, progress: goal ? Math.min(100, Math.round((100 * cur) / goal)) : null });
     return out;
   }
   if (m.kind === "seriesTotal") {

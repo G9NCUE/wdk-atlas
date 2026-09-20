@@ -92,7 +92,8 @@ audit:
 #   be recomputed from npm, GitHub or this file is not a key result here.
 #   kinds: share (field over a scope: published packages or first-party wallets; fields stable, audits, ci, signer),
 #   average (field health over a scope, target %), count (source thirdPartyModules | privateRepos | examples, target),
-#   quarterGrowth (series, targetPct: growth vs the previous calendar quarter), issueResponse (withinHours, target %).
+#   seriesTotal (series, days, target: a count over a rolling window), issueResponse (withinHours, target %),
+#   currency (target: share of chosen installs on the latest release).
 # Rewritten 2026-09-13 from the Q3 2026 OKR sheet so every result is public and checkable; pending review.
 northStars:
   # A published audit, green CI and the shared signer interface were key results here until
