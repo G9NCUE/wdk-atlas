@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Gates M1 to M10 from the measurement specification: do the numbers Atlas publishes mean
+// Gates M1 to M11 from the measurement specification: do the numbers Atlas publishes mean
 // what they appear to mean?
 //
 // Three results, never two. A gate that runs and finds the condition false is a fail. A gate
@@ -35,7 +35,7 @@ export const callSites = (src, name) =>
 /** Registry ids named at a render site, through the one helper pages are allowed to use. */
 export const referencedIds = (src) => [...src.matchAll(/defFor\("([a-z0-9-]+)"\)/g)].map((m) => m[1]);
 
-/** The balanced argument list of the first call to `name(` in src, or null. */
+/** From `marker` to the close of the bracket it opens, marker included, or null. */
 export function balancedBlock(src, marker) {
   const at = src.indexOf(marker);
   if (at < 0) return null;
@@ -50,16 +50,24 @@ export function balancedBlock(src, marker) {
 
 // ---- M1 ---------------------------------------------------------------------------------
 // A figure on a page with no entry behind it is a number nobody has had to justify.
+export const renderSites = (src) =>
+  src.split("\n").filter((l) => /\b(statTile|chartCard)\(/.test(l) && !/^\s*(export\s+)?function\s/.test(l));
+
 function m1() {
-  const sites = callSites(APP, "statTile") + callSites(APP, "chartCard");
-  if (!sites) return notRun("found no tile or chart call sites in app.js; the parser needs updating");
-  const ids = referencedIds(APP);
-  if (!ids.length) return fail(`0 of ${sites} rendered figures name a registry id`, "no page reads the registry yet");
+  // Per site, not per occurrence. Counting ids across the whole file and comparing the total
+  // against the number of sites let a figure lose its id entirely as long as another figure
+  // named one twice: the real page had four occurrences of that slack, so four tiles could
+  // have gone unregistered with the gate still green.
+  const sites = renderSites(APP);
+  if (!sites.length) return notRun("found no tile or chart call sites in app.js; the parser needs updating");
+  const named = sites.filter((l) => /defFor\("[a-z0-9-]+"\)/.test(l));
   const known = new Set(METRICS.map((m) => m.id));
-  const unknown = [...new Set(ids)].filter((id) => !known.has(id));
+  const unknown = [...new Set(referencedIds(APP))].filter((id) => !known.has(id));
   if (unknown.length) return fail(`ids with no registry entry: ${unknown.join(", ")}`);
-  if (ids.length < sites) return fail(`${ids.length} of ${sites} rendered figures name a registry id`);
-  return pass(`${sites} rendered figures, all named and all registered`);
+  if (named.length < sites.length) {
+    return fail(`${named.length} of ${sites.length} rendered figures name a registry id`, named.length ? undefined : "no page reads the registry yet");
+  }
+  return pass(`${sites.length} rendered figures, each naming a registered id`);
 }
 
 // ---- M2 ---------------------------------------------------------------------------------
@@ -89,7 +97,8 @@ function m3() {
 // 53% of WDK download volume is the dependency graph echoing. Published whole, it misleads.
 function m4() {
   const publishesDownloads = /npm downloads/.test(APP);
-  if (!publishesDownloads) return pass("no download figure is published");
+  // Triggered by a label in app.js, so a rename would silence it. Absence is "not run".
+  if (!publishesDownloads) return notRun("found no download figure in app.js; the parser needs updating");
   const ids = new Set(referencedIds(APP));
   const have = ["downloads-direct", "downloads-induced"].filter((id) => ids.has(id));
   return have.length === 2
@@ -113,7 +122,7 @@ export function pillSites(src) {
 
 function m5() {
   const { total, named, ids } = pillSites(APP);
-  if (!total) return pass("no percentage change is shown anywhere");
+  if (!total) return notRun("found no change indicator in app.js; the parser needs updating");
   const guardInHelper = /const pct = [^;]*mayShowChange\(/.test(APP);
   const known = new Set(METRICS.map((m) => m.id));
   const unknown = [...new Set(ids)].filter((id) => !known.has(id));
@@ -139,12 +148,16 @@ function m6() {
 // "Recompute it yourself" is only true if the definition travels with the data.
 function m7() {
   const hasCsv = /text\/csv/.test(APP);
-  const hasJson = /application\/json/.test(APP) && /Blob|createObjectURL|download/.test(APP);
+  // Blob and createObjectURL each appear once and do the real work. "download" was a third
+  // alternative here and was free: it is also a metric id, so it matches 26 times.
+  const hasJson = /application\/json/.test(APP) && /Blob|createObjectURL/.test(APP);
   if (!hasCsv && !hasJson) return fail("no chart or table offers an export");
   if (!hasCsv || !hasJson) return fail(`export offers ${hasCsv ? "CSV" : "JSON"} only`);
-  return /definition/.test(APP)
-    ? pass("exports carry the definition")
-    : fail("exports exist but carry no definition");
+  // Whether the definition travels inside the file is settled by test/export.test.mjs, which
+  // builds one and reads it back. Asserting it here by grepping app.js for the word was free:
+  // the word occurs eight times for unrelated reasons, so the clause passed over a gutted
+  // export.
+  return pass("every chart and table offers CSV and JSON");
 }
 
 // ---- M8 ---------------------------------------------------------------------------------
@@ -214,7 +227,7 @@ const GATES = [
   { id: "M4", what: "downloads are published with their direct and induced parts", run: m4 },
   { id: "M5", what: "no percentage change is shown below the entry's floor", run: m5 },
   { id: "M6", what: "demoted metrics do not appear in the tile row", run: m6 },
-  { id: "M7", what: "every chart and table exports CSV and JSON, carrying the definition", run: m7 },
+  { id: "M7", what: "every chart and table exports CSV and JSON", run: m7 },
   { id: "M8", what: "the collector writes version currency for every published package", run: m8 },
   { id: "M9", what: "pages stay inside their compressed weight budget", run: m9 },
   { id: "M10", what: "every figure carries its collection date and window", run: m10 },

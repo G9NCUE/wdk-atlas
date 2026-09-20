@@ -136,17 +136,16 @@ function writeOut(file) {
   writeFileSync(SUMMARY_OUT, JSON.stringify(summarise(file)) + "\n");
 }
 
-// The registry, asked politely: three tries with a widening pause, then give up on this one
-// package rather than on the run. Used for the per-version call, which is the only one made
-// once per package on top of the rest and so the first to be rate limited.
-async function npmSoft(url, attempt = 0) {
+// Give up on one package rather than on the run. Used for the per-version call, the only one
+// made once per package on top of the rest and so the first to be rate limited.
+//
+// The retrying is npmJson's: five attempts with a widening pause. This used to add three more
+// rounds of those five on top, which by the time it ran meant the registry had already refused
+// a package fifteen times, and the comment here claimed the three tries were the whole of it.
+async function npmSoft(url) {
   try {
     return await npmJson(url);
-  } catch (e) {
-    if (attempt < 2 && /\b(429|5\d\d)\b/.test(String(e.message))) {
-      await sleep(1500 * (attempt + 1));
-      return npmSoft(url, attempt + 1);
-    }
+  } catch {
     softFailures.push(url.split("/").slice(-2)[0]);
     return null;
   }
