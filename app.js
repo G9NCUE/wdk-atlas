@@ -1,3 +1,6 @@
+// Calendar arithmetic lives in lib/quarters.mjs so Node can test it without a DOM.
+import { quarterOf, quarterBounds, nextQuarter, previousQuarter, sumSeries } from "./lib/quarters.mjs";
+
 // WDK Atlas — one page per section of atlas.yaml, rendered in the browser with no build step.
 //
 // Data: atlas.yaml (modules, sections, north stars with key results, roadmap) and data/metrics.json
@@ -882,10 +885,6 @@ async function loadMetrics() {
   } catch { METRICS = null; }
   return METRICS;
 }
-const quarterOf = (dayStr) => `${dayStr.slice(0, 4)}Q${Math.floor((Number(dayStr.slice(5, 7)) - 1) / 3) + 1}`;
-const sumSeries = (perRepo, from, to) => { let n = 0; for (const days of Object.values(perRepo || {})) for (const [d, v] of Object.entries(days)) if (d >= from && d < to) n += v; return n; };
-const nextQuarter = (q) => (q.endsWith("Q4") ? `${Number(q.slice(0, 4)) + 1}Q1` : `${q.slice(0, 4)}Q${Number(q.slice(5)) + 1}`);
-const quarterBounds = (q) => { const y = Number(q.slice(0, 4)), i = Number(q.slice(5)); const m = (i - 1) * 3; const from = `${y}-${String(m + 1).padStart(2, "0")}-01`; const to = m + 3 > 11 ? `${y + 1}-01-01` : `${y}-${String(m + 4).padStart(2, "0")}-01`; return [from, to]; };
 
 // Scopes and facts the release-readiness key results read. All from the metrics file or the atlas.
 const isStableVersion = (v) => Boolean(v) && !/-(alpha|beta|rc|next|canary|dev|pre)/i.test(v);
@@ -948,7 +947,7 @@ function evaluateMetric(kr) {
   if (m.kind === "quarterGrowth") {
     const first = METRICS.since || Object.values(D[m.series] || {}).flatMap((x) => Object.keys(x)).sort()[0] || null, today = new Date().toISOString().slice(0, 10);
     const q = quarterOf(today), [qFrom, qTo] = quarterBounds(q);
-    const prevQ = `${qFrom.slice(0, 4) - (q.endsWith("Q1") ? 1 : 0)}Q${q.endsWith("Q1") ? 4 : Number(q.slice(5)) - 1}`, [pFrom, pTo] = quarterBounds(prevQ);
+    const prevQ = previousQuarter(q), [pFrom, pTo] = quarterBounds(prevQ);
     const cur = sumSeries(D[m.series], qFrom, qTo);
     out.current = cur; out.unit = `so far in ${q}`; out.link = "./?page=dashboard&range=monthly";
     if (!first || first > pFrom) {
