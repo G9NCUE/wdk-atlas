@@ -98,27 +98,26 @@
   --module-width: 196px;
 }
 
-* {
-  box-sizing: border-box;
-}
-
-html {
-  color-scheme: dark;
-}
-
-html,
-body {
-  margin: 0;
-}
-
-body {
-  background-color: var(--bg);
+/* Everything Atlas paints lives under one of these two roots: the site's own body, or the
+   frame Atlas builds for itself inside a host page. Nothing below reaches a host's own
+   elements. The rules that do belong to a whole page, the box model, the colour scheme and
+   the body reset, are in page.css, which only index.html loads. */
+body,
+.wdk-atlas-embed {
   color: var(--ink);
   font-family: var(--font-sans);
   font-size: 15px;
   line-height: 20px;
   -webkit-font-smoothing: antialiased;
 }
+
+.wdk-atlas-embed,
+.wdk-atlas-embed *,
+.wdk-atlas-embed *::before,
+.wdk-atlas-embed *::after {
+  box-sizing: border-box;
+}
+
 
 .site-header {
   display: flex;
@@ -254,14 +253,14 @@ main:focus {
   border: 0;
 }
 
-body.page-dashboard .pending-toggle,
-body.page-dashboard .legend,
-body.page-results .pending-toggle,
-body.page-results .legend,
-body.page-roadmap .pending-toggle,
-body.page-roadmap .legend,
-body.page-overview .pending-toggle,
-body.page-overview .legend {
+.page-dashboard .pending-toggle,
+.page-dashboard .legend,
+.page-results .pending-toggle,
+.page-results .legend,
+.page-roadmap .pending-toggle,
+.page-roadmap .legend,
+.page-overview .pending-toggle,
+.page-overview .legend {
   display: none;
 }
 
@@ -272,11 +271,11 @@ body.page-overview .legend {
   padding: 0 16px;
 }
 
-body.page-roadmap .atlas {
+.page-roadmap .atlas {
   max-width: none;
 }
 
-body.page-roadmap .poster {
+.page-roadmap .poster {
   min-width: 0;
 }
 
@@ -316,17 +315,13 @@ body.page-roadmap .poster {
   background: var(--bg);
 }
 
-body.page-roadmap .site-header {
+.page-roadmap .site-header {
   padding-top: 0;
 }
 
 /* Mission and view switch */
 .roadmap-intro {
   display: flex;
-  /* Wrap rather than push the page wider: the controls carry a search field, three status
-     toggles, a partner filter and a view switch, and below about 900px they cannot sit beside
-     the mission without forcing the whole document to scroll sideways. */
-  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
   gap: 32px;
@@ -903,7 +898,7 @@ details[open] > .star-head .star-title::after {
 .roadmap-children .roadmap-card { padding: 10px; }
 .roadmap-children .roadmap-card-title { font-size: 13px; }
 
-h1 {
+.site-header h1 {
   margin: 0;
   font-family: var(--font-display);
   font-size: 28px;
@@ -2425,7 +2420,7 @@ summary .module-stack {
 
 /* ---- Dashboard: tiles, inline SVG charts, folding sections ------------------------------------ */
 .dash-page { display: flex; flex-direction: column; gap: 28px; padding: 0 16px 40px; }
-body.page-dashboard .atlas { max-width: none; }
+.page-dashboard .atlas { max-width: none; }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 .tile { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); }
@@ -2554,7 +2549,7 @@ body.page-dashboard .atlas { max-width: none; }
 }
 
 /* ---- Overview, the front page ------------------------------------------------------------------ */
-body.page-overview .site-header {
+.page-overview .site-header {
   padding-top: 0;
 }
 
@@ -2717,6 +2712,13 @@ table.ready .owners { white-space: normal; }
    1024 was tried first and the table technically fits there, but the title column gets about
    200px and every result wraps to three lines, which is worse than the stack it replaces. At
    1200 the column has roughly 380px and the table earns its place. */
+/* The controls carry a search field, three status toggles, a partner filter and a view
+   switch. Beside the mission they fit on a wide screen; narrower, they cannot, and without
+   somewhere to wrap to they pushed the whole document sideways instead. */
+@media (max-width: 1199px) {
+  .roadmap-intro { flex-wrap: wrap; }
+}
+
 @media (max-width: 1199px) {
   .kr-line.kr-head { display: none; }
   .kr-line { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
