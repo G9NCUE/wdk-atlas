@@ -25,6 +25,7 @@ const METRIC = {
   quarterGrowth: [["series", "targetPct"], []],
   issueResponse: [["withinHours"], ["target"]],
   currency: [["target"], []],
+  seriesTotal: [["series", "days", "target"], []],
 };
 
 const typeOf = (v) => (Array.isArray(v) ? "array" : v === null ? "null" : typeof v);
