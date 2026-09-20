@@ -24,7 +24,7 @@
 //                audits: { repo: true when an audit folder or file sits at the repo root },
 //                signer: { repo: true when the code references ISigner }   (code search; absent when the token cannot search)
 //                examples: number of example folders in the examples repo, dependents: repos outside the org that depend on a WDK package } }
-//   contributors: { repo: [login…] }   current, kept once
+//   contributors: { repo: [sha256(login)…] }   current, kept once; hashed, see the collector
 //   owners: { repo: [handle…] }        from CODEOWNERS, current, kept once
 //   releases: { repo: { "YYYY-MM-DD": version } }   npm publish dates inside the retention window, rewritten each run
 //   atlasUpdated: last commit touching atlas.yaml, from git
@@ -181,7 +181,15 @@ try {
   for (const r of wdkRepos) {
     snap.stars[r.name] = r.stargazers_count;
     snap.forks[r.name] = r.forks_count;
-    contributorsByRepo[r.name] = (await ghAll(`/repos/${ORG}/${r.name}/contributors?anon=0`)).map((u) => u.login).filter((l) => !isBot(l));
+    // Hashed, not named. Each handle is public on its own repository, but a single file
+    // listing every contributor to every repository is a ready-made roster, and that is what
+    // this used to publish. The hash keeps what the dashboard needs, which is only whether two
+    // repositories share a contributor so a selection can be counted without double counting.
+    // It is obfuscation rather than secrecy: anyone can rebuild the list from the commits.
+    contributorsByRepo[r.name] = (await ghAll(`/repos/${ORG}/${r.name}/contributors?anon=0`))
+      .map((u) => u.login)
+      .filter((l) => !isBot(l))
+      .map(hashLogin);
     snap.contributors[r.name] = contributorsByRepo[r.name].length;
     // Key-result sources, all public: the last completed CI run on the default branch, GitHub's community
     // profile, an audit folder or file at the root, and CODEOWNERS for who owns the repo.

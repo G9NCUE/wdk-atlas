@@ -91,5 +91,6 @@ lives somewhere other than beside `app.js`.
 ## Security
 
 The site is static and loads nothing from third parties. The automation behind it runs with the
-least access it can, collects public data only, and never names org members. Please report anything
-you find to the maintainer rather than in an issue.
+least access it can and collects public data only: GitHub handles, which anyone can read off the
+commits in these repositories, and no personal names. Please report anything you find to the
+maintainer rather than in an issue.
