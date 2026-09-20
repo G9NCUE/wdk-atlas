@@ -71,6 +71,23 @@ and screenshot the page at its own size:
 chrome --headless=new --window-size=1200,630 --screenshot=assets/og.png http://localhost:4173/og-source.html
 ```
 
+## Embed it in another site
+
+One script tag. Atlas resolves its data against its own location, builds the few elements it
+needs if the page has none, and fetches the YAML parser itself:
+
+```html
+<link rel="stylesheet" href="https://example.com/atlas/styles.css" />
+<script type="module" src="https://example.com/atlas/app.js"></script>
+```
+
+It renders where the tag sits, or inside an element marked `data-wdk-atlas` if there is one.
+`page.css` is not loaded: it holds the rules for a whole page, so a host keeps its own box
+model, colour scheme, background and typography. Add `?base=` to the script URL if the data
+lives somewhere other than beside `app.js`.
+
+`examples/embed.html` is a working page in another directory.
+
 ## Security
 
 The site is static and loads nothing from third parties. The automation behind it runs with the
