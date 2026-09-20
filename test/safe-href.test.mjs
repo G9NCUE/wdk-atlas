@@ -1,7 +1,8 @@
-// app.js is still one classic browser script, so it cannot be imported here yet. Until it is
-// split into modules, the test lifts the function out of the source and runs it. The regex
-// fails loudly if the function is renamed or reshaped, which is the behaviour we want: a test
-// that quietly stops testing is worse than one that breaks.
+// app.js is a module, but importing it runs it: it mounts its markup and reaches for document
+// on the way down, so Node cannot hold it. Until safeHref moves to lib/ the test lifts the
+// function out of the source and runs it. The regex fails loudly if the function is renamed or
+// reshaped, which is the behaviour we want: a test that quietly stops testing is worse than
+// one that breaks.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

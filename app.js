@@ -37,7 +37,6 @@ const dataUrl = (path) => {
   if (ASSET_V) url.searchParams.set("v", ASSET_V);
   return url.href;
 };
-const versioned = dataUrl;
 
 // Atlas expects a small set of elements to exist. index.html provides them. Anywhere else,
 // it builds them itself, inside the element marked data-wdk-atlas or at the end of the body,
@@ -47,7 +46,7 @@ const versioned = dataUrl;
 //
 // This runs before anything below reads those elements, which is why it sits at the top.
 function mount(host = document.querySelector("[data-wdk-atlas]") || document.body) {
-  if (document.querySelector("#poster")) return false; // the full site: nothing to build
+  if (document.querySelector("#poster")) return; // the full site: nothing to build
   const frame = document.createElement("div");
   frame.className = "wdk-atlas-embed";
   const make = (tag, attrs) => {
@@ -63,13 +62,15 @@ function mount(host = document.querySelector("[data-wdk-atlas]") || document.bod
     header,
     make("p", { id: "error", class: "error", hidden: "" }),
     make("div", { id: "poster", class: "poster", hidden: "" }),
-    make("aside", { id: "drawer", class: "drawer", role: "dialog", "aria-labelledby": "drawer-title", hidden: "" }),
+    make("aside", { id: "drawer", class: "drawer", role: "dialog", "aria-labelledby": "drawer-title", tabindex: "-1", hidden: "" }),
     make("footer", { id: "site-foot", class: "site-foot", hidden: "" }),
   );
   host.append(frame);
-  return true;
 }
-const EMBEDDED = mount();
+mount();
+// Whether Atlas built its own frame, which means it is a guest on somebody else's page. The
+// address bar then belongs to the host, so none of the filter state below is written to it.
+const EMBEDDED = Boolean(document.querySelector(".wdk-atlas-embed"));
 
 const poster = document.querySelector("#poster");
 const drawer = document.querySelector("#drawer");
@@ -79,7 +80,41 @@ let atlas = null;
 let openId = null;
 // The overview is the front page; the map lives at ?page=map ("main" kept as an alias for old links).
 const PAGES = new Set(["overview", "roadmap", "results", "dashboard", "map", "dev"]);
-const page = (() => { const p = new URLSearchParams(location.search).get("page") || "overview"; const q = p === "main" ? "map" : p; return PAGES.has(q) ? q : "overview"; })();
+// An unknown page used to render the Overview under the address that was asked for, so a link
+// gone stale looked like it had worked and the reader was quietly given a different page.
+const askedFor = new URLSearchParams(location.search).get("page") || "overview";
+const page = (() => { const q = askedFor === "main" ? "map" : askedFor; return PAGES.has(q) ? q : "notfound"; })();
+
+// Every filter that belongs in the address goes through here, so a link opens the way the
+// sender left it. null deletes its parameter, keeping an unfiltered page on a plain address;
+// an empty string is written, because "no repositories" is a state and "all" is the default.
+// replaceState, not push: ten keystrokes should not be ten presses of the back button.
+function setUrlParams(changes) {
+  if (EMBEDDED) return; // the host owns its address bar
+  const params = new URLSearchParams(location.search);
+  for (const [key, value] of Object.entries(changes)) {
+    if (value == null) params.delete(key);
+    else params.set(key, value);
+  }
+  const qs = params.toString();
+  history.replaceState(null, "", `${location.pathname}${qs ? "?" + qs : ""}${location.hash}`);
+  refreshStateLinks();
+}
+
+// Links that carry the state forward: the timeline/backlog pair and the granularity switch.
+// Both are built from location.search, so they go stale when a filter moves.
+function refreshStateLinks() {
+  for (const a of poster.querySelectorAll(".view-toggle a[data-view]")) a.href = viewHref(a.dataset.view);
+  for (const a of poster.querySelectorAll(".view-toggle a[data-grain]")) a.href = grainHref(a.dataset.grain);
+}
+
+// On the site this marks the body; embedded it marks Atlas's own frame, so a host page does not
+// end up wearing a class that belongs to us. The stylesheet matches either.
+//
+// Set here rather than in renderPoster, which does not run until atlas.yaml has been fetched and
+// parsed. Until then no page class existed, so the stylesheet could not tell the pages apart and
+// the header showed its most furnished state on all of them for as long as the fetch took.
+(document.querySelector(".wdk-atlas-embed") || document.body).classList.add(`page-${page}`);
 
 function showError(message) {
   errorEl.hidden = false;
@@ -807,13 +842,23 @@ function wireRail() {
 }
 
 // Column filter on the grid: one chain at a time, click again to clear.
-function toggleColumn(th) {
+function toggleColumn(th, { write = true } = {}) {
   const grid = th.closest(".matrix");
   const col = th.getAttribute("data-col");
   const on = th.getAttribute("aria-pressed") !== "true";
   for (const other of grid.querySelectorAll(".mx-th")) other.setAttribute("aria-pressed", other === th && on ? "true" : "false");
   grid.classList.toggle("is-filtered", on);
   for (const cell of grid.querySelectorAll("[data-col]")) cell.classList.toggle("is-off", on && cell.getAttribute("data-col") !== col);
+  if (write) setUrlParams({ chain: on ? col : null });
+}
+
+// A map opened at ?chain=solana shows that column filtered. Applied once the grid exists, and
+// without writing back the address it came from.
+function applyChainFromUrl() {
+  const wanted = new URLSearchParams(location.search).get("chain");
+  if (!wanted) return;
+  const th = poster.querySelector(`.mx-th[data-col="${CSS.escape(wanted)}"]`);
+  if (th) toggleColumn(th, { write: false });
 }
 
 function moduleChip(ref) {
@@ -977,14 +1022,19 @@ function loadMetrics() {
 // metrics file to read them. data/summary.json carries the same four in about a kilobyte, and
 // falls back to the full file if it is missing, so an older deployment still works.
 let SUMMARY = null;
-async function loadSummary() {
-  if (SUMMARY) return SUMMARY;
-  try {
-    const res = await fetch(dataUrl("data/summary.json"), { cache: "no-cache" });
-    if (res.ok) { SUMMARY = await res.json(); return SUMMARY; }
-  } catch { /* fall through to the full file */ }
-  SUMMARY = await loadMetrics();
-  return SUMMARY;
+// The fetch in flight is remembered here too, and for the same reason as above: the Developer
+// Resources page asks for the summary to name the package while the freshness stamp asks for it
+// again, and holding only the result fetched the file twice on every visit.
+let SUMMARY_FETCH = null;
+function loadSummary() {
+  if (SUMMARY) return Promise.resolve(SUMMARY);
+  if (!SUMMARY_FETCH) {
+    SUMMARY_FETCH = fetch(dataUrl("data/summary.json"), { cache: "no-cache" })
+      .then((res) => (res.ok ? res.json() : loadMetrics()))
+      .catch(() => loadMetrics()) // the summary is missing on an older deployment; the full file still has it
+      .then((file) => { SUMMARY = file; SUMMARY_FETCH = null; return file; });
+  }
+  return SUMMARY_FETCH;
 }
 
 // Scopes and facts the release-readiness key results read. All from the metrics file or the atlas.
@@ -1244,13 +1294,10 @@ const filterNarrowed = () => filter.statuses.size < STATUSES.length || filter.pa
 
 // Write the current filters into the address bar so a filtered roadmap can be shared, and keep the view links in step.
 function syncFilterUrl() {
-  const params = new URLSearchParams(location.search);
-  if (filter.statuses.size === STATUSES.length) params.delete("status");
-  else params.set("status", STATUSES.filter((s) => filter.statuses.has(s)).join(","));
-  if (filter.partners) params.set("partners", "1"); else params.delete("partners");
-  const qs = params.toString();
-  history.replaceState(null, "", `${location.pathname}${qs ? "?" + qs : ""}${location.hash}`);
-  for (const a of poster.querySelectorAll(".view-toggle a")) a.href = viewHref(a.dataset.view);
+  setUrlParams({
+    status: filter.statuses.size === STATUSES.length ? null : STATUSES.filter((s) => filter.statuses.has(s)).join(","),
+    partners: filter.partners ? "1" : null,
+  });
 }
 
 function renderSearch(apply = applyFilters, what = "initiatives") {
@@ -1261,6 +1308,8 @@ function renderSearch(apply = applyFilters, what = "initiatives") {
     filter.query = input.value;
     filter.count = count;
     apply(input.value, count);
+    // ?q= was read on load and never written, so a shareable search had to be built by hand.
+    setUrlParams({ q: input.value.trim() || null });
   };
   input.addEventListener("input", run);
   // ?q= prefills the search, so a filtered view can be shared as a link.
@@ -1774,8 +1823,8 @@ function snapshotSeries(snapshots, field, selected, reduce = (vals) => vals.redu
 }
 
 function readSelection(all) {
-  const fromUrl = params.get("repos");
-  if (fromUrl) { const set = new Set(fromUrl.split(",")); return all.filter((r) => set.has(r)); }
+  // has(), not get(): an empty ?repos= means nothing selected, which is a state a link carries.
+  if (params.has("repos")) { const set = new Set((params.get("repos") || "").split(",").filter(Boolean)); return all.filter((r) => set.has(r)); }
   try { const saved = JSON.parse(localStorage.getItem(SEL_KEY) || "null"); if (Array.isArray(saved) && saved.length) return all.filter((r) => saved.includes(r)); } catch {}
   return all;
 }
@@ -1792,8 +1841,10 @@ function monthlyReady(file) {
   const done = new Date(Date.UTC(firstFull.getUTCFullYear(), firstFull.getUTCMonth() + 1, 1));
   return new Date().toISOString().slice(0, 10) >= done.toISOString().slice(0, 10);
 }
+const grainHref = (id) => { const u = new URLSearchParams(location.search); u.set("page", "dashboard"); u.set("range", id); return `./?${u}`; };
+
 function renderGrainSwitch(file) {
-  const link = (id) => { const u = new URLSearchParams(location.search); u.set("page", "dashboard"); u.set("range", id); return el("a", { href: `./?${u}`, "aria-current": grain === id ? "page" : null }, GRAINS[id]); };
+  const link = (id) => el("a", { href: grainHref(id), "data-grain": id, "aria-current": grain === id ? "page" : null }, GRAINS[id]);
   const ids = Object.keys(GRAINS).filter((id) => id !== "monthly" || grain === "monthly" || monthlyReady(file));
   return el("nav", { class: "view-toggle", "aria-label": "Granularity" }, ids.map(link));
 }
@@ -1813,6 +1864,9 @@ function renderRepoPanel(file, selected, onChange) {
     const chosen = all.filter((n) => boxes.get(n).checked);
     count.textContent = `${chosen.length}/${all.length}`;
     saveSelection(chosen, all);
+    // Read from the address but never written to it, so a dashboard link used to show the
+    // recipient a different set of repositories.
+    setUrlParams({ repos: chosen.length === all.length ? null : chosen.join(",") });
     onChange(chosen);
   };
   const list = el("div", { class: "repo-groups" }, groups.map(([id, names]) =>
@@ -2075,6 +2129,22 @@ const pageHeadings = {
     title: "Key results",
     subtitle: "What each north star is measured by.",
   },
+  notfound: {
+    title: "Page not found",
+    subtitle: "",
+  },
+};
+
+// What a search result or a pasted link shows. All six pages shipped index.html's one
+// description, so every link previewed as the front page whatever it led to.
+const pageDescriptions = {
+  overview: "Where WDK stands: three north stars, this quarter, and the headline numbers, recomputed from npm and GitHub.",
+  roadmap: "Every WDK initiative on one quarter timeline, by north star, with what is late and what needs a partner.",
+  results: "What each WDK north star is measured by, what is not measured, and the public source behind each figure.",
+  dashboard: "Public WDK adoption, community and support numbers, collected daily from npm and GitHub.",
+  map: "Every WDK package as a stack, from the app down to the chains, with its state and chain coverage.",
+  dev: "How to start building with WDK: the package to install, the reference apps, and the examples.",
+  notfound: "This address does not name a page of the WDK Atlas.",
 };
 
 // ---- Overview: the front page. What WDK is, where each north star stands, this quarter, the headline
@@ -2203,6 +2273,28 @@ function renderFreshness(file) {
 // renderPoster picks the page; the drawer is shared by the map and the developer page.
 // ==========================================================================================================
 
+// A reader who landed on a wrong address needs the list of pages, not an apology. The six are
+// the six; nothing here is read from the data.
+const PAGE_LINKS = [
+  ["./", "Overview", "Where WDK stands, in 60 seconds"],
+  ["./?page=roadmap", "Roadmap", "What is next, and what is late"],
+  ["./?page=results", "Key results", "What is measured, and what is not"],
+  ["./?page=dashboard", "Dashboard", "The numbers, and where they come from"],
+  ["./?page=map", "WDK Visual Map", "What exists, on which chain, in what state"],
+  ["./?page=dev", "Developer Resources", "How to start building"],
+];
+
+function renderNotFound() {
+  return el(
+    "section",
+    { class: "notfound" },
+    el("h2", { class: "mission-text" }, "There is no page at this address."),
+    el("p", { class: "meta" }, "The link asked for ", el("code", null, `?page=${String(askedFor).slice(0, 60)}`), ". Atlas has six pages:"),
+    el("ul", { class: "notfound-list" }, PAGE_LINKS.map(([href, label, blurb]) =>
+      el("li", null, el("a", { href }, label), el("span", { class: "meta" }, blurb))))
+  );
+}
+
 function renderPoster() {
   const heading = pageHeadings[page] || pageHeadings.main;
   const title = document.querySelector("#title");
@@ -2212,12 +2304,17 @@ function renderPoster() {
   // Six pages once shared one tab title, so browser history and a pasted link said nothing
   // about where they led.
   document.title = `${heading.title} · WDK Atlas`;
-  // On the site this marks the body; embedded it marks Atlas's own frame, so a host page does
-  // not end up wearing a class that belongs to us. The stylesheet matches either.
-  (document.querySelector(".wdk-atlas-embed") || document.body).classList.add(`page-${page}`);
+  const description = document.querySelector('meta[name="description"]');
+  if (description && pageDescriptions[page]) description.setAttribute("content", pageDescriptions[page]);
 
   for (const link of document.querySelectorAll(".nav a")) {
     link.toggleAttribute("aria-current", link.getAttribute("data-page") === page);
+  }
+
+  if (page === "notfound") {
+    poster.replaceChildren(el("div", { class: "atlas" }, renderNotFound()));
+    poster.hidden = false;
+    return;
   }
 
   if (page === "overview") {
@@ -2250,6 +2347,7 @@ function renderPoster() {
   if (page === "map") {
     poster.replaceChildren(el("div", { class: "atlas" }, renderCrossSection(onPage)));
     poster.hidden = false;
+    applyChainFromUrl();
     return;
   }
   const sections = el("div", { class: "sections" });
@@ -2324,9 +2422,24 @@ function renderStartHere(data) {
 
 let openAnchor = null;
 
+// Below this width a popover anchored to a chip covers the chip. The same content becomes a
+// sheet along the bottom edge instead.
+const SHEET_WIDTH = 720;
+const wantsSheet = () => window.matchMedia(`(max-width: ${SHEET_WIDTH - 1}px)`).matches;
+
 // The details open as a popover under the module that was clicked, kept inside the viewport width.
 function placeDrawer() {
   if (drawer.hidden || !openAnchor || !openAnchor.isConnected) return;
+  // The stylesheet places the sheet, so the inline geometry from a wider viewport has to go:
+  // an inline width beats a class, and the sheet would keep the popover's 360px.
+  if (wantsSheet()) {
+    drawer.classList.add("is-sheet");
+    drawer.style.removeProperty("width");
+    drawer.style.removeProperty("left");
+    drawer.style.removeProperty("top");
+    return;
+  }
+  drawer.classList.remove("is-sheet");
   const rect = openAnchor.getBoundingClientRect();
   const viewport = document.documentElement.clientWidth;
   const width = Math.min(360, viewport - 24);
@@ -2337,6 +2450,9 @@ function placeDrawer() {
 }
 
 function closeDrawer() {
+  // Where the reader was before the drawer took the focus. Only taken back if the drawer still
+  // holds it: closing by clicking somewhere else must not drag them away from what they clicked.
+  const returnTo = drawer.contains(document.activeElement) ? openAnchor : null;
   openId = null;
   openAnchor = null;
   updateActiveBand();
@@ -2347,7 +2463,8 @@ function closeDrawer() {
     node.setAttribute("aria-expanded", "false");
   }
   applyRelated(null);
-  if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+  if (returnTo && returnTo.isConnected) returnTo.focus();
+  if (!EMBEDDED && location.hash) history.replaceState(null, "", location.pathname + location.search);
 }
 
 function sectionMeta(item) {
@@ -2448,8 +2565,14 @@ function openDrawer(id, anchor) {
   if (section && !anchor.closest("summary")) section.open = true;
   placeDrawer();
   scrollTo(drawer, { block: "nearest" });
+  // The role announced a dialog while the focus stayed on the chip behind it, so a screen
+  // reader never read a word of what opened. The drawer takes it, not the close button, so
+  // that its title is read first.
+  drawer.focus({ preventScroll: true });
 
-  if (location.hash !== `#${id}`) history.replaceState(null, "", `#${id}`);
+  // Same rule as setUrlParams: on a host page a #wdk-wallet we wrote could collide with the
+  // host's own anchors, or move it. The drawer is open either way; only the address is spared.
+  if (!EMBEDDED && location.hash !== `#${id}`) history.replaceState(null, "", `#${id}`);
 }
 
 function onPosterClick(event) {
@@ -2491,7 +2614,7 @@ function onDrawerClick(event) {
 }
 
 async function loadAtlas() {
-  const response = await fetch(versioned("atlas.yaml"));
+  const response = await fetch(dataUrl("atlas.yaml"));
   if (!response.ok) {
     throw new Error(`Could not load atlas.yaml (${response.status}).`);
   }
@@ -2534,7 +2657,7 @@ async function main() {
   if (page === "roadmap" || page === "results") await loadMetrics();
   renderPoster();
   // A page that needs nothing else reads the small file instead of the large one.
-  const needsFullMetrics = !["map", "dev"].includes(page);
+  const needsFullMetrics = !["map", "dev", "notfound"].includes(page);
   (needsFullMetrics ? loadMetrics() : loadSummary()).then(renderFreshness);
   // Site furniture an embedding page does not get: each is wired only if it is there.
   const togglePending = document.querySelector("#toggle-pending");
@@ -2547,7 +2670,18 @@ async function main() {
       }
     }
   }
-  if (togglePending) togglePending.addEventListener("change", applyToggles);
+  if (togglePending) {
+    // This hides everything unshipped, which changes what the page says more than any other
+    // control, and was the one piece of state a link could not carry.
+    if (new URLSearchParams(location.search).get("planned") === "0") {
+      togglePending.checked = false;
+      applyToggles();
+    }
+    togglePending.addEventListener("change", () => {
+      applyToggles();
+      setUrlParams({ planned: togglePending.checked ? null : "0" });
+    });
+  }
 
   if (page === "map" || page === "dev") {
     const side = document.querySelector(".header-side");
