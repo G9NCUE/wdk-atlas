@@ -56,6 +56,25 @@ function el(tag, attrs, ...children) {
   return node;
 }
 
+// The same helper for SVG, which needs its own namespace and takes every attribute through
+// setAttribute. Charts are built with this rather than assembled as markup, so no string from
+// the data is ever parsed as HTML and no escaping has to be remembered.
+const SVG_NS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs, ...children) {
+  const node = document.createElementNS(SVG_NS, tag);
+  if (attrs) {
+    for (const [key, value] of Object.entries(attrs)) {
+      if (value == null || value === false) continue;
+      node.setAttribute(key, value === true ? "" : value);
+    }
+  }
+  for (const child of children.flat(2)) {
+    if (child == null || child === false) continue;
+    node.append(child.nodeType ? child : document.createTextNode(child));
+  }
+  return node;
+}
+
 function itemById(id) {
   return (
     atlas.modules.find((module) => module.id === id) ||
@@ -1346,8 +1365,6 @@ function renderResults() {
 // ==========================================================================================================
 
 const SERIES = ["#3987e5", "#199e70", "#c98500"]; // categorical, fixed order, validated for the dark surface
-// The charts are SVG strings; every label that came from data goes through this first.
-const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const fmtNum = (n) => (n == null ? "—" : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${Math.round(n / 1e3)}K` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(n));
 
 function deltaPill(now, before, { invert = false, note = "" } = {}) {
@@ -1389,15 +1406,31 @@ function lineChart(points, { color = SERIES[0], height = 160, unit = "", marks =
   const x = (i) => px + (i * (W - 2 * px)) / Math.max(points.length - 1, 1);
   const y = (v) => H - py - ((v - min) * (H - 2 * py)) / (max - min || 1);
   const d = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.y).toFixed(1)}`).join(" ");
-  const svg = `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="line chart">
-    ${[0, 0.5, 1].map((t) => `<line class="grid" x1="${px}" x2="${W - px}" y1="${y(max * t).toFixed(1)}" y2="${y(max * t).toFixed(1)}"/><text class="axis" x="${px - 6}" y="${(y(max * t) + 4).toFixed(1)}" text-anchor="end">${fmtNum(Math.round(max * t))}</text>`).join("")}
-    <path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
-    ${points.map((p, i) => `<g><circle cx="${x(i).toFixed(1)}" cy="${y(p.y).toFixed(1)}" r="4.5" fill="${color}" stroke="var(--card)" stroke-width="2"/><title>${esc(p.label)}: ${p.y.toLocaleString()}${esc(unit)}</title></g>`).join("")}
-    ${points.map((p, i) => (i === 0 || i === points.length - 1 ? `<text class="dlabel" x="${x(i).toFixed(1)}" y="${(y(p.y) - 10).toFixed(1)}" text-anchor="middle">${fmtNum(p.y)}</text>` : "")).join("")}
-    ${points.map((p, i) => (labelEvery(points.length, i) ? `<text class="axis" x="${x(i).toFixed(1)}" y="${H - 2}" text-anchor="middle">${esc(p.label)}</text>` : "")).join("")}
-    ${points.map((p, i) => { const list = marks && marks.get(p.key); return list && list.length ? `<g class="mark"><path d="M${(x(i) - 3.5).toFixed(1)},${H - py + 3} h7 l-3.5,5 z" fill="var(--muted)"/><title>${list.length} npm release${list.length === 1 ? "" : "s"}: ${esc(list.join(", "))}</title></g>` : ""; }).join("")}
-  </svg>`;
-  const box = el("div", { class: "chart-box" }); box.innerHTML = svg; return box;
+
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart", role: "img", "aria-label": "line chart" },
+    [0, 0.5, 1].flatMap((t) => [
+      svgEl("line", { class: "grid", x1: px, x2: W - px, y1: y(max * t).toFixed(1), y2: y(max * t).toFixed(1) }),
+      svgEl("text", { class: "axis", x: px - 6, y: (y(max * t) + 4).toFixed(1), "text-anchor": "end" }, fmtNum(Math.round(max * t))),
+    ]),
+    svgEl("path", { d, fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round" }),
+    points.map((p, i) => svgEl("g", null,
+      svgEl("circle", { cx: x(i).toFixed(1), cy: y(p.y).toFixed(1), r: 4.5, fill: color, stroke: "var(--card)", "stroke-width": 2 }),
+      svgEl("title", null, `${p.label}: ${p.y.toLocaleString()}${unit}`))),
+    points.map((p, i) => (i === 0 || i === points.length - 1
+      ? svgEl("text", { class: "dlabel", x: x(i).toFixed(1), y: (y(p.y) - 10).toFixed(1), "text-anchor": "middle" }, fmtNum(p.y))
+      : null)),
+    points.map((p, i) => (labelEvery(points.length, i)
+      ? svgEl("text", { class: "axis", x: x(i).toFixed(1), y: H - 2, "text-anchor": "middle" }, p.label)
+      : null)),
+    points.map((p, i) => {
+      const list = marks && marks.get(p.key);
+      if (!list || !list.length) return null;
+      return svgEl("g", { class: "mark" },
+        svgEl("path", { d: `M${(x(i) - 3.5).toFixed(1)},${H - py + 3} h7 l-3.5,5 z`, fill: "var(--muted)" }),
+        svgEl("title", null, `${list.length} npm release${list.length === 1 ? "" : "s"}: ${list.join(", ")}`));
+    }));
+
+  return el("div", { class: "chart-box" }, svg);
 }
 
 // Which npm releases fall in each bucket of the current grain, for the selected repos.
@@ -1417,12 +1450,23 @@ function groupedBars(categories, series, { height = 160 } = {}) {
   const gw = (W - 2 * px) / Math.max(categories.length, 1);
   const bw = Math.min(28, (gw * 0.7) / series.length);
   const y = (v) => H - py - (v * (H - 2 * py)) / max;
-  const svg = `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="bar chart">
-    ${[0, 0.5, 1].map((t) => `<line class="grid" x1="${px}" x2="${W - px}" y1="${y(max * t).toFixed(1)}" y2="${y(max * t).toFixed(1)}"/><text class="axis" x="${px - 6}" y="${(y(max * t) + 4).toFixed(1)}" text-anchor="end">${fmtNum(Math.round(max * t))}</text>`).join("")}
-    ${categories.map((c, ci) => series.map((s, si) => { const v = s.values[ci] || 0; const bx = px + ci * gw + (gw - bw * series.length - 2 * (series.length - 1)) / 2 + si * (bw + 2); return `<g><rect x="${bx.toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, H - py - y(v)).toFixed(1)}" rx="3" fill="${SERIES[si]}"/><title>${esc(c)} · ${esc(s.label)}: ${v}</title></g>`; }).join("")).join("")}
-    ${categories.map((c, ci) => (labelEvery(categories.length, ci) ? `<text class="axis" x="${(px + ci * gw + gw / 2).toFixed(1)}" y="${H - 2}" text-anchor="middle">${esc(c)}</text>` : "")).join("")}
-  </svg>`;
-  const box = el("div", { class: "chart-box" }); box.innerHTML = svg;
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart", role: "img", "aria-label": "bar chart" },
+    [0, 0.5, 1].flatMap((t) => [
+      svgEl("line", { class: "grid", x1: px, x2: W - px, y1: y(max * t).toFixed(1), y2: y(max * t).toFixed(1) }),
+      svgEl("text", { class: "axis", x: px - 6, y: (y(max * t) + 4).toFixed(1), "text-anchor": "end" }, fmtNum(Math.round(max * t))),
+    ]),
+    categories.map((c, ci) => series.map((s, si) => {
+      const v = s.values[ci] || 0;
+      const bx = px + ci * gw + (gw - bw * series.length - 2 * (series.length - 1)) / 2 + si * (bw + 2);
+      return svgEl("g", null,
+        svgEl("rect", { x: bx.toFixed(1), y: y(v).toFixed(1), width: bw.toFixed(1), height: Math.max(0, H - py - y(v)).toFixed(1), rx: 3, fill: SERIES[si] }),
+        svgEl("title", null, `${c} · ${s.label}: ${v}`));
+    })),
+    categories.map((c, ci) => (labelEvery(categories.length, ci)
+      ? svgEl("text", { class: "axis", x: (px + ci * gw + gw / 2).toFixed(1), y: H - 2, "text-anchor": "middle" }, c)
+      : null)));
+
+  const box = el("div", { class: "chart-box" }, svg);
   if (series.length > 1) box.append(el("ul", { class: "legend-row" }, series.map((s, i) => el("li", null, el("i", { style: `background:${SERIES[i]}` }), s.label))));
   return box;
 }
