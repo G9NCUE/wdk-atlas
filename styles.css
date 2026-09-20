@@ -2687,6 +2687,17 @@ table.ready .owners { white-space: normal; }
 @starting-style {
   .has-tip[data-tip]:hover::after, .has-tip[data-tip]:focus-visible::after { opacity: 0; }
 }
+/* Take it away. Quiet until wanted: the numbers are the point of the card, not the buttons. */
+.export { display: flex; gap: 6px; margin-left: auto; }
+.export-btn {
+  padding: 3px 8px; border: 1px solid var(--line); border-radius: var(--radius-control);
+  background: transparent; color: var(--text-muted);
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em; cursor: pointer;
+}
+.export-btn:hover { color: var(--ink); border-color: var(--muted); }
+.export-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ready-tools { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+
 /* Source cell: the public endpoint first, then the copy we counted, then our own page. The
    order is the argument: a reader who wants to check the row should not have to start here. */
 .kr-col-source { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }

@@ -2,6 +2,8 @@
 import { quarterOf, quarterBounds, nextQuarter, previousQuarter, sumSeries } from "./lib/quarters.mjs";
 // Definitions live in lib/metrics-defs.mjs, so the page, the export and the gates read one copy.
 import { metricDef, mayShowChange } from "./lib/metrics-defs.mjs";
+// Building the files a reader takes away; pure, so Node tests them without a DOM.
+import { metricCsv, metricJson, fileName } from "./lib/export.mjs";
 
 // WDK Atlas — one page per section of atlas.yaml, rendered in the browser with no build step.
 //
@@ -1634,9 +1636,37 @@ function hBars(rows, { color = SERIES[0] } = {}) {
     el("span", { class: "hbar-value" }, fmtNum(r.value)))));
 }
 
-function chartCard(def, title, value, delta, body, foot) {
+// Handing a file to the reader. The address is a blob this page built a moment ago from its
+// own data, so it never passes through the link allow-list, which exists to judge addresses
+// that came from somewhere else. It is revoked once the browser has taken it.
+function downloadText(name, mime, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: `${mime};charset=utf-8` }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+// Two buttons, one file each. Both carry the definition, because a column of numbers with no
+// statement of what was counted is the same unfalsifiable claim in another file format.
+function exportControls(def, data) {
+  const meta = { title: data.title, collected: data.collected, scope: data.scope };
+  const make = (label, ext, mime, build) => {
+    const button = el("button", withTip({ class: "export-btn", type: "button" }, `${def.definition}\nSource: ${def.source}\nWindow: ${def.window}`, `Download ${label}`), label);
+    button.addEventListener("click", () => downloadText(fileName(def, meta, ext), mime, build(def, meta, data.columns, data.rows)));
+    return button;
+  };
+  return el("div", { class: "export", role: "group", "aria-label": `Download ${data.title}` },
+    make("CSV", "csv", "text/csv", metricCsv), make("JSON", "json", "application/json", metricJson));
+}
+
+function chartCard(def, title, value, delta, body, foot, data) {
   return el("article", { class: "chart-card" },
-    el("header", { class: "chart-head" }, el("h3", withTip({}, defTip(def), title), title), value != null && el("span", { class: "chart-value" }, value), delta),
+    el("header", { class: "chart-head" }, el("h3", withTip({}, defTip(def), title), title), value != null && el("span", { class: "chart-value" }, value), delta,
+      data && data.rows && data.rows.length ? exportControls(def, { ...data, title: data.title || title }) : null),
     body, foot && el("p", { class: "chart-foot" }, foot));
 }
 
@@ -1823,10 +1853,17 @@ function buildDashboard(file, selected) {
   const byPackage = selected.filter((r) => file.repos[r].package).map((r) => { const pts = seriesBuckets({ [r]: (D.downloads || {})[r] }, [r], { coverage: dlCov }); return { label: unscoped(file.repos[r].package), hint: file.repos[r].title !== r ? file.repos[r].title : "", value: lastTwo(pts).now || 0 }; }).sort((a, b) => b.value - a.value).slice(0, 8);
   const byStars = selected.map((r) => ({ label: r, hint: file.repos[r].title !== r ? file.repos[r].title : "", value: (latest.stars || {})[r] || 0 })).sort((a, b) => b.value - a.value).slice(0, 8);
 
+  // Every export says which day the numbers were collected and how much of the org they cover.
+  const exportMeta = { collected: String(file.updated).slice(0, 10), scope: `${selected.length} of ${Object.keys(file.repos).length} repos` };
+  const series2 = (cats, a, b, ca, cb) => ({ ...exportMeta, columns: ["period", ca, cb], rows: cats.map((c, i) => [c, a[i], b[i]]) });
+
   const adoption = dashSection("Adoption & growth", [
-    chartCard(defFor("downloads"), `npm downloads per ${unit}`, fmtNum(dlLast.now), trendPill("downloads", dl), dl.length ? lineChart(dl, { marks: releaseMarks(file, selected) }) : el("p", { class: "chart-foot" }, coverageNote(dlCov)), "Selected packages summed. npm reports a few days late, so the current period is left out. Ticks mark npm releases; hover for the versions."),
-    chartCard(defFor("downloads"), `Downloads by package, last full ${unit}`, null, null, hBars(byPackage, { color: SERIES[1] }), "Top eight of the selection."),
-    chartCard(defFor("stars"), "Stars by repository", fmtNum(sum(latest.stars)), null, hBars(byStars, { color: SERIES[2] }), "Top eight of the selection."),
+    chartCard(defFor("downloads"), `npm downloads per ${unit}`, fmtNum(dlLast.now), trendPill("downloads", dl), dl.length ? lineChart(dl, { marks: releaseMarks(file, selected) }) : el("p", { class: "chart-foot" }, coverageNote(dlCov)), "Selected packages summed. npm reports a few days late, so the current period is left out. Ticks mark npm releases; hover for the versions.",
+      { ...exportMeta, columns: ["period", "downloads"], rows: dl.map((p) => [p.key, p.y]) }),
+    chartCard(defFor("downloads"), `Downloads by package, last full ${unit}`, null, null, hBars(byPackage, { color: SERIES[1] }), "Top eight of the selection.",
+      { ...exportMeta, columns: ["package", "title", "downloads"], rows: byPackage.map((r) => [r.label, r.hint, r.value]) }),
+    chartCard(defFor("stars"), "Stars by repository", fmtNum(sum(latest.stars)), null, hBars(byStars, { color: SERIES[2] }), "Top eight of the selection.",
+      { ...exportMeta, columns: ["repo", "title", "stars"], rows: byStars.map((r) => [r.label, r.hint, r.value]) }),
   ]);
   // External contributors over the same complete periods the pull request charts show.
   const windowKeys = new Set([...prsO, ...prsM].map((p) => p.key));
@@ -1837,12 +1874,13 @@ function buildDashboard(file, selected) {
     .map(([login, a]) => ({ label: login, hint: `${((file.authors || {})[login] || "").toLowerCase().replace(/_/g, " ")} · ${a.merged} merged`, value: a.opened }));
   const windowLabel = windowKeys.size ? `last ${windowKeys.size} ${unit}${windowKeys.size === 1 ? "" : "s"}` : "no complete period yet";
   const community = dashSection("Community & engagement", [
-    chartCard(defFor("external-authors"), `External contributors, ${windowLabel}`, String(Object.keys(authors).length), null, topAuthors.length ? hBars(topAuthors, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, windowKeys.size ? "No external pull requests in the window." : coverageNote(evCov)), "Top five by pull requests opened over the periods shown; hover for GitHub's label and merges. A teammate or a bot showing up here means the internal list needs a fix."),
-    chartCard(defFor("prs-flow"), `Pull requests per ${unit}`, lastTwo(prsO).now == null ? "—" : String(lastTwo(prsO).now), null, pr.cats.length ? groupedBars(pr.cats, [{ label: "Opened", values: pr.a }, { label: "Merged", values: pr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Complete periods only."),
-    chartCard(defFor("external-prs-merged"), `External pull requests per ${unit}`, lastTwo(xO).now == null ? "—" : String(lastTwo(xO).now), null, xpr.cats.length ? groupedBars(xpr.cats, [{ label: "Opened", values: xpr.a }, { label: "Merged", values: xpr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Authors who are not members or collaborators of the org."),
+    chartCard(defFor("external-authors"), `External contributors, ${windowLabel}`, String(Object.keys(authors).length), null, topAuthors.length ? hBars(topAuthors, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, windowKeys.size ? "No external pull requests in the window." : coverageNote(evCov)), "Top five by pull requests opened over the periods shown; hover for GitHub's label and merges. A teammate or a bot showing up here means the internal list needs a fix.",
+      { ...exportMeta, columns: ["author", "detail", "pull requests opened"], rows: topAuthors.map((r) => [r.label, r.hint, r.value]) }),
+    chartCard(defFor("prs-flow"), `Pull requests per ${unit}`, lastTwo(prsO).now == null ? "—" : String(lastTwo(prsO).now), null, pr.cats.length ? groupedBars(pr.cats, [{ label: "Opened", values: pr.a }, { label: "Merged", values: pr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Complete periods only.", series2(pr.cats, pr.a, pr.b, "opened", "merged")),
+    chartCard(defFor("external-prs-merged"), `External pull requests per ${unit}`, lastTwo(xO).now == null ? "—" : String(lastTwo(xO).now), null, xpr.cats.length ? groupedBars(xpr.cats, [{ label: "Opened", values: xpr.a }, { label: "Merged", values: xpr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Authors who are not members or collaborators of the org.", series2(xpr.cats, xpr.a, xpr.b, "opened", "merged")),
   ]);
   const support = dashSection("Support & responsiveness", [
-    chartCard(defFor("issues-flow"), `Issues opened and closed per ${unit}`, String(sum(latest.openIssues)), deltaPill("open-issues", lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), iss.cats.length ? groupedBars(iss.cats, [{ label: "Opened", values: iss.a }, { label: "Closed", values: iss.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Headline is the open backlog today."),
+    chartCard(defFor("issues-flow"), `Issues opened and closed per ${unit}`, String(sum(latest.openIssues)), deltaPill("open-issues", lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), iss.cats.length ? groupedBars(iss.cats, [{ label: "Opened", values: iss.a }, { label: "Closed", values: iss.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Headline is the open backlog today.", series2(iss.cats, iss.a, iss.b, "opened", "closed")),
   ]);
   const readiness = renderReadiness(file, selected, latest);
   const note = el("p", { class: "dash-note" }, `Public sources only: the npm registry and the GitHub API. ${selected.length} of ${Object.keys(file.repos).length} public WDK repos selected. Daily series cover the last 30 days and grow by one day per run; stars, contributors and open counts are daily snapshots, the first taken ${snapDays[0]}. Last collected ${String(file.updated).slice(0, 10)}. Community, newsletter and website figures are not public and are not shown.`);
@@ -1884,7 +1922,20 @@ function renderReadiness(file, selected, latest) {
       el("td", { class: "mono owners" }, ((file.owners || {})[r] || []).join(" ") || "—"));
   });
   const table = el("div", { class: "table-wrap" }, el("table", { class: "ready" }, el("thead", null, head), el("tbody", null, rows)));
-  const section = dashSection("Release readiness", [el("div", { class: "ready-card" }, summary, table, el("p", { class: "chart-foot" }, "Stable: the npm latest tag has no beta, alpha or rc suffix. CI: last completed run on the default branch. Audit: a folder or file named audit at the repo root. Health: GitHub's community profile score. Signer: the repo references ISigner. Owners: CODEOWNERS."))]);
+  const readyExport = {
+    title: "Release readiness",
+    collected: String(file.updated).slice(0, 10),
+    scope: `${repos.length} published packages`,
+    columns: ["package", "version", "stable", "ci", "audit", "health", "signer", "owners"],
+    rows: repos.map((r) => {
+      const fact = (f) => { const v = readinessFact(f, r, latest); return v == null ? "not measured" : v ? "yes" : "no"; };
+      return [unscoped(file.repos[r].package) || r, file.repos[r].version || "", fact("stable"), fact("ci"), fact("audits"),
+        (latest.health || {})[r] == null ? "not measured" : latest.health[r],
+        wallets.has(r) ? fact("signer") : "not a wallet package",
+        ((file.owners || {})[r] || []).join(" ")];
+    }),
+  };
+  const section = dashSection("Release readiness", [el("div", { class: "ready-card" }, el("div", { class: "ready-tools" }, exportControls(defFor("readiness"), readyExport)), summary, table, el("p", { class: "chart-foot" }, "Stable: the npm latest tag has no beta, alpha or rc suffix. CI: last completed run on the default branch. Audit: a folder or file named audit at the repo root. Health: GitHub's community profile score. Signer: the repo references ISigner. Owners: CODEOWNERS."))]);
   section.id = "readiness";
   return section;
 }
