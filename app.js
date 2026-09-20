@@ -79,6 +79,17 @@ function svgEl(tag, attrs, ...children) {
   if (attrs) {
     for (const [key, value] of Object.entries(attrs)) {
       if (value == null || value === false) continue;
+      // Styles go through the property, never the attribute. The content security policy has
+      // no 'unsafe-inline' for styles, so a style attribute is dropped silently: the element
+      // still appears, just with no colour. Setting each declaration is not blocked, which is
+      // how el() has always done it.
+      if (key === "style") {
+        for (const decl of String(value).split(";")) {
+          const i = decl.indexOf(":");
+          if (i > 0) node.style.setProperty(decl.slice(0, i).trim(), decl.slice(i + 1).trim());
+        }
+        continue;
+      }
       node.setAttribute(key, value === true ? "" : value);
     }
   }
@@ -1404,11 +1415,10 @@ function renderResults() {
 // Public metrics from data/metrics.json. Charts are inline SVG; no charting library.
 // ==========================================================================================================
 
-// Read from the stylesheet so the palette lives in one place and stays the design system's.
-// Resolved once: the stylesheet is a blocking link in the head, so these are computed by the
-// time this module runs.
-const cssColour = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-const SERIES = ["--chart-1", "--chart-2", "--chart-3"].map(cssColour);
+// Kept as references, not as resolved values, and applied through style rather than through a
+// fill attribute. A resolved value would be frozen at load: the print stylesheet redefines
+// these tokens to darker inks, and a chart drawn from a copy taken on screen would ignore it.
+const SERIES = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)"];
 const fmtNum = (n) => (n == null ? "—" : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${Math.round(n / 1e3)}K` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : String(n));
 
 function deltaPill(now, before, { invert = false, note = "" } = {}) {
@@ -1456,9 +1466,9 @@ function lineChart(points, { color = SERIES[0], height = 190, unit = "", marks =
       svgEl("line", { class: "grid", x1: px, x2: W - px, y1: y(max * t).toFixed(1), y2: y(max * t).toFixed(1) }),
       svgEl("text", { class: "axis", x: px - 6, y: (y(max * t) + 4).toFixed(1), "text-anchor": "end" }, fmtNum(Math.round(max * t))),
     ]),
-    svgEl("path", { d, fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round" }),
+    svgEl("path", { d, fill: "none", style: `stroke:${color}`, "stroke-width": 2, "stroke-linejoin": "round" }),
     points.map((p, i) => svgEl("g", null,
-      svgEl("circle", { cx: x(i).toFixed(1), cy: y(p.y).toFixed(1), r: 4.5, fill: color, stroke: "var(--card)", "stroke-width": 2 }),
+      svgEl("circle", { cx: x(i).toFixed(1), cy: y(p.y).toFixed(1), r: 4.5, style: `fill:${color}`, stroke: "var(--card)", "stroke-width": 2 }),
       svgEl("title", null, `${p.label}: ${p.y.toLocaleString()}${unit}`))),
     points.map((p, i) => (i === 0 || i === points.length - 1
       ? svgEl("text", { class: "dlabel", x: x(i).toFixed(1), y: (y(p.y) - 10).toFixed(1), "text-anchor": "middle" }, fmtNum(p.y))
@@ -1503,7 +1513,7 @@ function groupedBars(categories, series, { height = 190 } = {}) {
       const v = s.values[ci] || 0;
       const bx = px + ci * gw + (gw - bw * series.length - 2 * (series.length - 1)) / 2 + si * (bw + 2);
       return svgEl("g", null,
-        svgEl("rect", { x: bx.toFixed(1), y: y(v).toFixed(1), width: bw.toFixed(1), height: Math.max(0, H - py - y(v)).toFixed(1), rx: 3, fill: SERIES[si] }),
+        svgEl("rect", { x: bx.toFixed(1), y: y(v).toFixed(1), width: bw.toFixed(1), height: Math.max(0, H - py - y(v)).toFixed(1), rx: 3, style: `fill:${SERIES[si]}` }),
         svgEl("title", null, `${c} · ${s.label}: ${v}`));
     })),
     categories.map((c, ci) => (labelEvery(categories.length, ci)
