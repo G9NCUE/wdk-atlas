@@ -231,6 +231,22 @@ const GATES = [
       const count = (js.match(/\.innerHTML\s*=/g) || []).length;
       return { pass: count === 0, detail: count ? `${count} innerHTML assignment(s) in app.js` : "no innerHTML assignments" };
     } },
+  { id: "P5.4", what: "the content security policy stays strict",
+    run: () => {
+      const policy = (/http-equiv="Content-Security-Policy"[\s\S]*?content="([^"]+)"/i.exec(html) || [])[1] || "";
+      if (!policy) return { pass: false, detail: "no content security policy found in index.html" };
+      const problems = [];
+      for (const required of ["default-src 'none'", "script-src 'self'", "object-src 'none'", "base-uri 'self'"]) {
+        if (!policy.includes(required)) problems.push(`missing ${required}`);
+      }
+      for (const loosened of ["'unsafe-inline'", "'unsafe-eval'", "*"]) {
+        if (policy.includes(loosened)) problems.push(`loosened by ${loosened}`);
+      }
+      // Trusted Types is only demanded once nothing assigns markup, which is gate P5.3.
+      const noMarkupSinks = !/\.innerHTML\s*=/.test(js);
+      if (noMarkupSinks && !policy.includes("require-trusted-types-for 'script'")) problems.push("nothing assigns markup any more, so require-trusted-types-for 'script' should be set");
+      return { pass: problems.length === 0, detail: problems.length ? problems.join("; ") : "strict, with trusted types required" };
+    } },
   { id: "P5.5", what: "data-driven style values are clamped",
     run: () => {
       const raw = [...js.matchAll(/width:\$\{(?!clamp|pct|Math)[^}]+\}/g)].map((m) => m[0]);
