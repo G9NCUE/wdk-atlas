@@ -2684,12 +2684,22 @@ table.ready .owners { white-space: normal; }
 }
 
 /* ---- Phones: one column everywhere, tables and timelines scroll inside their own box ------------ */
-@media (max-width: 720px) {
+/* The key results grid is minmax(0, 1fr) plus four fixed columns of 150, 190, 200 and 130,
+   four 16px gaps and 24px of padding: 758px is spoken for before the title column gets a
+   pixel. On a 768px screen that leaves it nothing, and every word wraps onto its own line.
+   Below 1200px the row becomes a stack instead, which is how it already behaved on a phone.
+   1024 was tried first and the table technically fits there, but the title column gets about
+   200px and every result wraps to three lines, which is worse than the stack it replaces. At
+   1200 the column has roughly 380px and the table earns its place. */
+@media (max-width: 1199px) {
   .kr-line.kr-head { display: none; }
   .kr-line { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
   .kr-main { flex: 1 1 100%; }
   .kr-col { flex: 0 0 auto; }
   .kr-col-progress { display: inline-flex; align-items: center; gap: 8px; }
+}
+
+@media (max-width: 720px) {
   .kr-strip-summary { flex-wrap: wrap; }
   .dash-controls { flex-wrap: wrap; }
   .header-side { justify-content: flex-start; width: 100%; }
