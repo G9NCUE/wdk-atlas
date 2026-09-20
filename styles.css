@@ -2341,13 +2341,6 @@ summary .module-stack {
   padding: 0 16px 40px;
 }
 
-.results-note {
-  margin: 0;
-  max-width: 78ch;
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--secondary);
-}
 
 .results-star {
   display: flex;
