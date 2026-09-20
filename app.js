@@ -1488,7 +1488,9 @@ function krRow(kr) {
   return el(
     "div",
     { class: `kr-line ${st.key}`, id: kr.id },
-    el("div", { class: "kr-main" }, el("div", { class: "kr-title" }, kr.label), (kr.unit || kr.note) && el("div", { class: "kr-sub" }, [kr.unit, kr.note].filter(Boolean).join(" · "))),
+    el("div", { class: "kr-main" },
+      el("div", withTip({ class: "kr-title" }, kr.note || "", kr.label), kr.label),
+      kr.unit && el("div", { class: "kr-sub" }, kr.unit)),
     el("div", { class: "kr-col kr-col-status" }, el("span", { class: `status-pill ${st.key}` }, st.label)),
     el("div", { class: "kr-col kr-col-value" }, krValue(kr)),
     el("div", { class: "kr-col kr-col-progress" }, el("span", { class: "kr-bar" }, el("span", { style: `width:${pct(kr.progress)}%` })), el("span", { class: "kr-pct" }, kr.progress == null ? "—" : `${kr.progress}%`)),
@@ -1496,7 +1498,7 @@ function krRow(kr) {
       kr.origin && el("a", withTip({ class: "kr-origin", href: kr.origin.href }, "The public endpoint behind this row. Call it and you get the same fact.", kr.origin.label), kr.origin.label),
       el("span", { class: "kr-secondary" },
         kr.data && el("a", { class: "kr-data", href: kr.data }, "data"),
-        kr.sourceLink ? el("a", { class: "kr-view", href: kr.sourceLink }, "view") : kr.source ? el("span", null, kr.source) : el("span", { class: "kr-none" }, "to define")))
+        kr.sourceLink ? el("a", withTip({ class: "kr-view", href: kr.sourceLink }, `See it on the ${(kr.source || "dashboard").split(",")[0].toLowerCase()}`, "Open"), "\u2192") : kr.source ? el("span", null, kr.source) : el("span", { class: "kr-none" }, "to define")))
   );
 }
 
@@ -1531,9 +1533,10 @@ function renderResults() {
       el("div", { class: "kr-lines" }, krs.map(krRow))
     );
   });
-  // Said in plain sight as well as in the tip, because a distinction that only exists on hover
-  // is not a distinction for a reader who never hovers.
-  const note = el("p", { class: "results-note" }, "Draft, pending review. Measured means a real number exists; nothing is estimated. Figures beside each key result are collected from npm and GitHub. Tallies beside each north star are counted from atlas.yaml, and say what we have written down rather than what is true of the world.");
+  // The counted-versus-collected distinction is said here in plain sight as well as in the
+  // tallies' own tip, because one that exists only on hover is no distinction for a reader who
+  // never hovers. Kept to a line: the definitions themselves are a hover away on every row.
+  const note = el("p", { class: "results-note" }, "Draft, pending review. Figures are collected from npm and GitHub; tallies are counted from atlas.yaml.");
   return el("div", { class: "results-page" }, strip, note, head, blocks);
 }
 
@@ -1591,11 +1594,13 @@ function defFor(id) {
 // so the warning comes from there rather than being written out again here.
 const countedTip = () => defTip(defFor("atlas-counts"));
 
-const defTip = (def) => `${def.definition}\nSource: ${def.source}\nWindow: ${def.window}`;
+// What is counted, then where it came from and over what window on one line. Kept to two lines
+// because a tile that needs a paragraph to be read is not a tile.
+const defTip = (def) => `${def.definition}\n${def.source} · ${def.window}`;
 
 function statTile(def, label, value, delta, hint, feeds) {
   return el("div", { class: "tile" }, el("div", withTip({ class: "tile-label" }, defTip(def), label), label), el("div", { class: "tile-value" }, value), delta, hint && el("div", { class: "tile-hint" }, hint),
-    feeds && el("a", { class: "tile-feeds", href: `./?page=results#${feeds.id}` }, `feeds key result: ${feeds.label}`));
+    feeds && el("a", withTip({ class: "tile-feeds", href: `./?page=results#${feeds.id}` }, feeds.label, "Key result"), "\u2192"));
 }
 
 // Axis labels thin out when there are many buckets: every point up to 12, then every nth, always the last.
@@ -1945,18 +1950,18 @@ function buildDashboard(file, selected) {
   // the open-issue level were demoted by the review and removed by the PM. Both keep their
   // chart further down the page, where a count is context rather than a headline.
   const tiles = el("div", { class: "tiles" },
-    latest.dependents != null && statTile(defFor("dependents"), "Projects depending on WDK", fmtNum(latest.dependents), el("span", { class: "delta none" }, "public repos outside the org"), "repos whose package.json names a WDK package, from GitHub code search"),
-    statTile(defFor("downloads"), `npm downloads, last full ${unit}`, dlLast.now == null ? "—" : fmtNum(dlLast.now), trendPill("downloads", dl), splitHint || (dlLast.key ? `${dlLast.key} · ${withPkg} packages` : coverageNote(dlCov))),
+    latest.dependents != null && statTile(defFor("dependents"), "Projects depending on WDK", fmtNum(latest.dependents), el("span", { class: "delta none" }, "public repos outside the org"), "from GitHub code search"),
+    statTile(defFor("downloads"), `npm downloads, last full ${unit}`, dlLast.now == null ? "—" : fmtNum(dlLast.now), trendPill("downloads", dl), splitHint || (dlLast.key ? `${withPkg} packages` : coverageNote(dlCov))),
     currencyPct != null && statTile(defFor("version-currency"), "Version currency", `${currencyPct}%`,
       el("span", { class: "delta none" }, `${currencyRepos.length} packages`),
-      `of chosen installs are on the latest release · median ${medianShare}% per package${medianFresh == null ? "" : ` · ${medianFresh}% on a release under 30 days old`}`),
+      `median ${medianShare}% per package`),
     supportStats.pct != null && statTile(defFor("issue-response"), "Answered within a week", `${supportStats.pct}%`,
       el("span", { class: "delta none" }, `${supportStats.total} issues`),
-      `of issues opened in the last 30 days${supportStats.pending ? `, ${supportStats.pending} still inside the week` : ""}`,
+      `${supportStats.pending ? `${supportStats.pending} still inside the week` : "last 30 days"}`,
       feeds("issue-response")),
-    statTile(defFor("external-prs-merged"), `External pull requests merged, last ${unit}`, lastTwo(xM).now == null ? "—" : String(lastTwo(xM).now), trendPill("external-prs-merged", xM), lastTwo(xM).now == null ? coverageNote(evCov) : `${lastTwo(xO).now ?? 0} opened · Tether team excluded`, feeds("external-prs")),
-    statTile(defFor("contributors"), "Contributors", String(people), trendPill("contributors", contribSeries), "people with commits, bots excluded, unique across the selection"),
-    statTile(defFor("packages-published"), "Packages published", String(published), el("span", { class: "delta none" }, `${stable} stable · ${published - stable} in beta`), `${(atlas.modules || []).filter((m) => m.publisher && m.publisher !== file.org && m.status === "shipped").length} more by third parties, not in this count`, feeds("stable")),
+    statTile(defFor("external-prs-merged"), `External pull requests merged, last ${unit}`, lastTwo(xM).now == null ? "—" : String(lastTwo(xM).now), trendPill("external-prs-merged", xM), lastTwo(xM).now == null ? coverageNote(evCov) : `${lastTwo(xO).now ?? 0} opened`, feeds("external-prs")),
+    statTile(defFor("contributors"), "Contributors", String(people), trendPill("contributors", contribSeries), "bots excluded"),
+    statTile(defFor("packages-published"), "Packages published", String(published), el("span", { class: "delta none" }, `${stable} stable · ${published - stable} in beta`), `${(atlas.modules || []).filter((m) => m.publisher && m.publisher !== file.org && m.status === "shipped").length} more by third parties`, feeds("stable")),
   );
 
   const byStars = selected.map((r) => ({ label: r, hint: file.repos[r].title !== r ? file.repos[r].title : "", value: (latest.stars || {})[r] || 0 })).sort((a, b) => b.value - a.value).slice(0, 8);
@@ -1966,14 +1971,14 @@ function buildDashboard(file, selected) {
   const series2 = (cats, a, b, ca, cb) => ({ ...exportMeta, columns: ["period", ca, cb], rows: cats.map((c, i) => [c, a[i], b[i]]) });
 
   const adoption = dashSection("Adoption & growth", [
-    chartCard(defFor("downloads"), `npm downloads per ${unit}`, fmtNum(dlLast.now), trendPill("downloads", dl), dl.length ? lineChart(dl, { marks: releaseMarks(file, selected) }) : el("p", { class: "chart-foot" }, coverageNote(dlCov)), "Selected packages summed. npm reports a few days late, so the current period is left out. Ticks mark npm releases; hover for the versions.",
+    chartCard(defFor("downloads"), `npm downloads per ${unit}`, fmtNum(dlLast.now), trendPill("downloads", dl), dl.length ? lineChart(dl, { marks: releaseMarks(file, selected) }) : el("p", { class: "chart-foot" }, coverageNote(dlCov)), "Ticks mark releases. The current period is left out; npm reports late.",
       { ...exportMeta, columns: ["period", "downloads"], rows: dl.map((p) => [p.key, p.y]) }),
-    chartCard(defFor("downloads-direct"), `Chosen installs by package, last full ${unit}`, fmtNum(chosenTotal), null, hBars(byPackage, { color: SERIES[1] }), "Downloads left after subtracting those another WDK package pinned. A lower bound: a cache means a dependent install does not always fetch its dependency again.",
+    chartCard(defFor("downloads-direct"), `Chosen installs by package, last full ${unit}`, fmtNum(chosenTotal), null, hBars(byPackage, { color: SERIES[1] }), "Top eight. A lower bound.",
       { ...exportMeta, columns: ["package", "title", "chosen installs, at least"], rows: byPackage.map((r) => [r.label, r.hint, r.value]) }),
     byCurrency.length ? chartCard(defFor("version-currency"), "Installs on the latest release, by package", currencyPct == null ? null : `${currencyPct}%`, null,
-      hBars(byCurrency, { color: SERIES[0], unit: "%", scale: 100 }), "The eight furthest behind, worst first. A package nobody has released for a while can still score well here: this asks whether readers take what we ship, not how often we ship.",
+      hBars(byCurrency, { color: SERIES[0], unit: "%", scale: 100 }), "The eight furthest behind.",
       { ...exportMeta, columns: ["package", "share of installs on the latest release"], rows: byCurrency.map((r) => [r.label, r.value]) }) : null,
-    byInduced.length ? chartCard(defFor("downloads-induced"), `Pulled in as a dependency, last full ${unit}`, fmtNum(inducedTotal), null, hBars(byInduced, { color: SERIES[2] }), "Attributable to another WDK package pinning this exact version. Nobody chose these; they arrive with something else.",
+    byInduced.length ? chartCard(defFor("downloads-induced"), `Pulled in as a dependency, last full ${unit}`, fmtNum(inducedTotal), null, hBars(byInduced, { color: SERIES[2] }), "Top eight. An upper bound.",
       { ...exportMeta, columns: ["package", "title", "pulled in, at most"], rows: byInduced.map((r) => [r.label, r.hint, r.value]) }) : null,
     chartCard(defFor("stars"), "Stars by repository", fmtNum(sum(latest.stars)), null, hBars(byStars, { color: SERIES[2] }), "Top eight of the selection.",
       { ...exportMeta, columns: ["repo", "title", "stars"], rows: byStars.map((r) => [r.label, r.hint, r.value]) }),
@@ -1987,16 +1992,16 @@ function buildDashboard(file, selected) {
     .map(([login, a]) => ({ label: login, hint: `${((file.authors || {})[login] || "").toLowerCase().replace(/_/g, " ")} · ${a.merged} merged`, value: a.opened }));
   const windowLabel = windowKeys.size ? `last ${windowKeys.size} ${unit}${windowKeys.size === 1 ? "" : "s"}` : "no complete period yet";
   const community = dashSection("Community & engagement", [
-    chartCard(defFor("external-authors"), `External contributors, ${windowLabel}`, String(Object.keys(authors).length), null, topAuthors.length ? hBars(topAuthors, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, windowKeys.size ? "No external pull requests in the window." : coverageNote(evCov)), "Top five by pull requests opened over the periods shown. GitHub's label for each author and the number they had merged are in the export. A teammate or a bot showing up here means the internal list needs a fix.",
+    chartCard(defFor("external-authors"), `External contributors, ${windowLabel}`, String(Object.keys(authors).length), null, topAuthors.length ? hBars(topAuthors, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, windowKeys.size ? "No external pull requests in the window." : coverageNote(evCov)), "Top five by pull requests opened.",
       { ...exportMeta, columns: ["author", "detail", "pull requests opened"], rows: topAuthors.map((r) => [r.label, r.hint, r.value]) }),
     chartCard(defFor("prs-flow"), `Pull requests per ${unit}`, lastTwo(prsO).now == null ? "—" : String(lastTwo(prsO).now), null, pr.cats.length ? groupedBars(pr.cats, [{ label: "Opened", values: pr.a }, { label: "Merged", values: pr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Complete periods only.", series2(pr.cats, pr.a, pr.b, "opened", "merged")),
-    chartCard(defFor("external-prs-merged"), `External pull requests per ${unit}`, lastTwo(xO).now == null ? "—" : String(lastTwo(xO).now), null, xpr.cats.length ? groupedBars(xpr.cats, [{ label: "Opened", values: xpr.a }, { label: "Merged", values: xpr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Authors who are not members or collaborators of the org.", series2(xpr.cats, xpr.a, xpr.b, "opened", "merged")),
+    chartCard(defFor("external-prs-merged"), `External pull requests per ${unit}`, lastTwo(xO).now == null ? "—" : String(lastTwo(xO).now), null, xpr.cats.length ? groupedBars(xpr.cats, [{ label: "Opened", values: xpr.a }, { label: "Merged", values: xpr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Authors outside the org.", series2(xpr.cats, xpr.a, xpr.b, "opened", "merged")),
   ]);
   const support = dashSection("Support & responsiveness", [
-    chartCard(defFor("issues-flow"), `Issues opened and closed per ${unit}`, String(sum(latest.openIssues)), deltaPill("open-issues", lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), iss.cats.length ? groupedBars(iss.cats, [{ label: "Opened", values: iss.a }, { label: "Closed", values: iss.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Headline is the open backlog today.", series2(iss.cats, iss.a, iss.b, "opened", "closed")),
+    chartCard(defFor("issues-flow"), `Issues opened and closed per ${unit}`, String(sum(latest.openIssues)), deltaPill("open-issues", lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), iss.cats.length ? groupedBars(iss.cats, [{ label: "Opened", values: iss.a }, { label: "Closed", values: iss.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Headline is today's backlog.", series2(iss.cats, iss.a, iss.b, "opened", "closed")),
   ]);
   const readiness = renderReadiness(file, selected, latest);
-  const note = el("p", { class: "dash-note" }, `Public sources only: the npm registry and the GitHub API. ${selected.length} of ${Object.keys(file.repos).length} public WDK repos selected. Daily series cover the last 30 days and grow by one day per run; stars, contributors and open counts are daily snapshots, the first taken ${snapDays[0]}. Last collected ${String(file.updated).slice(0, 10)}. Community, newsletter and website figures are not public and are not shown.`);
+  const note = el("p", { class: "dash-note" }, `${selected.length} of ${Object.keys(file.repos).length} public WDK repos · npm and GitHub only · collected ${String(file.updated).slice(0, 10)} · snapshots since ${snapDays[0]}`);
   return [tiles, adoption, community, support, readiness, note];
 }
 
@@ -2048,7 +2053,7 @@ function renderReadiness(file, selected, latest) {
         ((file.owners || {})[r] || []).join(" ")];
     }),
   };
-  const section = dashSection("Release readiness", [el("div", { class: "ready-card" }, el("div", { class: "ready-tools" }, exportControls(defFor("readiness"), readyExport)), summary, table, el("p", { class: "chart-foot" }, "Stable: the npm latest tag has no beta, alpha or rc suffix. CI: last completed run on the default branch. Audit: a folder or file named audit at the repo root. Health: GitHub's community profile score. Signer: the repo references ISigner. Owners: CODEOWNERS."))]);
+  const section = dashSection("Release readiness", [el("div", { class: "ready-card" }, el("div", { class: "ready-tools" }, exportControls(defFor("readiness"), readyExport)), summary, table, el("p", { class: "chart-foot" }, "From npm's latest tag, the newest CI run, an audit file, GitHub's community profile, ISigner and CODEOWNERS."))]);
   section.id = "readiness";
   return section;
 }
@@ -2083,11 +2088,11 @@ const pageHeadings = {
   overview: { title: "Overview", subtitle: "", hidden: true },
   dashboard: {
     title: "Dashboard",
-    subtitle: "Public adoption, community and support numbers, collected daily into the same repo.",
+    subtitle: "Adoption, community and support, collected daily from npm and GitHub.",
   },
   results: {
     title: "Key results",
-    subtitle: "How each north star is measured.",
+    subtitle: "What each north star is measured by.",
   },
 };
 
