@@ -323,6 +323,10 @@ body.page-roadmap .site-header {
 /* Mission and view switch */
 .roadmap-intro {
   display: flex;
+  /* Wrap rather than push the page wider: the controls carry a search field, three status
+     toggles, a partner filter and a view switch, and below about 900px they cannot sit beside
+     the mission without forcing the whole document to scroll sideways. */
+  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
   gap: 32px;
@@ -1095,6 +1099,12 @@ h1 {
 .poster {
   position: relative;
   padding: 8px 32px 64px;
+  /* Nothing here should widen the page. The map's grid, the roadmap's timeline and the
+     readiness table each scroll inside their own container; anything else that reaches past
+     the edge is a fault, and clipping it keeps the whole document from sliding sideways under
+     a thumb. clip rather than hidden: it creates no scroll container, so the sticky header and
+     the sticky timeline still hold. */
+  overflow-x: clip;
 }
 
 .atlas,
@@ -2241,6 +2251,9 @@ summary .module-stack {
 }
 
 @media (max-width: 900px) {
+  /* The fold header bleeds 10px each side so its hover background clears the text. Below this
+     width the page gutter is 16px and the bleed pushes the document wider than the window. */
+  .section-head { margin: 0; }
   .topbar-inner,
   .site-header {
     padding-left: 16px;
@@ -2616,7 +2629,10 @@ body.page-overview .site-header {
 .chart .mark line { opacity: 0.6; }
 .ready-card { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px 16px 12px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--card); }
 .ready-summary { margin: 0; font-size: 14px; line-height: 20px; color: var(--ink); }
-.table-wrap { overflow-x: auto; }
+/* The scroller has to be allowed to be narrower than the table it holds. Without min-width,
+   a grid or flex item is sized to its content, so the wrap grew to the full 873px of the
+   readiness table and pushed the whole page sideways while scrolling nothing. */
+.table-wrap { overflow-x: auto; min-width: 0; max-width: 100%; }
 table.ready { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.ready th { padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; letter-spacing: 0.3px; text-align: left; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; }
 table.ready td { padding: 6px 10px; border-bottom: 1px solid var(--line-subtle); vertical-align: middle; white-space: nowrap; }
