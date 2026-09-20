@@ -3,7 +3,7 @@
 // pointed anywhere, and a context too thin to build a real address from.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { originFor, uncovered, describe, metricsOf, PROBE } from "../lib/origins.mjs";
+import { originFor, uncovered, metricsOf } from "../lib/origins.mjs";
 
 test("each readiness field goes somewhere public and specific", () => {
   const ctx = { org: "tetherto", repo: "wdk-wallet", pkg: "@tetherto/wdk-wallet" };
@@ -15,26 +15,27 @@ test("each readiness field goes somewhere public and specific", () => {
 });
 
 test("every address is https or a relative path, never plain http", () => {
-  for (const m of [{ kind: "share", field: "stable" }, { kind: "count", source: "privateRepos" }, { kind: "issueResponse" }, { kind: "quarterGrowth" }]) {
-    const href = originFor(m, PROBE).href;
-    assert.ok(/^https:\/\//.test(href), `${describe(m)} -> ${href}`);
+  const ctx = { org: "org", repo: "repo", pkg: "@scope/package", examplesUrl: "https://github.com/org/examples", atlasUrl: "./atlas.yaml" };
+  for (const m of [{ kind: "share", field: "stable" }, { kind: "count", source: "privateRepos" }, { kind: "issueResponse" }, { kind: "seriesTotal" }]) {
+    assert.match(originFor(m, ctx).href, /^https:\/\//, JSON.stringify(m));
   }
-  assert.equal(originFor({ kind: "count", source: "thirdPartyModules" }, PROBE).href, "./atlas.yaml");
+  assert.equal(originFor({ kind: "count", source: "thirdPartyModules" }, ctx).href, "./atlas.yaml");
 });
 
 test("a field nobody has pointed anywhere returns null rather than a guess", () => {
-  assert.equal(originFor({ kind: "share", field: "coverage" }, PROBE), null);
-  assert.equal(originFor({ kind: "count", source: "newsletter" }, PROBE), null);
-  assert.equal(originFor({ kind: "somethingNew" }, PROBE), null);
-  assert.equal(originFor(null, PROBE), null);
-  assert.equal(originFor({}, PROBE), null);
+  const ctx = { org: "org", repo: "repo", pkg: "@scope/package", examplesUrl: "https://x/y", atlasUrl: "./atlas.yaml" };
+  assert.equal(originFor({ kind: "share", field: "coverage" }, ctx), null);
+  assert.equal(originFor({ kind: "count", source: "newsletter" }, ctx), null);
+  assert.equal(originFor({ kind: "somethingNew" }, ctx), null);
+  assert.equal(originFor(null, ctx), null);
+  assert.equal(originFor({}, ctx), null);
 });
 
 test("a context too thin to build a real address refuses instead of half building one", () => {
   assert.equal(originFor({ kind: "share", field: "stable" }, { org: "o", repo: "r" }), null, "no package name");
   assert.equal(originFor({ kind: "share", field: "ci" }, { org: "o" }), null, "no repo");
   assert.equal(originFor({ kind: "issueResponse" }, {}), null, "no org");
-  assert.equal(originFor({ kind: "count", source: "examples" }, PROBE).href, PROBE.examplesUrl);
+  assert.equal(originFor({ kind: "count", source: "examples" }, { examplesUrl: "https://x/y" }).href, "https://x/y");
 });
 
 test("uncovered names what is missing and stays empty when nothing is", () => {
