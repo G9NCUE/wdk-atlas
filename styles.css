@@ -545,6 +545,7 @@ main:focus {
 .timeline-quarter {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   padding: 0 8px;
   font-size: 13px;
