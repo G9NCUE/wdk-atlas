@@ -2456,7 +2456,6 @@ summary .module-stack {
 .hbar-track { height: 10px; border-radius: 3px; background: var(--line-subtle); overflow: hidden; }
 .hbar-fill { display: block; height: 100%; border-radius: 3px; }
 /* The repository title behind a package name, trimmed cleanly rather than cut mid-letter. */
-.hbar-hint { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; color: var(--text-muted); }
 .hbar-value { font-family: var(--font-mono); text-align: right; color: var(--ink); }
 
 .dash-note { margin: 0; max-width: 90ch; font-size: 12px; line-height: 16px; color: var(--secondary); }
