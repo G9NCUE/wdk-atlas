@@ -463,7 +463,7 @@ function renderChip(module, context) {
     .join(" ");
   return el(
     "button",
-    { class: classes, type: "button", "data-id": module.id, "data-node": module.id, "aria-expanded": "false", title: module.name || module.id, "data-search": searchTextOf(module) },
+    withTip({ class: classes, type: "button", "data-id": module.id, "data-node": module.id, "aria-expanded": "false", "data-search": searchTextOf(module) }, module.name || module.id, module.title || module.id),
     el("i", { class: "dot", "aria-hidden": "true" }),
     el("span", { class: "mod-title" }, shortTitle(module, context)),
     module.private && lockMark(),
@@ -551,7 +551,7 @@ function renderMatrix(lanes, modules) {
       cols.map((col) =>
         el(
           "button",
-          { class: "mx-th", type: "button", "data-col": col.id, "aria-pressed": "false", title: `Show only ${col.label}` },
+          withTip({ class: "mx-th", type: "button", "data-col": col.id, "aria-pressed": "false" }, `Show only ${col.label}`, col.label),
           el("b", null, col.label),
           el("span", null, `${counts.get(col.id)} module${counts.get(col.id) === 1 ? "" : "s"}`)
         )
@@ -1145,7 +1145,7 @@ function renderStatusFilter(counts) {
     const label = status === "wip" ? "In progress" : status === "done" ? "Done" : "Planned";
     const button = el(
       "button",
-      { class: `status-toggle ${status}`, type: "button", "data-status": status, "aria-pressed": filter.statuses.has(status) ? "true" : "false", title: `Show or hide ${label.toLowerCase()} initiatives` },
+      { class: `status-toggle ${status}`, type: "button", "data-status": status, "aria-pressed": filter.statuses.has(status) ? "true" : "false" },
       el("span", { class: `state-dot ${status}`, "aria-hidden": "true" }),
       label,
       counts[status] > 0 && el("span", { class: "view-count" }, String(counts[status]))
@@ -1170,7 +1170,7 @@ function renderStatusFilter(counts) {
 function renderPartnerToggle(count) {
   const button = el(
     "button",
-    { class: "status-toggle partner", type: "button", "aria-pressed": filter.partners ? "true" : "false", title: "Only initiatives that need a partner to finish" },
+    withTip({ class: "status-toggle partner", type: "button", "aria-pressed": filter.partners ? "true" : "false" }, "Only initiatives that need a partner to finish", "Partner-dependent"),
     el("span", { class: "partner-mark", "aria-hidden": "true" }),
     "Partner-dependent",
     count > 0 && el("span", { class: "view-count" }, String(count))
@@ -1317,6 +1317,14 @@ function krStatus(kr) {
 // A value with more behind it (`valueTitle`, one line per item) gets a CSS tooltip that opens on hover and on
 // keyboard focus at once; a native title needs a still pointer for a second and never shows on touch.
 const tipAttrs = (tip, text) => (tip ? { class: "has-tip", "data-tip": tip, tabindex: "0", "aria-label": `${text}: ${tip.split("\n").join(", ")}` } : {});
+
+// Merge a tip into attributes that already carry classes. Spreading tipAttrs directly would
+// replace the class list rather than add to it, which silently strips an element's styling.
+const withTip = (attrs, tip, text) => {
+  const extra = tipAttrs(tip, text);
+  if (!extra.class) return attrs;
+  return { ...attrs, ...extra, class: [attrs.class, extra.class].filter(Boolean).join(" ") };
+};
 
 function krValue(kr) {
   if (kr.current == null && kr.target == null) return el("span", { class: "kr-none" }, "—");
@@ -1718,7 +1726,11 @@ function buildDashboard(file, selected) {
 function renderReadiness(file, selected, latest) {
   const repos = selected.filter((r) => file.repos[r].version).sort();
   const wallets = new Set(walletRepos());
-  const mark = (v) => (v == null ? el("span", { class: "fact none", title: "not measured" }, "·") : el("span", { class: `fact ${v ? "yes" : "no"}` }, v ? "✓" : "✕"));
+  // The symbol carries the state for anyone who can see it; the hidden word carries it for
+  // everyone else, so nothing here depends on recognising a tick, a cross or a colour.
+  const mark = (v) => (v == null
+    ? el("span", { class: "fact none" }, "·", el("span", { class: "visually-hidden" }, "not measured"))
+    : el("span", { class: `fact ${v ? "yes" : "no"}` }, v ? "✓" : "✕", el("span", { class: "visually-hidden" }, v ? "yes" : "no")));
   const count = (field) => repos.filter((r) => readinessFact(field, r, latest) === true).length;
   const measured = (field) => field === "stable" || Boolean(latest[field]);
   const healthVals = repos.map((r) => (latest.health || {})[r]).filter((v) => typeof v === "number");
@@ -1739,7 +1751,7 @@ function renderReadiness(file, selected, latest) {
       el("td", null, mark(readinessFact("ci", r, latest))),
       el("td", null, mark(readinessFact("audits", r, latest))),
       el("td", { class: "mono" }, (latest.health || {})[r] == null ? "·" : `${latest.health[r]}%`),
-      el("td", null, wallets.has(r) ? mark(readinessFact("signer", r, latest)) : el("span", { class: "fact none", title: "not a wallet package" }, "–")),
+      el("td", null, wallets.has(r) ? mark(readinessFact("signer", r, latest)) : el("span", { class: "fact none" }, "–", el("span", { class: "visually-hidden" }, "not a wallet package"))),
       el("td", { class: "mono owners" }, ((file.owners || {})[r] || []).join(" ") || "—"));
   });
   const table = el("div", { class: "table-wrap" }, el("table", { class: "ready" }, el("thead", null, head), el("tbody", null, rows)));

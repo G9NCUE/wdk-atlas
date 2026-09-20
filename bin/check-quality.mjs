@@ -295,8 +295,19 @@ const GATES = [
     } },
   { id: "P3.3", what: "no information lives only in a title attribute",
     run: () => {
-      const count = (js.match(/\btitle:\s*(?!null)/g) || []).length;
-      return { pass: count === 0, detail: count ? `${count} title attribute(s) set from the script` : "nothing depends on a title attribute" };
+      // "title" is also an ordinary data key in this codebase, for page headings and for a
+      // module's own title, so counting the word alone overstated the problem by a third.
+      // Only a title passed to el() as an attribute becomes a tooltip nobody can reach by
+      // touch or keyboard, and an empty one shows nothing at all.
+      // A title only becomes a tooltip when it is handed to el() beside other attributes, so a
+      // line is counted when it also carries class, href, type or an aria- attribute. A plain
+      // object with a title field, such as a page heading or a stand-in north star, is data.
+      const found = js.split("\n")
+        .map((line, i) => ({ line, n: i + 1 }))
+        .filter(({ line }) => /\btitle:\s*(?!null\b)/.test(line))
+        .filter(({ line }) => !/\btitle:\s*""/.test(line))
+        .filter(({ line }) => /\bel\(|class:|href:|aria-/.test(line));
+      return { pass: found.length === 0, detail: found.length ? `${found.length} tooltip(s) unreachable by touch or keyboard, at app.js lines ${found.map((f) => f.n).join(", ")}` : "nothing depends on a title attribute" };
     } },
   { id: "P5.2", what: "links built from data are scheme-checked",
     run: () => ({ pass: has(js, /safeHref|isHttps|allowedScheme/), detail: "no scheme allow-list guards href values" }) },
