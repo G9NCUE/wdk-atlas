@@ -10,9 +10,57 @@ import { quarterOf, quarterBounds, nextQuarter, previousQuarter, sumSeries } fro
 // Pages, in nav order: overview (the front page), roadmap, results, dashboard, map, dev.
 // `page` below decides which one renders; each has its own section in this file.
 //
-// Asset version from this script's own URL (app.js?v=N); data fetches carry it so a bump refreshes everything.
-const ASSET_V = (() => { try { return new URL(document.currentScript.src, location.href).searchParams.get("v") || ""; } catch { return ""; } })();
-const versioned = (path) => (ASSET_V ? `${path}?v=${ASSET_V}` : path);
+// Everything this module needs to find its data comes from its own URL.
+//
+// document.currentScript is null inside a module, so reading the version from it returned
+// nothing and atlas.yaml was being fetched unversioned; import.meta.url carries the query.
+//
+// The data is resolved against this file rather than against the page that loaded it. On the
+// site those are the same directory. Embedded in another site they are not, and a path
+// relative to the host page would look for the atlas beside whatever page happened to include
+// it. Pass ?base= on the script tag to point somewhere else again.
+const MODULE_URL = new URL(import.meta.url);
+const ASSET_V = MODULE_URL.searchParams.get("v") || "";
+const DATA_BASE = new URL(MODULE_URL.searchParams.get("base") || "./", MODULE_URL);
+const dataUrl = (path) => {
+  const url = new URL(path, DATA_BASE);
+  if (ASSET_V) url.searchParams.set("v", ASSET_V);
+  return url.href;
+};
+const versioned = dataUrl;
+
+// Atlas expects a small set of elements to exist. index.html provides them. Anywhere else,
+// it builds them itself, inside the element marked data-wdk-atlas or at the end of the body,
+// so a host page can include one script tag and get a working atlas without copying markup it
+// would then have to keep in step. Only the parts a page needs to render: no top bar, no
+// navigation, no legend, since a host site has its own and would not want ours.
+//
+// This runs before anything below reads those elements, which is why it sits at the top.
+function mount(host = document.querySelector("[data-wdk-atlas]") || document.body) {
+  if (document.querySelector("#poster")) return false; // the full site: nothing to build
+  const frame = document.createElement("div");
+  frame.className = "wdk-atlas-embed";
+  frame.innerHTML = "";
+  const make = (tag, attrs) => {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+    return node;
+  };
+  const header = make("header", { class: "site-header" });
+  const headMain = make("div", { class: "header-main" });
+  headMain.append(make("h1", { id: "title" }), make("p", { id: "subtitle", class: "subtitle" }));
+  header.append(headMain, make("div", { class: "header-side" }));
+  frame.append(
+    header,
+    make("p", { id: "error", class: "error", hidden: "" }),
+    make("div", { id: "poster", class: "poster", hidden: "" }),
+    make("aside", { id: "drawer", class: "drawer", role: "dialog", "aria-labelledby": "drawer-title", hidden: "" }),
+    make("footer", { id: "site-foot", class: "site-foot", hidden: "" }),
+  );
+  host.append(frame);
+  return true;
+}
+const EMBEDDED = mount();
 
 const poster = document.querySelector("#poster");
 const drawer = document.querySelector("#drawer");
@@ -902,7 +950,7 @@ let METRICS = null;
 async function loadMetrics() {
   if (METRICS) return METRICS;
   try {
-    const res = await fetch("data/metrics.json", { cache: "no-cache" });
+    const res = await fetch(dataUrl("data/metrics.json"), { cache: "no-cache" });
     METRICS = res.ok ? await res.json() : null;
   } catch { METRICS = null; }
   return METRICS;
@@ -916,7 +964,7 @@ let SUMMARY = null;
 async function loadSummary() {
   if (SUMMARY) return SUMMARY;
   try {
-    const res = await fetch("data/summary.json", { cache: "no-cache" });
+    const res = await fetch(dataUrl("data/summary.json"), { cache: "no-cache" });
     if (res.ok) { SUMMARY = await res.json(); return SUMMARY; }
   } catch { /* fall through to the full file */ }
   SUMMARY = await loadMetrics();
@@ -1949,7 +1997,7 @@ function renderFreshness(file) {
   if (!foot || !file) return;
   foot.replaceChildren(
     `Atlas updated ${fmtDay(file.atlasUpdated)} · metrics collected ${fmtDay(file.updated)} · public sources only: npm and GitHub · `,
-    el("a", { href: document.querySelector(".gh-link").href }, "source"));
+    (() => { const gh = document.querySelector(".gh-link"); return gh ? el("a", { href: gh.href }, "source") : null; })());
   foot.hidden = false;
 }
 
@@ -2253,8 +2301,25 @@ async function loadAtlas() {
 }
 
 async function main() {
+  // index.html loads the parser in its own tag. A page that embeds Atlas should not have to
+  // know that, so when it is absent this fetches it from beside this module. One script tag
+  // is then the whole integration.
   if (typeof jsyaml === "undefined") {
-    showError("js-yaml failed to load from vendor/js-yaml.min.js.");
+    try {
+      await new Promise((resolve, reject) => {
+        const tag = document.createElement("script");
+        tag.src = dataUrl("vendor/js-yaml.min.js");
+        tag.onload = resolve;
+        tag.onerror = () => reject(new Error("could not be fetched"));
+        document.head.append(tag);
+      });
+    } catch {
+      showError("The YAML parser could not be loaded. Atlas needs vendor/js-yaml.min.js beside app.js.");
+      return;
+    }
+  }
+  if (typeof jsyaml === "undefined") {
+    showError("The YAML parser loaded but did not register. Check that vendor/js-yaml.min.js is the published bundle.");
     return;
   }
 
@@ -2273,17 +2338,18 @@ async function main() {
   // A page that needs nothing else reads the small file instead of the large one.
   const needsFullMetrics = !["map", "dev"].includes(page);
   (needsFullMetrics ? loadMetrics() : loadSummary()).then(renderFreshness);
+  // Site furniture an embedding page does not get: each is wired only if it is there.
   const togglePending = document.querySelector("#toggle-pending");
   function applyToggles() {
-    poster.classList.toggle("hide-pending", !togglePending.checked);
-    if (!togglePending.checked && openId) {
+    poster.classList.toggle("hide-pending", togglePending ? !togglePending.checked : false);
+    if (togglePending && !togglePending.checked && openId) {
       const item = itemById(openId);
       if (item && (item.status === "wip" || item.status === "planned")) {
         closeDrawer();
       }
     }
   }
-  togglePending.addEventListener("change", applyToggles);
+  if (togglePending) togglePending.addEventListener("change", applyToggles);
 
   if (page === "map" || page === "dev") {
     const side = document.querySelector(".header-side");
@@ -2298,17 +2364,21 @@ async function main() {
 
   // Phones: the nav folds behind a menu button. Closes on a link, on Escape and on a tap outside.
   const navToggle = document.querySelector(".nav-toggle");
-  const setMenu = (open) => { navToggle.setAttribute("aria-expanded", open ? "true" : "false"); document.body.classList.toggle("menu-open", open); };
-  navToggle.addEventListener("click", () => setMenu(navToggle.getAttribute("aria-expanded") !== "true"));
-  document.addEventListener("click", (event) => { if (document.body.classList.contains("menu-open") && !event.target.closest(".topbar-left")) setMenu(false); });
-  document.addEventListener("keydown", (event) => { if (event.key === "Escape") setMenu(false); });
+  if (navToggle) {
+    const setMenu = (open) => { navToggle.setAttribute("aria-expanded", open ? "true" : "false"); document.body.classList.toggle("menu-open", open); };
+    navToggle.addEventListener("click", () => setMenu(navToggle.getAttribute("aria-expanded") !== "true"));
+    document.addEventListener("click", (event) => { if (document.body.classList.contains("menu-open") && !event.target.closest(".topbar-left")) setMenu(false); });
+    document.addEventListener("keydown", (event) => { if (event.key === "Escape") setMenu(false); });
+  }
 
   window.addEventListener("hashchange", () => { if (page === "roadmap") spotlightTarget(); });
 
   const topbar = document.querySelector("#topbar");
-  const onScroll = () => topbar.classList.toggle("is-scrolled", window.scrollY > 8);
-  window.addEventListener("scroll", onScroll, { passive: true });
-  onScroll();
+  if (topbar) {
+    const onScroll = () => topbar.classList.toggle("is-scrolled", window.scrollY > 8);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+  }
 
   poster.addEventListener("click", onPosterClick);
   wireRail();
