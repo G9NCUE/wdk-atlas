@@ -628,9 +628,6 @@ details[open] > .star-head .star-title::after {
 
 .star-summary {
   margin: 4px 0 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   font-size: 14px;
   line-height: 20px;
   color: var(--secondary);
@@ -1472,7 +1469,7 @@ h1 {
   display: grid;
   grid-template-columns: 140px repeat(var(--cols, 7), minmax(0, 1fr));
   gap: 4px;
-  min-width: 900px; /* fits without a scrollbar from 1160 px up; narrower screens scroll the grid */
+  min-width: 1000px; /* 900 left each column about 60px of text, too narrow for "Ethereum" to stay whole. 1100 would also keep "ERC-4337" on one line but overflows a 1440 window once the rail is allowed for, so a hyphen break there is accepted. Fits without a scrollbar from about 1260 px up; narrower screens scroll the grid as before */
 }
 
 .mx-row {
@@ -1584,7 +1581,9 @@ h1 {
 }
 
 .mx-cell .mod .mod-title {
-  overflow-wrap: anywhere;
+  /* break-word, not anywhere: a word only comes apart when it cannot fit a line by itself,
+     so "Ethereum" wraps as a word instead of splitting into "Ethere" and "um". */
+  overflow-wrap: break-word;
 }
 
 .mx-cell .mod .pub {
@@ -2180,9 +2179,6 @@ summary .module-stack {
 }
 
 .kr-label {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
   max-width: 34ch;
 }
 
