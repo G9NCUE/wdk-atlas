@@ -1403,8 +1403,8 @@ function statTile(label, value, delta, hint, feeds) {
 const labelEvery = (n, i) => n <= 12 || i === n - 1 || i % Math.ceil(n / 8) === 0;
 
 // Inline SVG line chart, one series, hover titles on points, selective direct labels (first and last).
-function lineChart(points, { color = SERIES[0], height = 160, unit = "", marks = null } = {}) {
-  const W = 520, H = height, px = 28, py = 16;
+function lineChart(points, { color = SERIES[0], height = 190, unit = "", marks = null } = {}) {
+  const W = 520, H = height, px = 46, py = 22;
   const ys = points.map((p) => p.y);
   const max = Math.max(...ys, 1), min = 0;
   const x = (i) => px + (i * (W - 2 * px)) / Math.max(points.length - 1, 1);
@@ -1448,8 +1448,8 @@ function releaseMarks(file, selected) {
 }
 
 // Grouped bars: categories on x, up to three series, 2px gaps, hover titles, legend below.
-function groupedBars(categories, series, { height = 160 } = {}) {
-  const W = 520, H = height, px = 28, py = 14;
+function groupedBars(categories, series, { height = 190 } = {}) {
+  const W = 520, H = height, px = 46, py = 22;
   const max = Math.max(1, ...series.flatMap((s) => s.values));
   const gw = (W - 2 * px) / Math.max(categories.length, 1);
   const bw = Math.min(28, (gw * 0.7) / series.length);

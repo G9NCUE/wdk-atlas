@@ -2318,8 +2318,11 @@ body.page-dashboard .atlas { max-width: none; }
 .chart-box { width: 100%; }
 .chart { display: block; width: 100%; height: auto; overflow: visible; }
 .chart .grid { stroke: var(--line-subtle); stroke-width: 1; }
-.chart .axis { fill: var(--muted); font-family: var(--font-mono); font-size: 10px; }
-.chart .dlabel { fill: var(--ink); font-family: var(--font-mono); font-size: 12px; }
+/* Sizes here are viewBox units, not pixels: a 520-unit chart drawn in a 366-pixel card shrinks
+   everything by about 0.7, so 10 units used to reach the reader as 7px. 18 units lands at
+   roughly 12px in the narrowest card the dashboard grid produces. */
+.chart .axis { fill: var(--text-muted); font-family: var(--font-mono); font-size: 18px; }
+.chart .dlabel { fill: var(--ink); font-family: var(--font-mono); font-size: 18px; }
 .legend-row { display: flex; flex-wrap: wrap; gap: 14px; margin: 6px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--secondary); }
 .legend-row i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 2px; vertical-align: -1px; }
 

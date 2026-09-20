@@ -125,9 +125,13 @@ function contrastGate() {
 
   const failures = new Map();
   for (const { selector, body } of rules) {
-    const fg = /(?:^|[;\s])color:\s*var\(--([\w-]+)\)/.exec(body);
+    // SVG paints text with fill, not color, so a chart label is invisible to a check that only
+    // looks for one of them. Anything with a font declared alongside its fill is text.
+    const painted = /(?:^|[;\s])color:\s*var\(--([\w-]+)\)/.exec(body)
+      || (/font(?:-family|-size)?:/.test(body) ? /(?:^|[;\s])fill:\s*var\(--([\w-]+)\)/.exec(body) : null);
+    const fg = painted;
     if (!fg || !t[fg[1]]) continue;
-    if (/::(?:before|after|placeholder)|\bfill:/.test(selector)) continue; // decoration, not body text
+    if (/::(?:before|after|placeholder)/.test(selector)) continue; // decoration, not body text
     const own = backgroundOf(body, null) || ancestorBackground(selector);
     // Named surfaces where one is known, so the report can say which; otherwise the resolved
     // colour on its own, and failing both, every surface the element could sit on.
@@ -163,9 +167,23 @@ function contrastGate() {
   };
 }
 
+// A chart is drawn in a 520-unit box and displayed at about 366 pixels, so everything inside it
+// reaches the reader around 0.7 of its declared size. Measured in a browser, 2026-09-20.
+const CHART_SCALE = 366 / 520;
+
 function fontFloorGate() {
   const small = [];
-  for (const source of [["styles.css", css], ["app.js", js]]) {
+  // Read the stylesheet rule by rule so a size is attributed to the selector that declares it.
+  for (const [, selector, body] of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const inChart = /(^|[\s,>])\.chart(?![\w-])/.test(selector);
+    for (const m of body.matchAll(/font(?:-size)?:[^;]*?([\d.]+)px/g)) {
+      const declared = Number(m[1]);
+      const seen = inChart ? declared * CHART_SCALE : declared;
+      if (seen >= MIN_FONT_PX) continue;
+      small.push(`styles.css ${selector.trim().split(",")[0].trim()}: ${declared}px${inChart ? ` in drawing units, seen as ${seen.toFixed(1)}px` : ""}`);
+    }
+  }
+  for (const source of [["app.js", js]]) {
     for (const m of source[1].matchAll(/font-size:\s*([\d.]+)px/g)) {
       if (Number(m[1]) < MIN_FONT_PX) small.push(`${source[0]}: ${m[1]}px`);
     }
