@@ -40,7 +40,6 @@ function mount(host = document.querySelector("[data-wdk-atlas]") || document.bod
   if (document.querySelector("#poster")) return false; // the full site: nothing to build
   const frame = document.createElement("div");
   frame.className = "wdk-atlas-embed";
-  frame.innerHTML = "";
   const make = (tag, attrs) => {
     const node = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
