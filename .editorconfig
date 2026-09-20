@@ -1,0 +1,21 @@
+# One set of whitespace rules for every editor that opens this repo. There is no formatter
+# here and no package.json to hang one on, so this file is the whole convention.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false # two trailing spaces are a line break in Markdown
+
+[*.{json,yaml,yml}]
+indent_size = 2
+
+[data/*.json]
+insert_final_newline = true
+trim_trailing_whitespace = false # written by the collector, not by hand
