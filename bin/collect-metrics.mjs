@@ -49,8 +49,10 @@ import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { loadAtlas, ROOT } from "./lib/load-atlas.mjs";
+import { summarise } from "./lib/summary.mjs";
 
 const OUT = join(ROOT, "data", "metrics.json");
+const SUMMARY_OUT = join(ROOT, "data", "summary.json");
 const TOKEN = process.env.GITHUB_TOKEN || "";
 const DRY = process.argv.includes("--dry");
 
@@ -357,9 +359,12 @@ try {
   else {
     mkdirSync(dirname(OUT), { recursive: true });
     writeFileSync(OUT, JSON.stringify(file) + "\n");
+    // The few values every page needs, kept apart so a page that needs nothing else fetches
+    // nothing else. Written from the same object, so the two cannot disagree.
+    writeFileSync(SUMMARY_OUT, JSON.stringify(summarise(file)) + "\n");
     const stars = Object.values(snap.stars).reduce((a, b) => a + b, 0);
     const people = new Set(Object.values(contributorsByRepo).flat()).size;
-    console.log(`wrote data/metrics.json: ${today}, ${Object.keys(repos).length} repos, ${published.length} published packages, ${stars} stars, ${people} contributors, ${Object.keys(file.snapshots).length} snapshot(s)`);
+    console.log(`wrote data/metrics.json and data/summary.json: ${today}, ${Object.keys(repos).length} repos, ${published.length} published packages, ${stars} stars, ${people} contributors, ${Object.keys(file.snapshots).length} snapshot(s)`);
   }
 } catch (error) {
   console.error(`collect-metrics: ${error && error.message ? error.message : error}`);

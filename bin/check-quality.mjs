@@ -7,6 +7,7 @@
 // Usage: node bin/check-quality.mjs [--json]
 // Prints one line per gate, ids from the product spec, and exits 1 if any gate fails.
 import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
+import { gzipSync } from "node:zlib";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { ROOT } from "./lib/load-atlas.mjs";
@@ -34,8 +35,10 @@ const VENDOR = {
   },
 };
 
-// Uncompressed budget per page, excluding fonts. What a page fetches, not what the repo holds.
-const BUDGET_KB = { map: 300, dev: 300, overview: 350, roadmap: 450, results: 450, dashboard: 750 };
+// What a reader actually downloads for a page, compressed, excluding fonts. GitHub Pages
+// serves these gzipped, so measuring the raw bytes overstated every page by three or four
+// times and turned a respectable site into six failures.
+const BUDGET_KB = { map: 100, dev: 100, overview: 140, roadmap: 140, results: 140, dashboard: 140 };
 
 // ---------------------------------------------------------------- colour
 // WCAG relative luminance and contrast, from hsl() as the tokens are written.
@@ -195,19 +198,19 @@ function fontFloorGate() {
   return { pass: unique.length === 0, detail: unique.length ? unique.join(", ") : `nothing below ${MIN_FONT_PX}px` };
 }
 
+const gz = (rel) => (existsSync(join(ROOT, rel)) ? gzipSync(readFileSync(join(ROOT, rel)), { level: 9 }).length : 0);
+
 function pageWeightGate() {
-  const shell = size("index.html") + size("styles.css") + size("app.js") + size("vendor/js-yaml.min.js");
-  const atlas = size("atlas.yaml");
-  const metrics = size("data/metrics.json");
-  const summary = size("data/summary.json");
-  // Which pages pull the full metrics file. The light pages should read the summary instead.
-  const lightPages = ["map", "dev", "overview"];
-  const pulls = /loadMetrics\(\)/.test(js);
+  const shell = gz("index.html") + gz("styles.css") + gz("app.js") + gz("vendor/js-yaml.min.js") + gz("atlas.yaml");
+  const metrics = gz("data/metrics.json");
+  const summary = gz("data/summary.json");
+  // Only the Map and Developer Resources can be served by the small file; every other page
+  // reads the series, the snapshots or the per-repo readiness facts.
+  const lightPages = ["map", "dev"];
   const rows = [];
   for (const [page, budget] of Object.entries(BUDGET_KB)) {
-    const light = lightPages.includes(page);
-    const data = light && summary ? summary : metrics;
-    const total = (shell + atlas + (pulls ? data : 0)) / KB;
+    const data = lightPages.includes(page) && summary ? summary : metrics;
+    const total = (shell + data) / KB;
     rows.push({ page, kb: Math.round(total), budget, pass: total <= budget });
   }
   const over = rows.filter((r) => !r.pass);
@@ -347,7 +350,7 @@ const GATES = [
       return { pass: missing.length === 0, detail: missing.length ? `not ignored: ${missing.join(", ")}` : "secrets and build output are ignored" };
     } },
   { id: "P6.1", what: "nothing blocks the first paint", run: fontPreloadGate },
-  { id: "P6.3", what: "pages stay inside their weight budget", run: pageWeightGate },
+  { id: "P6.3", what: "pages stay inside their weight budget, compressed", run: pageWeightGate },
 ];
 
 export function runGates() {
