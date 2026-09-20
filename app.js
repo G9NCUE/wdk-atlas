@@ -1012,8 +1012,6 @@ function originContext(repo) {
 
 const examplesRepoUrl = () => `https://github.com/${orgName()}/${(atlas.audit && atlas.audit.examplesRepo) || "wdk-examples"}`;
 
-// A key result with `metric` reads its current value and progress from public data: the atlas, npm and GitHub
-// through the metrics file. It never reads a number typed by hand.
 // Chosen installs per repo for the last complete period: the download total minus whatever
 // another WDK package pinned. One copy, because the dashboard and the key result quoting
 // different numbers from the same data is exactly the fault this loop keeps finding.
@@ -1037,6 +1035,8 @@ const chosenInstalls = (file, repos) => {
   return Object.fromEntries(withPackages.map((r) => [r, split[r] ? split[r].direct : 0]));
 };
 
+// A key result with `metric` reads its current value and progress from public data: the atlas, npm and GitHub
+// through the metrics file. It never reads a number typed by hand.
 function evaluateMetric(kr) {
   const m = kr.metric; if (!m) return null;
   // `origin` is the public endpoint a stranger can call to check the row for themselves, and
@@ -1584,8 +1584,6 @@ function defFor(id) {
   return metricDef(id) || { id, label: id, definition: "No definition recorded for this figure.", source: "unknown", window: "unknown" };
 }
 
-// What a definition looks like to a reader: what is counted, where it came from, over what
-// window. Opens on hover and on keyboard focus, so it works without a mouse.
 // Counted, not collected. Rows in atlas.yaml say what we have written down; figures from npm
 // and GitHub say what is true of the world. They sit side by side on three pages, in the same
 // type, and nothing told a reader which was which. The registry already says why that matters,

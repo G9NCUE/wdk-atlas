@@ -116,7 +116,6 @@
   box-sizing: border-box;
 }
 
-
 .site-header {
   display: flex;
   flex-wrap: wrap;
@@ -304,7 +303,6 @@ main:focus {
   scrollbar-width: thin;
   scrollbar-color: var(--muted) transparent;
 }
-
 
 .timeline-track .star-head {
   position: sticky;
@@ -2341,7 +2339,6 @@ summary .module-stack {
   padding: 0 16px 40px;
 }
 
-
 .results-star {
   display: flex;
   flex-direction: column;
@@ -2448,7 +2445,6 @@ summary .module-stack {
 .hbar-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-family: var(--font-mono); font-size: 12px; color: var(--secondary); }
 .hbar-track { height: 10px; border-radius: 3px; background: var(--line-subtle); overflow: hidden; }
 .hbar-fill { display: block; height: 100%; border-radius: 3px; }
-/* The repository title behind a package name, trimmed cleanly rather than cut mid-letter. */
 .hbar-value { font-family: var(--font-mono); text-align: right; color: var(--ink); }
 
 .dash-note { margin: 0; max-width: 90ch; font-size: 12px; line-height: 16px; color: var(--secondary); }
@@ -2473,8 +2469,7 @@ summary .module-stack {
 .repo-pkg { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
 
 .tile-feeds { align-self: flex-start; font-size: 14px; line-height: 1; color: var(--secondary); text-decoration: none; }
-.tile-feeds:hover { color: var(--accent); }
-.tile-feeds:hover { text-decoration: underline; }
+.tile-feeds:hover { color: var(--accent); text-decoration: underline; }
 
 /* ---- Key results page: one shared grid so columns line up across stars ------------------------ */
 .kr-strip-summary { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--secondary); }
