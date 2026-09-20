@@ -57,6 +57,13 @@ GITHUB_TOKEN=$(gh auth token) node bin/check-atlas.mjs
 GITHUB_TOKEN=$(gh auth token) node bin/collect-metrics.mjs --dry
 ```
 
+`--npm-only` refreshes just the figures that come from the npm registry, reusing the repository
+list already in `data/metrics.json` and asking GitHub for nothing, so it needs no token:
+
+```
+node bin/collect-metrics.mjs --npm-only
+```
+
 ## Editing the map
 
 `atlas.yaml` is the source of truth: modules, sections, relations, mission, north stars, key results
