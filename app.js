@@ -26,6 +26,18 @@ function showError(message) {
   errorEl.textContent = message;
 }
 
+// Links whose address comes from atlas.yaml: only an https address, or one that stays on this
+// site. bin/validate-atlas.mjs already refuses anything else in the file, so this is the second
+// line rather than the first. It is here because the content security policy does not stop a
+// javascript: address in every engine, and because the next person adding a link should not
+// have to remember any of that.
+function safeHref(value) {
+  const href = String(value).trim();
+  if (/^https:\/\/[^\s]+$/i.test(href)) return href;
+  if (/^(?:\.{1,2}\/|\/(?!\/)|[#?])/.test(href)) return href; // relative, in-page, or a query
+  return null;
+}
+
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
   if (attrs) {
@@ -33,6 +45,7 @@ function el(tag, attrs, ...children) {
       if (value == null || value === false) continue;
       if (key === "class") node.className = value;
       else if (key === "style") for (const decl of String(value).split(";")) { const i = decl.indexOf(":"); if (i > 0) node.style.setProperty(decl.slice(0, i).trim(), decl.slice(i + 1).trim()); }
+      else if (key === "href" || key === "src") { const safe = safeHref(value); if (safe) node.setAttribute(key, safe); }
       else node.setAttribute(key, value === true ? "" : value);
     }
   }
