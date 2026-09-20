@@ -1873,14 +1873,18 @@ function buildDashboard(file, selected) {
         el("span", withTip({ class: "split-part" }, defTip(defFor("downloads-induced")), "pulled in"), `${fmtNum(inducedTotal)} or fewer pulled in`))
     : null;
 
+  // The order is the argument. A reader takes in the first tiles and stops, so the first two
+  // are the ones with a decision behind them: how many projects depend on WDK, and how many
+  // installs somebody actually chose. The two the review demoted come last, where they are
+  // still true and no longer lead.
   const tiles = el("div", { class: "tiles" },
+    latest.dependents != null && statTile(defFor("dependents"), "Projects depending on WDK", fmtNum(latest.dependents), el("span", { class: "delta none" }, "public repos outside the org"), "repos whose package.json names a WDK package, from GitHub code search"),
     statTile(defFor("downloads"), `npm downloads, last full ${unit}`, dlLast.now == null ? "—" : fmtNum(dlLast.now), trendPill("downloads", dl), splitHint || (dlLast.key ? `${dlLast.key} · ${withPkg} packages` : coverageNote(dlCov))),
-    statTile(defFor("stars"), "GitHub stars", fmtNum(sum(latest.stars)), trendPill("stars", starsSeries), `${selected.length} repos · ${fmtNum(sum(latest.forks))} forks${snapDays.length < 2 ? "" : ` · counted daily since ${snapDays[0]}`}`),
     statTile(defFor("external-prs-merged"), `External pull requests merged, last ${unit}`, lastTwo(xM).now == null ? "—" : String(lastTwo(xM).now), trendPill("external-prs-merged", xM), lastTwo(xM).now == null ? coverageNote(evCov) : `${lastTwo(xO).now ?? 0} opened · Tether team excluded`, feeds("external-prs")),
     statTile(defFor("contributors"), "Contributors", String(people), trendPill("contributors", contribSeries), "people with commits, bots excluded, unique across the selection"),
-    statTile(defFor("open-issues"), "Open issues", String(sum(latest.openIssues)), trendPill("open-issues", backlogSeries, { invert: true }), lastTwo(isO).now == null ? coverageNote(evCov) : `${lastTwo(isO).now} opened · ${lastTwo(isC).now ?? 0} closed · last ${unit}`, feeds("issue-response")),
     statTile(defFor("packages-published"), "Packages published", String(published), el("span", { class: "delta none" }, `${stable} stable · ${published - stable} in beta`), `${(atlas.modules || []).filter((m) => m.publisher && m.publisher !== file.org && m.status === "shipped").length} more by third parties, not in this count`, feeds("stable")),
-    latest.dependents != null && statTile(defFor("dependents"), "Projects depending on WDK", fmtNum(latest.dependents), el("span", { class: "delta none" }, "public repos outside the org"), "repos whose package.json names a WDK package, from GitHub code search")
+    statTile(defFor("open-issues"), "Open issues", String(sum(latest.openIssues)), trendPill("open-issues", backlogSeries, { invert: true }), lastTwo(isO).now == null ? coverageNote(evCov) : `${lastTwo(isO).now} opened · ${lastTwo(isC).now ?? 0} closed · last ${unit}`, feeds("issue-response")),
+    statTile(defFor("stars"), "GitHub stars", fmtNum(sum(latest.stars)), trendPill("stars", starsSeries), `${selected.length} repos · ${fmtNum(sum(latest.forks))} forks${snapDays.length < 2 ? "" : ` · counted daily since ${snapDays[0]}`}`)
   );
 
   const byStars = selected.map((r) => ({ label: r, hint: file.repos[r].title !== r ? file.repos[r].title : "", value: (latest.stars || {})[r] || 0 })).sort((a, b) => b.value - a.value).slice(0, 8);
@@ -2047,11 +2051,11 @@ function briefTiles(file) {
   const people = new Set(all.flatMap((r) => (file.contributors || {})[r] || [])).size;
   const unit = { daily: "day", weekly: "week", monthly: "month" }[grain];
   return el("div", { class: "tiles brief-tiles" },
-    statTile(defFor("downloads"), `npm downloads, last full ${unit}`, dl.length ? fmtNum(dl[dl.length - 1].y) : "—", trendPill("downloads", dl), `${published.length} packages`),
-    statTile(defFor("packages-published"), "Packages published", String(published.length), el("span", { class: "delta none" }, `${stable} stable · ${published.length - stable} in beta`), "on npm, first party"),
-    statTile(defFor("contributors"), "Contributors", String(people), null, "people with commits, bots excluded"),
-    statTile(defFor("external-prs-merged"), `External pull requests merged, last 4 ${unit}s`, xM.length ? String(sum4(xM)) : "—", deltaPill("external-prs-merged", xM.length ? sum4(xM) : null, prev4(xM), { note: "vs prev 4" }), "Tether team excluded"),
     latest.dependents != null && statTile(defFor("dependents"), "Projects depending on WDK", fmtNum(latest.dependents), null, "public repos outside the org"),
+    statTile(defFor("downloads"), `npm downloads, last full ${unit}`, dl.length ? fmtNum(dl[dl.length - 1].y) : "—", trendPill("downloads", dl), `${published.length} packages`),
+    statTile(defFor("external-prs-merged"), `External pull requests merged, last 4 ${unit}s`, xM.length ? String(sum4(xM)) : "—", deltaPill("external-prs-merged", xM.length ? sum4(xM) : null, prev4(xM), { note: "vs prev 4" }), "Tether team excluded"),
+    statTile(defFor("contributors"), "Contributors", String(people), null, "people with commits, bots excluded"),
+    statTile(defFor("packages-published"), "Packages published", String(published.length), el("span", { class: "delta none" }, `${stable} stable · ${published.length - stable} in beta`), "on npm, first party"),
     statTile(defFor("stars"), "GitHub stars", fmtNum(all.reduce((n, r) => n + ((latest.stars || {})[r] || 0), 0)), null, `${all.length} public repos`)
   );
 }
