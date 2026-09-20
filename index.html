@@ -23,7 +23,15 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="icon" type="image/svg+xml" href="assets/wdk-logo.svg" />
-    <link rel="stylesheet" href="styles.css?v=72" />
+    <!-- The two faces the first screen is set in: Inter for the text, Space Grotesk standing in
+         for the licensed display face in the mission line. Fetched alongside the stylesheet
+         rather than after it, so the swap from a fallback happens before anyone reads.
+         Deliberately not the latin-ext subsets, 102 KB of accented characters this site almost
+         never uses, nor Inconsolata, whose figures arrive lower down and whose fallback is
+         metrically close. crossorigin is required even same-origin: fonts fetch anonymously. -->
+    <link rel="preload" href="assets/fonts/Inter-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="assets/fonts/Space-Grotesk-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="styles.css?v=73" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -83,6 +91,6 @@
     <footer id="site-foot" class="site-foot" hidden></footer>
 
     <script defer src="vendor/js-yaml.min.js"></script>
-    <script type="module" src="app.js?v=72"></script>
+    <script type="module" src="app.js?v=73"></script>
   </body>
 </html>
