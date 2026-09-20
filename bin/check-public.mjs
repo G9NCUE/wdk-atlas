@@ -33,6 +33,15 @@ const readLines = (rel) => {
   return existsSync(path) ? readFileSync(path, "utf8").split("\n") : null;
 };
 
+// Fingerprints committed to the repo. The private list beside them carries a note per line
+// saying why each was decided, which is why that one is not committed; this one is the
+// fingerprints alone, and being in the repo is what lets this gate run anywhere.
+const readRepoList = (name) => {
+  const path = join(ROOT, name);
+  if (!existsSync(path)) return [];
+  return readFileSync(path, "utf8").split("\n").map((l) => l.replace(/#.*/, "").trim()).filter(Boolean);
+};
+
 const readList = (name) => {
   if (!REVIEW_DIR) return [];
   const path = join(REVIEW_DIR, name);
@@ -180,7 +189,12 @@ export function scan() {
   const findings = [];
   for (const rel of ["atlas.yaml", "README.md", "index.html", "app.js", "styles.css"]) scanText(rel, findings);
   scanStructure(findings);
-  const acknowledged = new Set(readList("acknowledged.txt").map((l) => l.split(/\s+/)[0]));
+  // Two sources, unioned. The private list in the review directory carries a note beside each
+  // fingerprint saying why it was decided, which is why it is not committed. public-reviewed.txt
+  // is the fingerprints alone, and being in the repo is what lets this gate run in CI at all.
+  const acknowledged = new Set(
+    [...readList("acknowledged.txt"), ...readRepoList("public-reviewed.txt")].map((l) => l.split(/\s+/)[0])
+  );
   for (const f of findings) {
     f.id = fingerprint(f.category, f.file, f.evidence);
     f.acknowledged = acknowledged.has(f.id);

@@ -1,0 +1,49 @@
+# Every check this repo owns, on every push and every pull request.
+#
+# Until this existed, seventy tests, twenty-four static gates, eleven measurement gates, a
+# schema validator and a public-safety scan ran only when somebody typed the command, and the
+# daily collector committed to main and asked for a Pages build without any of them running.
+#
+# Read-only: no token is needed and none is granted. Nothing here installs anything.
+name: Checks
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      # The schema first: everything below reads atlas.yaml, so a broken file should say so once.
+      - name: Validate the atlas
+        run: node bin/validate-atlas.mjs
+
+      - name: Unit tests
+        run: node --test test/*.test.mjs
+
+      - name: Static gates
+        run: node bin/check-quality.mjs
+
+      - name: Measurement gates
+        run: node bin/check-metrics.mjs
+
+      # Reads public-reviewed.txt from the repo. The reviewer's notes live outside it, so a
+      # finding nobody has decided fails here whether or not that private folder exists.
+      - name: Public-safety scan
+        run: node bin/check-public.mjs
