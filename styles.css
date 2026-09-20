@@ -2687,6 +2687,13 @@ table.ready .owners { white-space: normal; }
 @starting-style {
   .has-tip[data-tip]:hover::after, .has-tip[data-tip]:focus-visible::after { opacity: 0; }
 }
+/* Source cell: the public endpoint first, then the copy we counted, then our own page. The
+   order is the argument: a reader who wants to check the row should not have to start here. */
+.kr-col-source { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.kr-origin { font-weight: 600; }
+.kr-secondary { display: flex; gap: 10px; }
+.kr-data, .kr-view { color: var(--text-muted); font-size: 12px; }
+
 .kr-col-value .has-tip[data-tip]::after, .brief-kr-value.has-tip[data-tip]::after { left: auto; right: 0; }
 
 /* ---- Menu button: the nav folds behind it on narrow screens ------------------------------------ */
