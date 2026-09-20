@@ -1776,14 +1776,18 @@ async function renderDashboard() {
 // Page headings, the Overview page and the freshness line
 // ==========================================================================================================
 
+// Every page gets a heading and a tab title. Where the page already opens with the mission or
+// the map, the heading is there but not drawn: the design stays as it is while the document
+// outline, the browser history and a shared link all say which page this is.
 const pageHeadings = {
-  main: { title: "WDK Atlas", subtitle: "", hidden: true },   // the logo carries the brand; keep an h1 for assistive tech
+  main: { title: "WDK Visual Map", subtitle: "", hidden: true },  // the logo carries the brand
+  map: { title: "WDK Visual Map", subtitle: "", hidden: true },
   dev: {
     title: "Developer Resources",
     subtitle: "Docs, examples and tools for building with WDK. Not part of a shipped wallet.",
   },
-  roadmap: { title: "", subtitle: "" },
-  overview: { title: "", subtitle: "" },
+  roadmap: { title: "Roadmap", subtitle: "", hidden: true },
+  overview: { title: "Overview", subtitle: "", hidden: true },
   dashboard: {
     title: "Dashboard",
     subtitle: "Public adoption, community and support numbers, collected daily into the same repo.",
@@ -1927,6 +1931,9 @@ function renderPoster() {
   title.textContent = heading.title;
   title.classList.toggle("visually-hidden", Boolean(heading.hidden));
   document.querySelector("#subtitle").textContent = heading.subtitle;
+  // Six pages once shared one tab title, so browser history and a pasted link said nothing
+  // about where they led.
+  document.title = `${heading.title} · WDK Atlas`;
   document.body.classList.add(`page-${page}`);
 
   for (const link of document.querySelectorAll(".nav a")) {
