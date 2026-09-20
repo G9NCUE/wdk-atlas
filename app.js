@@ -1127,8 +1127,7 @@ function evaluateMetric(kr) {
     const within = m.withinHours || 168, now = Date.now();
     // The collector only refreshes this window; older days are stale.
     const windowDays = 30, from = new Date(now - windowDays * 864e5).toISOString().slice(0, 10);
-    const { answered, missed, pending, total, pct } = responseStats(D.issueResponse, { withinHours: within, from, now });
-    void missed;
+    const { answered, pending, total, pct } = responseStats(D.issueResponse, { withinHours: within, from, now });
     const days = Math.round(within / 24);
     Object.assign(out, { current: pct == null ? null : `${pct}%`, target: `${m.target}%`, progress: pct == null ? null : Math.min(100, Math.round((100 * pct) / m.target)), unit: `${answered} of ${total} issues, last ${windowDays} days${pending ? `, ${pending} still within ${days} days` : ""}`, link: "./?page=dashboard&range=weekly", origin: originFor(m, originContext(null)), note: total ? null : "No issues opened in the window yet." });
     return out;
@@ -1568,21 +1567,21 @@ function deltaPill(id, now, before, { invert = false, note = "" } = {}) {
 
 // Trend against the average of the previous four periods, which is what a reader means by "is it up".
 // Falls back to the previous period while fewer than five exist.
-function trendPill(id, pts, { invert = false } = {}) {
+function trendPill(id, pts) {
   const short = { daily: "day", weekly: "wk", monthly: "mo" }[grain];
   if (pts.length >= 5) {
     const last = pts[pts.length - 1].y, base = pts.slice(-5, -1).reduce((a, p) => a + p.y, 0) / 4;
-    return deltaPill(id, last, Math.round(base), { invert, note: `vs 4-${short} avg` });
+    return deltaPill(id, last, Math.round(base), { note: `vs 4-${short} avg` });
   }
   const { now, prev } = lastTwo(pts);
-  return deltaPill(id, now, prev, { invert, note: prev == null ? "" : `vs prev ${short}` });
+  return deltaPill(id, now, prev, { note: prev == null ? "" : `vs prev ${short}` });
 }
 
 // The one way a page is allowed to reach a definition. A figure with no entry behind it is a
 // number nobody has had to justify, so it renders saying exactly that rather than looking
 // finished; bin/check-metrics.mjs refuses the build long before a reader would see it.
 function defFor(id) {
-  return metricDef(id) || { id, label: id, definition: "No definition recorded for this figure.", source: "unknown", window: "unknown", missing: true };
+  return metricDef(id) || { id, label: id, definition: "No definition recorded for this figure.", source: "unknown", window: "unknown" };
 }
 
 // What a definition looks like to a reader: what is counted, where it came from, over what
@@ -1721,7 +1720,7 @@ function exportControls(def, data) {
 function chartCard(def, title, value, delta, body, foot, data) {
   return el("article", { class: "chart-card" },
     el("header", { class: "chart-head" }, el("h3", withTip({}, defTip(def), title), title), value != null && el("span", { class: "chart-value" }, value), delta,
-      data && data.rows && data.rows.length ? exportControls(def, { ...data, title: data.title || title }) : null),
+      data && data.rows && data.rows.length ? exportControls(def, { ...data, title }) : null),
     body, foot && el("p", { class: "chart-foot" }, foot));
 }
 
@@ -1882,10 +1881,9 @@ function buildDashboard(file, selected) {
   const prsO = ev(D.prsOpened), prsM = ev(D.prsMerged);
   const xO = ev(D.externalPrsOpened), xM = ev(D.externalPrsMerged);
   const isO = ev(D.issuesOpened), isC = ev(D.issuesClosed);
-  const starsSeries = snapshotSeries(snaps, "stars", selected);
   const backlogSeries = snapshotSeries(snaps, "openIssues", selected);
   const contribSeries = snapshotSeries(snaps, "contributors", selected, (vals) => vals.reduce((n, v) => n + (Array.isArray(v) ? v.length : v), 0));
-  const dlLast = lastTwo(dl), starsLast = lastTwo(starsSeries);
+  const dlLast = lastTwo(dl);
   const unit = { daily: "day", weekly: "week", monthly: "month" }[grain];
   const align = (a, b) => { const keys = [...new Set([...a, ...b].map((p) => p.key))].sort(); const at = (s, k) => (s.find((p) => p.key === k) || {}).y || 0; return { cats: keys.map(bucketLabel), a: keys.map((k) => at(a, k)), b: keys.map((k) => at(b, k)) }; };
   const pr = align(prsO, prsM), xpr = align(xO, xM), iss = align(isO, isC);
@@ -1917,10 +1915,7 @@ function buildDashboard(file, selected) {
   // our own dependency graph and call it a reader failing to upgrade.
   const onLatest = latest.onLatest || {};
   const currencyRepos = withPackages.filter((r) => typeof onLatest[r] === "number");
-  const weight = (r) => Math.max(partOf(r, "direct"), 0);
-  const weighted = currencyRepos.reduce((n, r) => n + (onLatest[r] / 100) * weight(r), 0);
-  const weightTotal = currencyRepos.reduce((n, r) => n + weight(r), 0);
-  const currencyPct = weightTotal ? Math.round((100 * weighted) / weightTotal) : null;
+  const currencyPct = weightedCurrency(onLatest, Object.fromEntries(withPackages.map((r) => [r, Math.max(partOf(r, "direct"), 0)])));
   // The middle of an even set is the mean of the two middle values, so that a reader who
   // recomputes it from the export gets the same number we printed.
   const median = (xs) => {
@@ -1929,7 +1924,6 @@ function buildDashboard(file, selected) {
     return v.length % 2 ? v[i] : Math.round((v[i - 1] + v[i]) / 2);
   };
   const medianShare = median(currencyRepos.map((r) => onLatest[r]));
-  const medianFresh = median(withPackages.map((r) => (latest.currency || {})[r]).filter((v) => typeof v === "number"));
   const byCurrency = currencyRepos
     .map((r) => ({ label: unscoped(file.repos[r].package), value: onLatest[r] }))
     .sort((a, b) => a.value - b.value).slice(0, 8);
@@ -1940,9 +1934,9 @@ function buildDashboard(file, selected) {
 
   const splitHint = Object.keys(edges).length
     ? el("span", null,
-        el("span", withTip({ class: "split-part" }, defTip(defFor("downloads-direct")), "chosen"), `${fmtNum(chosenTotal)} or more chosen`),
+        el("span", withTip({}, defTip(defFor("downloads-direct")), "chosen"), `${fmtNum(chosenTotal)} or more chosen`),
         " · ",
-        el("span", withTip({ class: "split-part" }, defTip(defFor("downloads-induced")), "pulled in"), `${fmtNum(inducedTotal)} or fewer pulled in`))
+        el("span", withTip({}, defTip(defFor("downloads-induced")), "pulled in"), `${fmtNum(inducedTotal)} or fewer pulled in`))
     : null;
 
   // The order is the argument, and the row is now only the numbers that carry one. Stars and
