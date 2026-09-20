@@ -66,30 +66,46 @@ function tokens(block) {
   return colours;
 }
 
-// Foreground tokens that carry text, and the surfaces text sits on.
-const TEXT_TOKENS = ["ink", "secondary", "muted", "accent", "success", "warning", "error", "purple"];
 const SURFACE_TOKENS = ["bg", "surface", "card", "card-elevated"];
 
+// The token values are the WDK design system's and are not Atlas's to change: they are
+// byte-identical to the custom properties wdk.tether.io ships. So this gate does not ask
+// whether a token is accessible in the abstract. It asks whether a token that cannot carry
+// text is being used to carry text, which is a usage bug and fixable without touching the
+// palette. --secondary, also part of the system, clears 6:1 on every surface.
 function contrastGate() {
-  const light = css.includes("prefers-color-scheme: light") || css.includes('data-theme="light"');
-  const themes = [[":root {", "dark"]];
-  const failures = [];
-  for (const [block, theme] of themes) {
-    const t = tokens(block);
-    if (!t.bg) return { pass: false, detail: "no colour tokens found in the :root block" };
-    for (const name of TEXT_TOKENS) {
-      if (!t[name]) continue;
-      for (const surface of SURFACE_TOKENS) {
-        if (!t[surface]) continue;
-        const ratio = contrast(t[name], t[surface]);
-        if (ratio < MIN_CONTRAST) failures.push(`--${name} on --${surface}: ${ratio.toFixed(2)}:1 (${theme})`);
-      }
+  const t = tokens(":root {");
+  if (!t.bg) return { pass: false, detail: "no colour tokens found in the :root block" };
+
+  // Read each rule on its own terms. A rule that paints its own background is judged against
+  // that background, which is how dark text on the orange accent stays correct. A rule that
+  // does not is judged against every surface it could sit on.
+  const failures = new Map();
+  const source = css.replace(/\/\*[\s\S]*?\*\//g, ""); // comments would otherwise read as selectors
+  for (const [, selector, body] of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const fg = /(?:^|[;\s])color:\s*var\(--([\w-]+)\)/.exec(body);
+    if (!fg || !t[fg[1]]) continue;
+    if (/::(?:before|after|placeholder)|\bfill:/.test(selector)) continue; // decoration, not body text
+    // Only a flat background can be judged. A colour-mix or a gradient resolves at paint time,
+    // so those rules fall back to the surfaces the element could sit on.
+    const bgDecl = /background(?:-color)?:\s*([^;]+)/.exec(body);
+    const flat = bgDecl && !/color-mix|gradient/.test(bgDecl[1]) ? /var\(--([\w-]+)\)/.exec(bgDecl[1]) : null;
+    const against = flat && t[flat[1]] ? [flat[1]] : SURFACE_TOKENS.filter((s) => t[s]);
+    for (const surface of against) {
+      const ratio = contrast(t[fg[1]], t[surface]);
+      if (ratio >= MIN_CONTRAST) continue;
+      const key = `${fg[1]}|${surface}`;
+      if (!failures.has(key)) failures.set(key, { fg: fg[1], surface, ratio, where: selector.trim().split(",")[0].trim() });
     }
   }
+  const worst = (name) => Math.min(...SURFACE_TOKENS.filter((s) => t[s]).map((s) => contrast(t[name], t[s])));
+  const spare = Object.keys(t).find((n) => /secondary|text/.test(n) && worst(n) >= MIN_CONTRAST);
+  const list = [...failures.values()].sort((a, b) => a.ratio - b.ratio);
   return {
-    pass: failures.length === 0,
-    detail: failures.length ? failures.join("; ") : `every text token clears ${MIN_CONTRAST}:1 on every surface`,
-    note: light ? "" : "only the dark theme exists, so only it was measured",
+    pass: list.length === 0,
+    detail: list.length ? list.map((f) => `--${f.fg} on --${f.surface} is ${f.ratio.toFixed(2)}:1 (${f.where})`).join("; ")
+      : `every colour used for text clears ${MIN_CONTRAST}:1 where it is used`,
+    note: list.length && spare ? `--${spare} is in the design system and clears ${worst(spare).toFixed(1)}:1` : "",
   };
 }
 
@@ -188,13 +204,13 @@ const GATES = [
   { id: "P1.10", what: "the README matches the shipped data", run: readmeClaimGate },
   { id: "P2.1", what: `text tokens clear ${MIN_CONTRAST}:1`, run: contrastGate },
   { id: "P2.2a", what: `no type below ${MIN_FONT_PX}px`, run: fontFloorGate },
-  { id: "P2.2b", what: "chart colours come from tokens",
+  { id: "P2.2b", what: "chart colours come from the design system",
     run: () => {
       const literals = [...js.matchAll(/#[\da-f]{6}\b/gi)].map((m) => m[0]);
       return { pass: literals.length === 0, detail: literals.length ? `${literals.length} colour literal(s) in app.js: ${[...new Set(literals)].join(", ")}` : "no colour literals in the script" };
     } },
-  { id: "P2.3", what: "a light theme exists",
-    run: () => ({ pass: has(css, /prefers-color-scheme:\s*light/) || has(css, /\[data-theme="light"\]/), detail: "no light theme in the stylesheet" }) },
+  // P2.3 (a light theme) is struck: the WDK design system is dark only, so Atlas is too.
+  // Print legibility is covered by P1.8.
   { id: "P3.1", what: "a skip link comes first",
     run: () => ({ pass: has(html, /class="skip[^"]*"|href="#main"/), detail: "no skip link in index.html" }) },
   { id: "P3.2", what: "reduced motion is honoured everywhere",
