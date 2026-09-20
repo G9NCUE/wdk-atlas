@@ -87,30 +87,72 @@ function contrastGate() {
   // Read each rule on its own terms. A rule that paints its own background is judged against
   // that background, which is how dark text on the orange accent stays correct. A rule that
   // does not is judged against every surface it could sit on.
-  const failures = new Map();
   const source = css.replace(/\/\*[\s\S]*?\*\//g, ""); // comments would otherwise read as selectors
-  for (const [, selector, body] of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+  const rules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({ selector: selector.trim(), body }));
+
+  // The colour a background declaration actually paints, where that can be worked out:
+  // a token, or a colour-mix of a token with another token or with the surface behind it.
+  const backgroundOf = (body, behind) => {
+    const decl = /background(?:-color)?:\s*([^;]+)/.exec(body);
+    if (!decl || /gradient/.test(decl[1])) return null;
+    const value = decl[1].trim();
+    if (/^transparent$/.test(value)) return behind || null;
+    const mix = /^color-mix\(\s*in\s+srgb\s*,\s*var\(--([\w-]+)\)\s+([\d.]+)%\s*,\s*(transparent|var\(--([\w-]+)\))\s*\)$/.exec(value);
+    if (mix) {
+      const top = t[mix[1]];
+      const under = mix[3] === "transparent" ? behind : t[mix[4]];
+      if (!top || !under) return null;
+      const ratio = Number(mix[2]) / 100;
+      return top.map((c, i) => Math.round(c * ratio + under[i] * (1 - ratio)));
+    }
+    const plain = /^var\(--([\w-]+)\)$/.exec(value);
+    return plain && t[plain[1]] ? t[plain[1]] : null;
+  };
+
+  // A nested rule such as `.drawer a:hover` paints no background of its own, so look for the
+  // rule that styles the leading class and use whatever that paints.
+  const ancestorBackground = (selector) => {
+    const lead = /^\.([\w-]+)/.exec(selector);
+    if (!lead) return null;
+    const owner = rules.find((r) => r.selector === `.${lead[1]}`);
+    return owner ? backgroundOf(owner.body, null) : null;
+  };
+
+  const failures = new Map();
+  for (const { selector, body } of rules) {
     const fg = /(?:^|[;\s])color:\s*var\(--([\w-]+)\)/.exec(body);
     if (!fg || !t[fg[1]]) continue;
     if (/::(?:before|after|placeholder)|\bfill:/.test(selector)) continue; // decoration, not body text
-    // Only a flat background can be judged. A colour-mix or a gradient resolves at paint time,
-    // so those rules fall back to the surfaces the element could sit on.
-    const bgDecl = /background(?:-color)?:\s*([^;]+)/.exec(body);
-    const flat = bgDecl && !/color-mix|gradient/.test(bgDecl[1]) ? /var\(--([\w-]+)\)/.exec(bgDecl[1]) : null;
-    const against = flat && t[flat[1]] ? [flat[1]] : SURFACE_TOKENS.filter((s) => t[s]);
+    const own = backgroundOf(body, null) || ancestorBackground(selector);
+    // Named surfaces where one is known, so the report can say which; otherwise the resolved
+    // colour on its own, and failing both, every surface the element could sit on.
+    const against = own
+      ? [{ name: own === t[fg[1]] ? "its own colour" : "its background", rgb: own }]
+      : SURFACE_TOKENS.filter((s) => t[s]).map((s) => ({ name: `--${s}`, rgb: t[s] }));
     for (const surface of against) {
-      const ratio = contrast(t[fg[1]], t[surface]);
+      const ratio = contrast(t[fg[1]], surface.rgb);
       if (ratio >= MIN_CONTRAST) continue;
-      const key = `${fg[1]}|${surface}`;
-      if (!failures.has(key)) failures.set(key, { fg: fg[1], surface, ratio, where: selector.trim().split(",")[0].trim() });
+      const key = `${fg[1]}|${surface.name}|${selector}`;
+      if (!failures.has(key)) failures.set(key, { fg: fg[1], surface: surface.name, ratio, where: selector.split(",")[0].trim() });
     }
   }
   const worst = (name) => Math.min(...SURFACE_TOKENS.filter((s) => t[s]).map((s) => contrast(t[name], t[s])));
-  const spare = Object.keys(t).find((n) => /secondary|text/.test(n) && worst(n) >= MIN_CONTRAST);
-  const list = [...failures.values()].sort((a, b) => a.ratio - b.ratio);
+  const spare = Object.keys(t).find((n) => /secondary|text-muted/.test(n) && worst(n) >= MIN_CONTRAST);
+
+  // One line per colour pair, with how many rules hit it and one of them as an example, so the
+  // report reads as a worklist rather than as a wall of the same fault repeated.
+  const grouped = new Map();
+  for (const f of failures.values()) {
+    const key = `${f.fg}|${f.surface}`;
+    const seen = grouped.get(key);
+    if (seen) { seen.rules.add(f.where); continue; }
+    grouped.set(key, { ...f, rules: new Set([f.where]) });
+  }
+  const list = [...grouped.values()].sort((a, b) => a.ratio - b.ratio);
   return {
     pass: list.length === 0,
-    detail: list.length ? list.map((f) => `--${f.fg} on --${f.surface} is ${f.ratio.toFixed(2)}:1 (${f.where})`).join("; ")
+    detail: list.length
+      ? list.map((f) => `--${f.fg} on ${f.surface} is ${f.ratio.toFixed(2)}:1 in ${f.rules.size} rule${f.rules.size === 1 ? "" : "s"} (${[...f.rules][0]})`).join("; ")
       : `every colour used for text clears ${MIN_CONTRAST}:1 where it is used`,
     note: list.length && spare ? `--${spare} is in the design system and clears ${worst(spare).toFixed(1)}:1` : "",
   };
