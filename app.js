@@ -8,6 +8,8 @@ import { metricCsv, metricJson, fileName } from "./lib/export.mjs";
 import { attribute } from "./lib/adoption.mjs";
 // One table of public endpoints, shared with the gate that checks it covers every measurement.
 import { originFor } from "./lib/origins.mjs";
+// One answer-rate calculation, shared by the dashboard tile and the key result.
+import { responseStats } from "./lib/support.mjs";
 
 // WDK Atlas — one page per section of atlas.yaml, rendered in the browser with no build step.
 //
@@ -1075,19 +1077,11 @@ function evaluateMetric(kr) {
   }
   if (m.kind === "issueResponse") {
     const within = m.withinHours || 168, now = Date.now();
+    // The collector only refreshes this window; older days are stale.
     const windowDays = 30, from = new Date(now - windowDays * 864e5).toISOString().slice(0, 10);
-    let answered = 0, missed = 0, pending = 0;
-    for (const perDay of Object.values(D.issueResponse || {})) for (const [d, list] of Object.entries(perDay)) {
-      if (d < from) continue; // the collector only refreshes this window; older days are stale
-      for (const h of list) {
-        if (h >= 0 && h <= within) answered += 1;
-        else if (h >= 0) missed += 1;
-        else if (now - new Date(d + "T23:59:59Z") > within * 36e5) missed += 1;
-        else pending += 1;
-      }
-    }
-    const total = answered + missed, days = Math.round(within / 24);
-    const pct = total ? Math.round((100 * answered) / total) : null;
+    const { answered, missed, pending, total, pct } = responseStats(D.issueResponse, { withinHours: within, from, now });
+    void missed;
+    const days = Math.round(within / 24);
     Object.assign(out, { current: pct == null ? null : `${pct}%`, target: `${m.target}%`, progress: pct == null ? null : Math.min(100, Math.round((100 * pct) / m.target)), unit: `${answered} of ${total} issues, last ${windowDays} days${pending ? `, ${pending} still within ${days} days` : ""}`, link: "./?page=dashboard&range=weekly", origin: originFor(m, originContext(null)), note: total ? null : "No issues opened in the window yet." });
     return out;
   }
@@ -1897,6 +1891,10 @@ function buildDashboard(file, selected) {
     .map((r) => ({ label: unscoped(file.repos[r].package), value: onLatest[r] }))
     .sort((a, b) => a.value - b.value).slice(0, 8);
 
+  // Answered within a week, over the same selection as everything else on the page.
+  const supportFrom = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+  const supportStats = responseStats(D.issueResponse, { withinHours: 168, from: supportFrom, repos: selected });
+
   const splitHint = Object.keys(edges).length
     ? el("span", null,
         el("span", withTip({ class: "split-part" }, defTip(defFor("downloads-direct")), "chosen"), `${fmtNum(chosenTotal)} or more chosen`),
@@ -1914,6 +1912,10 @@ function buildDashboard(file, selected) {
     currencyPct != null && statTile(defFor("version-currency"), "Version currency", `${currencyPct}%`,
       el("span", { class: "delta none" }, `${currencyRepos.length} packages`),
       `of chosen installs are on the latest release · median ${medianShare}% per package${medianFresh == null ? "" : ` · ${medianFresh}% on a release under 30 days old`}`),
+    supportStats.pct != null && statTile(defFor("issue-response"), "Answered within a week", `${supportStats.pct}%`,
+      el("span", { class: "delta none" }, `${supportStats.total} issues`),
+      `of issues opened in the last 30 days${supportStats.pending ? `, ${supportStats.pending} still inside the week` : ""}`,
+      feeds("issue-response")),
     statTile(defFor("external-prs-merged"), `External pull requests merged, last ${unit}`, lastTwo(xM).now == null ? "—" : String(lastTwo(xM).now), trendPill("external-prs-merged", xM), lastTwo(xM).now == null ? coverageNote(evCov) : `${lastTwo(xO).now ?? 0} opened · Tether team excluded`, feeds("external-prs")),
     statTile(defFor("contributors"), "Contributors", String(people), trendPill("contributors", contribSeries), "people with commits, bots excluded, unique across the selection"),
     statTile(defFor("packages-published"), "Packages published", String(published), el("span", { class: "delta none" }, `${stable} stable · ${published - stable} in beta`), `${(atlas.modules || []).filter((m) => m.publisher && m.publisher !== file.org && m.status === "shipped").length} more by third parties, not in this count`, feeds("stable")),
