@@ -986,21 +986,47 @@ function readinessFact(field, repo, snap = latestSnapshot()) {
   return v === true;
 }
 const privateModules = () => (atlas.modules || []).filter((x) => x.private);
+// The public endpoint behind each readiness fact, shown on the first package in scope so a
+// reader can call one URL and see the fact rather than take our word for the whole set.
+// A link to the very file the page fetched. dataUrl gives an absolute address, and the link
+// allow-list refuses plain http, so a same-origin address is handed over as a path: the link
+// then works on the site, inside an embed, and on a local server alike.
+const dataHref = (path) => {
+  const url = dataUrl(path);
+  try { const u = new URL(url); if (u.origin === location.origin) return `${u.pathname}${u.search}`; } catch {}
+  return url;
+};
+
+function originForField(field, repo) {
+  const org = orgName();
+  const pkg = repo && METRICS && METRICS.repos && METRICS.repos[repo] ? METRICS.repos[repo].package : null;
+  if (field === "stable") return pkg ? { label: "npm registry", href: `https://registry.npmjs.org/${pkg}` } : null;
+  if (field === "signer") return { label: "GitHub code search", href: `https://github.com/search?q=org%3A${org}+ISigner&type=code` };
+  if (!repo) return null;
+  if (field === "audits") return { label: "GitHub contents", href: `https://api.github.com/repos/${org}/${repo}/contents/` };
+  if (field === "ci") return { label: "GitHub Actions", href: `https://api.github.com/repos/${org}/${repo}/actions/runs?per_page=1&status=completed` };
+  if (field === "health") return { label: "GitHub community profile", href: `https://api.github.com/repos/${org}/${repo}/community/profile` };
+  return null;
+}
+
 const examplesRepoUrl = () => `https://github.com/${orgName()}/${(atlas.audit && atlas.audit.examplesRepo) || "wdk-examples"}`;
 
 // A key result with `metric` reads its current value and progress from public data: the atlas, npm and GitHub
 // through the metrics file. It never reads a number typed by hand.
 function evaluateMetric(kr) {
   const m = kr.metric; if (!m) return null;
-  const out = { source: "Dashboard", link: "./?page=dashboard", note: null, current: null, target: null, progress: null, unit: "", valueTitle: null };
+  // `origin` is the public endpoint a stranger can call to check the row for themselves, and
+  // `data` is the file holding the copy we counted. Without them the source column links only
+  // to another page of ours, which is the opposite of what "don't trust, verify" promises.
+  const out = { source: "Dashboard", link: "./?page=dashboard", origin: null, data: dataHref("data/metrics.json"), note: null, current: null, target: null, progress: null, unit: "", valueTitle: null };
   if (m.kind === "count" && m.source === "thirdPartyModules") {
     const n = (atlas.modules || []).filter((x) => x.publisher && x.publisher !== orgName() && x.status === "shipped").length;
-    Object.assign(out, { current: n, target: m.target, progress: m.target ? Math.min(100, Math.round((100 * n) / m.target)) : null, link: "./?page=map", source: "Map, third-party modules" });
+    Object.assign(out, { current: n, target: m.target, progress: m.target ? Math.min(100, Math.round((100 * n) / m.target)) : null, link: "./?page=map", source: "Map, third-party modules", origin: { label: "atlas.yaml", href: dataHref("atlas.yaml") }, data: dataHref("atlas.yaml") });
     return out;
   }
   if (m.kind === "count" && m.source === "privateRepos") {
     const priv = privateModules();
-    Object.assign(out, { current: `${priv.length} private`, target: null, progress: priv.length ? 0 : 100, unit: priv.length ? "target none · hover the number for the repos" : "every repo in scope is public", link: "./?page=map", source: "Map, private repos",
+    Object.assign(out, { current: `${priv.length} private`, target: null, progress: priv.length ? 0 : 100, unit: priv.length ? "target none · hover the number for the repos" : "every repo in scope is public", link: "./?page=map", source: "Map, private repos", origin: { label: "GitHub repos", href: `https://api.github.com/orgs/${orgName()}/repos?type=public&per_page=100` }, data: dataHref("atlas.yaml"),
       valueTitle: priv.length ? priv.map((x) => `${x.title || x.id}${repoNameOf(x) ? ` (${repoNameOf(x)})` : ""}`).join("\n") : null });
     return out;
   }
@@ -1011,6 +1037,7 @@ function evaluateMetric(kr) {
     const scope = m.scope === "wallets" ? walletRepos() : publishedRepos();
     const scopeLabel = m.scope === "wallets" ? "first-party wallet packages" : "published packages";
     out.link = "./?page=dashboard#readiness"; out.source = "Dashboard, release readiness";
+    out.origin = originForField(m.field, scope[0]);
     if (m.field !== "stable" && (!snap || !snap[m.field])) { out.note = `Not collected yet (${m.field}); the next metrics run adds it.`; return out; }
     if (m.kind === "share") {
       const n = scope.filter((r) => readinessFact(m.field, r, snap) === true).length, total = scope.length;
@@ -1025,7 +1052,7 @@ function evaluateMetric(kr) {
   }
   if (m.kind === "count" && m.source === "examples") {
     const snap = latestSnapshot(); const n = snap ? snap.examples : null;
-    out.link = examplesRepoUrl(); out.source = "GitHub, examples repo";
+    out.link = examplesRepoUrl(); out.source = "GitHub, examples repo"; out.origin = { label: "GitHub, examples repo", href: examplesRepoUrl() };
     if (n == null) { out.note = "Not collected yet; the next metrics run adds it."; return out; }
     Object.assign(out, { current: n, target: m.target, progress: m.target ? Math.min(100, Math.round((100 * n) / m.target)) : null, unit: "example folders" });
     return out;
@@ -1036,6 +1063,7 @@ function evaluateMetric(kr) {
     const prevQ = previousQuarter(q), [pFrom, pTo] = quarterBounds(prevQ);
     const cur = sumSeries(D[m.series], qFrom, qTo);
     out.current = cur; out.unit = `so far in ${q}`; out.link = "./?page=dashboard&range=monthly";
+    out.origin = { label: "GitHub pull requests", href: `https://api.github.com/search/issues?q=org:${orgName()}+is:pr+is:merged` };
     if (!first || first > pFrom) {
       const firstFull = first && first === quarterBounds(quarterOf(first))[0] ? quarterOf(first) : nextQuarter(quarterOf(first || today));
       out.note = `Needs a full previous quarter of data. Data starts ${first || "today"}; the first full quarter is ${firstFull}, so the comparison becomes possible in ${nextQuarter(firstFull)}.`;
@@ -1061,7 +1089,7 @@ function evaluateMetric(kr) {
     }
     const total = answered + missed, days = Math.round(within / 24);
     const pct = total ? Math.round((100 * answered) / total) : null;
-    Object.assign(out, { current: pct == null ? null : `${pct}%`, target: `${m.target}%`, progress: pct == null ? null : Math.min(100, Math.round((100 * pct) / m.target)), unit: `${answered} of ${total} issues, last ${windowDays} days${pending ? `, ${pending} still within ${days} days` : ""}`, link: "./?page=dashboard&range=weekly", note: total ? null : "No issues opened in the window yet." });
+    Object.assign(out, { current: pct == null ? null : `${pct}%`, target: `${m.target}%`, progress: pct == null ? null : Math.min(100, Math.round((100 * pct) / m.target)), unit: `${answered} of ${total} issues, last ${windowDays} days${pending ? `, ${pending} still within ${days} days` : ""}`, link: "./?page=dashboard&range=weekly", origin: { label: "GitHub issues", href: `https://api.github.com/search/issues?q=org:${orgName()}+is:issue` }, note: total ? null : "No issues opened in the window yet." });
     return out;
   }
   out.note = `Unknown metric kind ${m.kind}.`; return out;
@@ -1078,7 +1106,7 @@ function keyResultsOf(star) {
     }
     if (ev && ev.progress != null) progress = ev.progress;
     return { id: o.id || `${star.id}-kr-${i + 1}`, label: o.label || String(kr), target: ev ? ev.target : o.target, current: ev ? ev.current : o.current, unit: ev ? ev.unit : o.unit,
-      source: ev ? ev.source : o.source, sourceLink: ev ? ev.link : null, note: [o.note, ev && ev.note].filter(Boolean).join(" "), fromDashboard: Boolean(ev), valueTitle: ev ? ev.valueTitle : null,
+      source: ev ? ev.source : o.source, sourceLink: ev ? ev.link : null, origin: ev ? ev.origin : null, data: ev ? ev.data : null, note: [o.note, ev && ev.note].filter(Boolean).join(" "), fromDashboard: Boolean(ev), valueTitle: ev ? ev.valueTitle : null,
       progress: progress == null ? null : Math.max(0, Math.min(100, Math.round(progress))) };
   });
 }
@@ -1423,7 +1451,11 @@ function krRow(kr) {
     el("div", { class: "kr-col kr-col-status" }, el("span", { class: `status-pill ${st.key}` }, st.label)),
     el("div", { class: "kr-col kr-col-value" }, krValue(kr)),
     el("div", { class: "kr-col kr-col-progress" }, el("span", { class: "kr-bar" }, el("span", { style: `width:${pct(kr.progress)}%` })), el("span", { class: "kr-pct" }, kr.progress == null ? "—" : `${kr.progress}%`)),
-    el("div", { class: "kr-col kr-col-source" }, kr.sourceLink ? el("a", { href: kr.sourceLink }, kr.source.split(",")[0]) : kr.source ? el("span", null, kr.source) : el("span", { class: "kr-none" }, "to define"))
+    el("div", { class: "kr-col kr-col-source" },
+      kr.origin && el("a", withTip({ class: "kr-origin", href: kr.origin.href }, "The public endpoint behind this row. Call it and you get the same fact.", kr.origin.label), kr.origin.label),
+      el("span", { class: "kr-secondary" },
+        kr.data && el("a", { class: "kr-data", href: kr.data }, "data"),
+        kr.sourceLink ? el("a", { class: "kr-view", href: kr.sourceLink }, "view") : kr.source ? el("span", null, kr.source) : el("span", { class: "kr-none" }, "to define")))
   );
 }
 
