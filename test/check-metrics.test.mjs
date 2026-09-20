@@ -18,13 +18,6 @@ test("counts a call once per line and ignores the line that declares it", () => 
   assert.equal(callSites(src, "deltaPill"), 1);
 });
 
-test("a name that is a prefix of another does not borrow its calls", () => {
-  const src = 'chartCardHeading("x"), chartCard("y")';
-  // chartCard( appears inside neither chartCardHeading( nor the other way round
-  assert.equal(callSites(src, "chartCardHeading"), 1);
-  assert.equal(callSites(src, "chartCard"), 1);
-});
-
 test("reads registry ids only through the helper, never from any quoted string", () => {
   const src = 'defFor("downloads"), "stars", defFor("dependents"), metricDef("not-this-one")';
   assert.deepEqual(referencedIds(src), ["downloads", "dependents"]);

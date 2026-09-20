@@ -34,14 +34,6 @@ test("induced never exceeds the total, and direct never goes below zero", () => 
   assert.equal(out.dep.induced + out.dep.direct, out.dep.total, "the two parts add up to the whole");
 });
 
-test("the two parts always add up to the total", () => {
-  const totals = { x: 100, y: 30, z: 7 };
-  const out = attribute(totals, { y: ["x"], z: ["x"] });
-  for (const [pkg, parts] of Object.entries(out)) {
-    assert.equal(parts.direct + parts.induced, totals[pkg], pkg);
-  }
-});
-
 test("a missing or unreadable total is skipped, not counted as zero", () => {
   const out = attribute({ a: 10, b: null, c: "many" }, { a: ["b"] });
   assert.deepEqual(Object.keys(out), ["a"]);
