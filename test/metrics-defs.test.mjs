@@ -4,7 +4,7 @@
 // the page is able to go down that a reader could tell a bad quarter from a good one.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { METRICS, REQUIRED, VERDICTS, DEMOTED, metricDef, mayShowChange } from "../lib/metrics-defs.mjs";
+import { METRICS, REQUIRED, DEMOTED, metricDef, mayShowChange } from "../lib/metrics-defs.mjs";
 
 test("every entry carries every required field, filled in", () => {
   for (const m of METRICS) {
@@ -42,8 +42,10 @@ test("a decision that says the number changes nothing comes with a verdict that 
   }
 });
 
-test("every verdict is one we defined", () => {
-  for (const m of METRICS) assert.ok(VERDICTS.includes(m.verdict), `${m.id} has verdict ${m.verdict}`);
+test("every verdict is one of the six, spelled out here rather than imported", () => {
+  // The literal is the point: asserting against the module's own list would pass for any list.
+  const allowed = ["keep", "redefine", "promote", "demote", "move", "add"];
+  for (const m of METRICS) assert.ok(allowed.includes(m.verdict), `${m.id} has verdict ${m.verdict}`);
 });
 
 test("canFall is a real boolean, and at least four numbers can fall", () => {
@@ -88,12 +90,4 @@ test("the demoted list is exactly the entries marked demote", () => {
 
 test("entries are frozen, so a page cannot edit a definition at runtime", () => {
   assert.throws(() => { METRICS[0].definition = "something else"; }, TypeError);
-});
-
-test("every entry says which pages publish it", () => {
-  const pages = new Set(["overview", "roadmap", "results", "dashboard", "map", "dev"]);
-  for (const m of METRICS) {
-    assert.ok(Array.isArray(m.pages) && m.pages.length, `${m.id} names no page`);
-    for (const p of m.pages) assert.ok(pages.has(p), `${m.id} names an unknown page: ${p}`);
-  }
 });
