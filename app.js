@@ -1846,7 +1846,14 @@ async function renderOverview() {
     el("div", { class: "brief-intro-text mission" },
       el("p", { class: "eyebrow" }, "WDK in one page"),
       el("h2", { class: "mission-text" }, atlas.mission || ""),
-      atlas.about && el("p", { class: "brief-about" }, atlas.about)),
+      atlas.about && el("p", { class: "brief-about" }, atlas.about),
+      // The one claim that separates this from a status page someone typed out. It is the rule
+      // the whole site is built on, it was only ever stated in the README, and a reader who
+      // never opens the README had no way of knowing it.
+      el("p", { class: "brief-promise" },
+        "Every number here is recomputed from public sources, npm and GitHub. Nothing is typed by hand, and anything that cannot be measured that way says so. ",
+        el("a", { href: "./?page=results" }, "See how each result is measured"),
+        ".")),
     el("div", { class: "brief-intro-side" },
       el("p", { class: "mission-sub" }, `${stars.length} north stars · ${counts.done} initiatives shipped · ${counts.wip} in progress · ${counts.planned} planned`),
       file && el("p", { class: "mission-sub" }, `Atlas updated ${fmtDay(file.atlasUpdated)} · metrics collected ${fmtDay(file.updated)}`)));

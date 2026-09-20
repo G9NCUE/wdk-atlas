@@ -2439,6 +2439,31 @@ body.page-overview .site-header {
 
 .brief-page { display: flex; flex-direction: column; gap: 26px; padding-bottom: 16px; }
 .brief-intro { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(240px, 0.8fr); gap: 32px; align-items: end; padding: 8px 0 4px; }
+/* The verifiability claim. Marked by the accent rule rather than by size, so it reads as the
+   ground rule for everything below it without competing with the mission above it. */
+.brief-promise {
+  margin: 12px 0 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--accent);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--secondary);
+  max-width: 62ch;
+}
+
+/* Underlined on purpose, unlike the chip links elsewhere. This is the one sentence that asks
+   the reader to go and check, and it sits in running prose, where a link that is only a colour
+   is easy to miss and impossible to see for some readers. */
+.brief-promise a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.brief-promise a:hover {
+  text-decoration-thickness: 2px;
+}
+
 .brief-about { margin: 16px 0 0; max-width: 64ch; font-size: 16px; line-height: 24px; color: var(--secondary); }
 .brief-intro-side { display: flex; flex-direction: column; gap: 6px; text-align: right; }
 .brief-intro-side .mission-sub { margin: 0; }
