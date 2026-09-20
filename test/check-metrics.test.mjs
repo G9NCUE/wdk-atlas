@@ -4,7 +4,7 @@
 // count and turn a fail into a pass.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { callSites, referencedIds, balancedBlock } from "../bin/check-metrics.mjs";
+import { callSites, referencedIds, balancedBlock, pillSites } from "../bin/check-metrics.mjs";
 
 test("counts a call once per line and ignores the line that declares it", () => {
   const src = [
@@ -48,4 +48,24 @@ test("a block that never closes is refused rather than guessed at", () => {
 
 test("a marker that is not there yields nothing", () => {
   assert.equal(balancedBlock("nothing here", "missing("), null);
+});
+
+test("a change indicator counts once per line, and only when it names its metric", () => {
+  const src = [
+    "function trendPill(id, pts) {",
+    '  return deltaPill(id, now, prev, {});',
+    '  trendPill("downloads", dl),',
+    "  trendPill(someVariable, dl),",
+    '  deltaPill("open-issues", a, b),',
+  ].join("\n");
+  const { total, named, ids } = pillSites(src);
+  assert.equal(total, 4, "the declaration line is not a call site");
+  assert.equal(named, 3, "a call passing an unknown variable is not named");
+  assert.deepEqual(ids, ["downloads", "open-issues"]);
+});
+
+test("the helper's own forwarding call counts as named", () => {
+  const { named, total } = pillSites("  return deltaPill(id, last, base, {});");
+  assert.equal(total, 1);
+  assert.equal(named, 1);
 });

@@ -97,14 +97,28 @@ function m4() {
 
 // ---- M5 ---------------------------------------------------------------------------------
 // "+50%" on a base of two is arithmetic, not information.
+//
+// The contract has two halves and both must hold: the one helper that draws a change consults
+// the floor, and every call site names the metric whose floor applies. An earlier wording of
+// this gate counted occurrences of the guard, which would have been satisfied by scattering it
+// across eleven call sites: the opposite of one definition kept in one place.
+export function pillSites(src) {
+  const lines = src.split("\n").filter((l) => /\b(trendPill|deltaPill)\(/.test(l) && !/^\s*(export\s+)?function\s/.test(l));
+  const named = lines.filter((l) => /\b(trendPill|deltaPill)\(\s*(?:"[a-z0-9-]+"|id\b)/.test(l));
+  const ids = [...src.matchAll(/\b(?:trendPill|deltaPill)\(\s*"([a-z0-9-]+)"/g)].map((m) => m[1]);
+  return { total: lines.length, named: named.length, ids };
+}
+
 function m5() {
-  const sites = callSites(APP, "trendPill") + callSites(APP, "deltaPill");
-  if (!sites) return pass("no percentage change is shown anywhere");
-  if (!/mayShowChange/.test(APP)) return fail(`${sites} change indicators, none guarded by a floor`);
-  const guarded = callSites(APP, "mayShowChange");
-  return guarded >= sites
-    ? pass(`${sites} change indicators, all guarded by the registry floor`)
-    : fail(`${guarded} of ${sites} change indicators are guarded by a floor`);
+  const { total, named, ids } = pillSites(APP);
+  if (!total) return pass("no percentage change is shown anywhere");
+  const guardInHelper = /const pct = [^;]*mayShowChange\(/.test(APP);
+  const known = new Set(METRICS.map((m) => m.id));
+  const unknown = [...new Set(ids)].filter((id) => !known.has(id));
+  if (!guardInHelper) return fail(`${total} change indicators, and the helper that draws them consults no floor`);
+  if (unknown.length) return fail(`change indicators name ids with no entry: ${unknown.join(", ")}`);
+  if (named < total) return fail(`${named} of ${total} change indicators name the metric whose floor applies`);
+  return pass(`${total} change indicators, each naming its metric, all drawn through one floor check`);
 }
 
 // ---- M6 ---------------------------------------------------------------------------------
