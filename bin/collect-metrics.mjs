@@ -47,19 +47,14 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createContext, runInContext } from "node:vm";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { loadAtlas, ROOT } from "./lib/load-atlas.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "data", "metrics.json");
 const TOKEN = process.env.GITHUB_TOKEN || "";
 const DRY = process.argv.includes("--dry");
 
-const ctx = {};
-createContext(ctx);
-runInContext(readFileSync(join(ROOT, "vendor/js-yaml.min.js"), "utf8"), ctx);
-const atlas = ctx.jsyaml.load(readFileSync(join(ROOT, "atlas.yaml"), "utf8"));
+const atlas = loadAtlas();
 const ORG = (atlas.audit && atlas.audit.org) || "tetherto";
 const REPO_PATTERN = new RegExp((atlas.audit && atlas.audit.repoPattern) || "^(wdk$|wdk-|pear-wrk-wdk$|create-wdk-module$)");
 // Scope: every public repo whose name matches the pattern — WDK's public open-source footprint.
