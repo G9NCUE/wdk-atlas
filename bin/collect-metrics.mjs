@@ -45,9 +45,10 @@
 // including torvalds/linux (two repos answer 200, unexplained). GraphQL reports stargazerCount but
 // an empty stargazers connection. So these series can only grow forward, one point per run.
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { internalDeps, currency, latestShare, publishDates } from "../lib/adoption.mjs";
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { loadAtlas, ROOT } from "./lib/load-atlas.mjs";
 import { summarise } from "./lib/summary.mjs";
 
@@ -55,6 +56,10 @@ const OUT = join(ROOT, "data", "metrics.json");
 const SUMMARY_OUT = join(ROOT, "data", "summary.json");
 const TOKEN = process.env.GITHUB_TOKEN || "";
 const DRY = process.argv.includes("--dry");
+// Refresh only what npm can answer. The GitHub half needs a token and a rate-limit budget; the
+// npm half needs neither, so a figure that comes from the registry can be rechecked at any time
+// without one. Everything GitHub wrote is left exactly as it was.
+const NPM_ONLY = process.argv.includes("--npm-only");
 
 const atlas = loadAtlas();
 const ORG = (atlas.audit && atlas.audit.org) || "tetherto";
@@ -108,13 +113,46 @@ const ghAll = async (path) => {
   }
   return out;
 };
-const npmJson = async (url) => {
+// The registry answers a burst of requests with 429 rather than with data. Collecting version
+// currency doubled the number of calls, so the retry is no longer optional: without it a run
+// fails on whichever package happened to be next, which looks like a missing package.
+const npmJson = async (url, attempt = 0) => {
   const res = await fetch(url, { headers: { accept: "application/json" } });
   if (res.status === 404) return null;
+  if ((res.status === 429 || res.status >= 500) && attempt < 4) {
+    const wait = Number(res.headers.get("retry-after")) * 1000 || 1000 * 2 ** attempt;
+    await sleep(Math.min(wait, 20000));
+    return npmJson(url, attempt + 1);
+  }
   if (!res.ok) throw new Error(`npm ${res.status} on ${url}`);
   const text = await res.text();
   return text ? JSON.parse(text) : null;
 };
+// One place that writes the two files, so a partial run and a full run cannot disagree about
+// how they are written, and the summary is always built from the object just saved.
+function writeOut(file) {
+  mkdirSync(dirname(OUT), { recursive: true });
+  writeFileSync(OUT, JSON.stringify(file) + "\n");
+  writeFileSync(SUMMARY_OUT, JSON.stringify(summarise(file)) + "\n");
+}
+
+// The registry, asked politely: three tries with a widening pause, then give up on this one
+// package rather than on the run. Used for the per-version call, which is the only one made
+// once per package on top of the rest and so the first to be rate limited.
+async function npmSoft(url, attempt = 0) {
+  try {
+    return await npmJson(url);
+  } catch (e) {
+    if (attempt < 2 && /\b(429|5\d\d)\b/.test(String(e.message))) {
+      await sleep(1500 * (attempt + 1));
+      return npmSoft(url, attempt + 1);
+    }
+    softFailures.push(url.split("/").slice(-2)[0]);
+    return null;
+  }
+}
+const softFailures = [];
+
 const iso = (d) => d.toISOString().slice(0, 10);
 const daysAgo = (n) => { const d = new Date(); d.setUTCDate(d.getUTCDate() - n); return d; };
 const day = (t) => String(t || "").slice(0, 10);
@@ -132,8 +170,11 @@ try {
     if (r && r[1].toLowerCase() === ORG.toLowerCase()) byRepoName.set(r[2].toLowerCase(), m);
   }
   // Public repos only: the workflow token cannot see private ones, and the dashboard publishes nothing private.
-  const wdkRepos = (await ghAll(`/orgs/${ORG}/repos?type=public`)).filter((r) => REPO_PATTERN.test(r.name) && !r.archived && !r.fork);
-  const repos = {};
+  // An npm-only run asks GitHub for nothing at all and reuses the repository list already on
+  // disk, so a figure that came from the registry can be rechecked without a token.
+  const wdkRepos = NPM_ONLY ? [] : (await ghAll(`/orgs/${ORG}/repos?type=public`)).filter((r) => REPO_PATTERN.test(r.name) && !r.archived && !r.fork);
+  const repos = NPM_ONLY ? JSON.parse(JSON.stringify(file.repos || {})) : {};
+  if (NPM_ONLY && !Object.keys(repos).length) throw new Error("npm-only needs an existing data/metrics.json to take the repository list from");
   for (const r of wdkRepos) {
     const m = byRepoName.get(r.name.toLowerCase());
     let pkg = null;
@@ -146,6 +187,10 @@ try {
   const downloads = {};
   const published = [];
   const releases = {};
+  const deps = {};            // repo -> the WDK packages it pins
+  const currencyByRepo = {};  // repo -> share of installs on a release under 30 days old
+  const latestByRepo = {};    // repo -> share of installs on the version npm serves as latest
+  const ourPackages = new Set(Object.values(repos).map((r) => r.package).filter(Boolean));
   for (const [name, r] of Object.entries(repos)) {
     if (!r.package) continue;
     const from = new Date(Date.now() - SERIES_DAYS * 864e5).toISOString().slice(0, 10);
@@ -162,6 +207,25 @@ try {
     const meta = await npmJson(`https://registry.npmjs.org/${r.package.replace("/", "%2F")}`);
     const v = meta && meta["dist-tags"] ? meta["dist-tags"].latest : null;
     if (v && v !== "0.0.0") { published.push(name); repos[name].version = v; }
+    // Which WDK packages this one pins. Exact pins are what make an induced install
+    // attributable, and so what lets the download chart tell demand from plumbing.
+    if (v && meta && meta.versions && meta.versions[v]) {
+      const inner = internalDeps(meta.versions[v].dependencies, ourPackages);
+      if (inner.length) deps[name] = inner;
+    }
+    // Share of this week's installs landing on a release under thirty days old. The one number
+    // here that falls when people stop keeping up, rather than only when they stop arriving.
+    // One extra call per package, so the registry sometimes says no: a package that cannot be
+    // read is left out and reads as "not collected" on the page, never as zero, and never
+    // takes the rest of the run down with it.
+    const perVersion = await npmSoft(`https://api.npmjs.org/versions/${r.package.replace("/", "%2F")}/last-week`);
+    await sleep(120); // the registry is a shared service and this loop asks it three questions per package
+    if (perVersion && perVersion.downloads && meta && meta.time) {
+      const share = currency(perVersion.downloads, publishDates(meta.time), today, 30);
+      if (share !== null) currencyByRepo[name] = share;
+      const onLatest = latestShare(perVersion.downloads, v);
+      if (onLatest !== null) latestByRepo[name] = onLatest;
+    }
     // Publish dates inside the retention window, for release markers on the charts.
     if (meta && meta.time) {
       const from = new Date(Date.now() - SERIES_DAYS * 864e5).toISOString().slice(0, 10);
@@ -169,6 +233,22 @@ try {
       for (const [ver, t] of Object.entries(meta.time)) { if (ver === "created" || ver === "modified") continue; const d = day(t); if (d >= from) dated[d] = ver; }
       if (Object.keys(dated).length) releases[name] = Object.fromEntries(Object.entries(dated).sort());
     }
+  }
+
+  if (NPM_ONLY) {
+    file.daily.downloads = downloads;
+    file.releases = releases;
+    file.deps = deps;
+    for (const [name, r] of Object.entries(repos)) if (r.version && file.repos[name]) file.repos[name].version = r.version;
+    const days = Object.keys(file.snapshots || {}).sort();
+    const latest = days.length ? file.snapshots[days[days.length - 1]] : null;
+    if (latest) { latest.currency = currencyByRepo; latest.onLatest = latestByRepo; if (published.length) latest.published = published; }
+    file.updated = new Date().toISOString();
+    writeOut(file);
+    console.log(`npm only: ${Object.keys(downloads).length} packages, ${Object.keys(deps).length} with WDK dependencies, currency for ${Object.keys(currencyByRepo).length}` + (softFailures.length ? `, ${softFailures.length} not collected` : ""));
+    // The script runs at the top level, so there is no function to return from. Both writes
+    // above are synchronous and already on disk.
+    process.exit(0);
   }
 
   const repoSet = new Set(wdkRepos.map((r) => r.name));
@@ -334,6 +414,9 @@ try {
       else delete file.daily[name][repo]; // a window with nothing left must not keep last run's entries
     }
   }
+  snap.currency = currencyByRepo;
+  snap.onLatest = latestByRepo;
+  file.deps = deps;
   file.snapshots[today] = snap;
   file.contributors = contributorsByRepo;
   file.owners = ownersByRepo;
@@ -365,11 +448,9 @@ try {
   file.updated = new Date().toISOString();
   if (DRY) console.log(JSON.stringify({ repos: Object.keys(repos).length, snapshot: snap }, null, 2));
   else {
-    mkdirSync(dirname(OUT), { recursive: true });
-    writeFileSync(OUT, JSON.stringify(file) + "\n");
-    // The few values every page needs, kept apart so a page that needs nothing else fetches
-    // nothing else. Written from the same object, so the two cannot disagree.
-    writeFileSync(SUMMARY_OUT, JSON.stringify(summarise(file)) + "\n");
+    // The summary holds the few values every page needs, kept apart so a page that needs
+    // nothing else fetches nothing else. Both files come from the same object.
+    writeOut(file);
     const stars = Object.values(snap.stars).reduce((a, b) => a + b, 0);
     const people = new Set(Object.values(contributorsByRepo).flat()).size;
     console.log(`wrote data/metrics.json and data/summary.json: ${today}, ${Object.keys(repos).length} repos, ${published.length} published packages, ${stars} stars, ${people} contributors, ${Object.keys(file.snapshots).length} snapshot(s)`);
