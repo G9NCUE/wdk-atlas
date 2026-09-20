@@ -72,6 +72,14 @@
   --wip-line: var(--warning);
   --planned-fill: var(--card);
   --planned-line: var(--muted);
+  /* Chart series, from the reference design system rather than picked for these charts: its
+     teal, its amber and its green. The blue, green and amber they replace were outside the
+     palette and read as foreign next to the orange. Teal and amber are the pair that ever
+     appears side by side, 129 degrees apart in hue; green only ever draws on its own. All
+     three clear 7.9:1 on a card, where the old three sat between 4.3 and 5.1. */
+  --chart-1: hsl(170 82% 49%);
+  --chart-2: hsl(41 100% 50%);
+  --chart-3: hsl(151 64% 51%);
   --ecosystem: var(--purple);
   --dark-grey: hsl(0 0% 13%);
   --white-5: hsl(0 0% 100% / 0.05);
