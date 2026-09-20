@@ -95,15 +95,27 @@ audit:
 #   quarterGrowth (series, targetPct: growth vs the previous calendar quarter), issueResponse (withinHours, target %).
 # Rewritten 2026-09-13 from the Q3 2026 OKR sheet so every result is public and checkable; pending review.
 northStars:
-  # A stable release, a published audit, green CI and the shared signer interface were key
-  # results here until 2026-09-20. They are gates on a checklist, not results: each is binary,
-  # three of them read 0% and would have kept reading 0% until a release landed, which teaches
-  # a reader that the page does not move. Every one of those facts is on the release readiness
-  # table, per package, and the 1.0.0 initiative on the roadmap carries the work.
+  # A published audit, green CI and the shared signer interface were key results here until
+  # 2026-09-20. They are gates on a checklist: binary, and each one is already on the release
+  # readiness table per package, where the 1.0.0 initiative carries the work. Leaving beta
+  # stayed, because it is the definition of production grade rather than a step towards it,
+  # and because the share moves the day any single package ships stable.
   - id: kit
     title: WDK is a production-grade kit for every platform
     summary: Secure, audited, out of beta, with the same SDK on iOS, Android, desktop and Node.
     keyResults:
+      - id: stable
+        label: "Every published package at a stable release, out of beta"
+        metric: { kind: share, field: stable, scope: published }
+        note: The npm latest tag carries no beta, alpha or rc suffix.
+      - id: currency
+        label: "Half of chosen installs on the current release"
+        metric: { kind: currency, target: 50 }
+        note: >-
+          A kit people cannot upgrade is not production grade. Share of installs landing on the
+          latest release, counting only installs somebody chose, since one our own packages
+          pinned is on an old version by construction. 11% on 2026-09-20. The 50% target is a
+          first bar and wants confirming.
       - id: public
         label: "No private repo in the WDK namespace"
         metric: { kind: count, source: privateRepos, target: 0 }
