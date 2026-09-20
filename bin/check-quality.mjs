@@ -10,6 +10,7 @@ import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { ROOT } from "./lib/load-atlas.mjs";
 
 const read = (rel) => (existsSync(join(ROOT, rel)) ? readFileSync(join(ROOT, rel), "utf8") : "");
@@ -294,6 +295,79 @@ function readmeClaimGate() {
   return { pass: problems.length === 0, detail: problems.length ? problems.join("; ") : "no README claim contradicts the shipped data" };
 }
 
+// ---------------------------------------------------------------- the asset version
+// index.html carries ?v=N on the stylesheet and the script, and app.js reads that N back off
+// its own URL and puts it on atlas.yaml too. So one number busts the cache for all four files,
+// and a change to any of them that does not move it leaves every returning reader on the copy
+// they already have. That is not theoretical: f01208e shipped an atlas.yaml written to take
+// people's names out of the published data and left the version where it was.
+//
+// Answering this needs the history, not the files, so the gate runs git. Where there is no
+// history to read it reports "not run" rather than passing.
+const VERSIONED = ["app.js", "styles.css", "page.css", "atlas.yaml"];
+
+const git = (args) => {
+  try {
+    return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch { return null; }
+};
+const versionIn = (text) => (/\bapp\.js\?v=(\d+)/.exec(text || "") || [])[1] || null;
+
+function assetVersionGate() {
+  if (git(["rev-parse", "--is-inside-work-tree"]) !== "true") return { skipped: true, detail: "no git history here, so the version cannot be compared with anything" };
+  const current = versionIn(html);
+  if (!current) return { pass: false, detail: "index.html does not carry ?v=N on app.js" };
+
+  // Every copy of the version has to agree, or the reader gets a fresh script against a cached
+  // stylesheet. examples/embed.html loads both from the same folder and counts as a copy.
+  const disagree = [];
+  for (const rel of ["index.html", "examples/embed.html"]) {
+    const text = read(rel);
+    if (!text) continue;
+    for (const m of text.matchAll(/(?:app\.js|styles\.css|page\.css)\?v=(\d+)/g)) {
+      if (m[1] !== current) disagree.push(`${rel} has ?v=${m[1]}`);
+    }
+  }
+  if (disagree.length) return { pass: false, detail: `the version is not the same everywhere: ${[...new Set(disagree)].join(", ")} against ?v=${current}` };
+
+  // Uncommitted work first: what is on disk is what the next commit ships.
+  const dirty = new Set((git(["status", "--porcelain"]) || "").split("\n").map((l) => l.slice(3).trim()).filter(Boolean));
+  const touched = VERSIONED.filter((rel) => dirty.has(rel));
+  if (touched.length && !dirty.has("index.html")) {
+    return { pass: false, detail: `${touched.join(", ")} changed in the working tree and index.html still says ?v=${current}` };
+  }
+
+  // A version that differs from the committed one is a bump in the working tree, and it covers
+  // everything else uncommitted beside it.
+  const atHead = versionIn(git(["show", "HEAD:index.html"]));
+  if (atHead && atHead !== current) return { pass: true, detail: `?v=${current} is a bump in the working tree, up from ?v=${atHead}` };
+
+  // The commit that last moved the version: walk index.html's history newest first and stop at
+  // the first revision carrying a different number. The one after it is the bump.
+  const history = (git(["log", "--format=%H", "--", "index.html"]) || "").split("\n").filter(Boolean);
+  let bump = null;
+  for (const sha of history) {
+    if (versionIn(git(["show", `${sha}:index.html`])) !== current) break;
+    bump = sha;
+  }
+  if (!bump) return { skipped: true, detail: `?v=${current} was never committed, so there is no bump to compare against` };
+
+  const stale = [];
+  for (const rel of VERSIONED) {
+    const last = git(["log", "-1", "--format=%H", "--", rel]);
+    if (!last || last === bump) continue;
+    // An ancestor of the bump changed before it, which is what we want.
+    const before = git(["merge-base", "--is-ancestor", last, bump]) !== null;
+    if (!before) stale.push(`${rel} (${last.slice(0, 7)})`);
+  }
+  return {
+    pass: stale.length === 0,
+    detail: stale.length
+      ? `changed after ?v=${current} was set in ${bump.slice(0, 7)}: ${stale.join(", ")} — bump the suffixes in index.html and examples/embed.html`
+      : `?v=${current} is newer than every file it busts`,
+  };
+}
+
 const has = (source, re) => re.test(source);
 
 // ---------------------------------------------------------------- gates
@@ -439,6 +513,14 @@ const GATES = [
       const readme = read("README.md");
       return { pass: /##\s*Embed/i.test(readme), detail: "the README has no section on embedding Atlas in another site" };
     } },
+  { id: "P4.8", what: "the repo says how to work in it",
+    run: () => {
+      // No package.json here by design, so the conventions have nowhere else to live.
+      const missing = [".editorconfig", ".nvmrc", "CONTRIBUTING.md", ".github/pull_request_template.md"]
+        .filter((rel) => !existsSync(join(ROOT, rel)));
+      return { pass: missing.length === 0, detail: missing.length ? `missing ${missing.join(", ")}` : "editor, Node version, contributing guide and pull request template" };
+    } },
+  { id: "P4.9", what: "the asset version moves when a cached file does", run: assetVersionGate },
   { id: "P6.1", what: "nothing blocks the first paint", run: fontPreloadGate },
   { id: "P6.3", what: "pages stay inside their weight budget, compressed", run: pageWeightGate },
 ];
@@ -457,11 +539,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(JSON.stringify(Object.fromEntries(results.map((r) => [r.id, r])), null, 2));
   } else {
     for (const r of results) {
-      console.log(`${r.id.padEnd(6)} ${r.pass ? "pass" : "fail"}  ${r.what}`);
-      if (!r.pass || r.note) console.log(`       ${r.detail}${r.note ? ` · ${r.note}` : ""}`);
+      console.log(`${r.id.padEnd(6)} ${r.skipped ? "not run" : r.pass ? "pass" : "fail"}  ${r.what}`);
+      if (r.skipped || !r.pass || r.note) console.log(`       ${r.detail}${r.note ? ` · ${r.note}` : ""}`);
     }
-    const failed = results.filter((r) => !r.pass).length;
-    console.log(`\n${results.length - failed} of ${results.length} static gates pass`);
+    const skipped = results.filter((r) => r.skipped).length;
+    const failed = results.filter((r) => !r.skipped && !r.pass).length;
+    const ran = results.length - skipped;
+    console.log(`\n${ran - failed} of ${ran} static gates pass${skipped ? `, ${skipped} not run` : ""}`);
   }
-  process.exit(results.some((r) => !r.pass) ? 1 : 0);
+  process.exit(results.some((r) => !r.skipped && !r.pass) ? 1 : 0);
 }
