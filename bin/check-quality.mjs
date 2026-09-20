@@ -167,7 +167,9 @@ function vendorGate() {
 function fontPreloadGate() {
   const fonts = existsSync(join(ROOT, "assets/fonts")) ? readdirSync(join(ROOT, "assets/fonts")).filter((f) => f.endsWith(".woff2")) : [];
   const preloaded = [...html.matchAll(/<link[^>]+rel="preload"[^>]+href="([^"]+)"/g)].map((m) => m[1]);
-  const blocking = [...html.matchAll(/<script(?![^>]*\b(?:defer|async|type="module")\b)[^>]*src=/g)].length;
+  // A module script is deferred by definition. The word boundary has to go before the attribute
+  // only: `type="module"` ends in a quote, so a trailing \b would never match.
+  const blocking = [...html.matchAll(/<script(?![^>]*\b(?:defer|async)\b)(?![^>]*type="module")[^>]*src=/g)].length;
   const problems = [];
   if (blocking) problems.push(`${blocking} render-blocking script tag(s)`);
   if (fonts.length && !preloaded.some((p) => p.includes(".woff2"))) problems.push(`${fonts.length} self-hosted fonts, none preloaded`);
