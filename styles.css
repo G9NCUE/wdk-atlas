@@ -2479,7 +2479,8 @@ summary .module-stack {
 .repo-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .repo-pkg { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
 
-.tile-feeds { margin-top: auto; font-size: 12px; color: var(--accent); text-decoration: none; }
+.tile-feeds { align-self: flex-start; font-size: 14px; line-height: 1; color: var(--secondary); text-decoration: none; }
+.tile-feeds:hover { color: var(--accent); }
 .tile-feeds:hover { text-decoration: underline; }
 
 /* ---- Key results page: one shared grid so columns line up across stars ------------------------ */
