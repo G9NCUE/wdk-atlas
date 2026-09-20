@@ -892,6 +892,21 @@ async function loadMetrics() {
   return METRICS;
 }
 
+// The Map and the Developer Resources pages need four values: two dates for the footer stamp,
+// the package to install and how many examples there are. They used to pull the whole 396 KB
+// metrics file to read them. data/summary.json carries the same four in about a kilobyte, and
+// falls back to the full file if it is missing, so an older deployment still works.
+let SUMMARY = null;
+async function loadSummary() {
+  if (SUMMARY) return SUMMARY;
+  try {
+    const res = await fetch("data/summary.json", { cache: "no-cache" });
+    if (res.ok) { SUMMARY = await res.json(); return SUMMARY; }
+  } catch { /* fall through to the full file */ }
+  SUMMARY = await loadMetrics();
+  return SUMMARY;
+}
+
 // Scopes and facts the release-readiness key results read. All from the metrics file or the atlas.
 const isStableVersion = (v) => Boolean(v) && !/-(alpha|beta|rc|next|canary|dev|pre)/i.test(v);
 function publishedRepos() { return Object.entries((METRICS && METRICS.repos) || {}).filter(([, r]) => r.version).map(([n]) => n).sort(); }
@@ -1984,8 +1999,8 @@ function renderPoster() {
   // fetches for the freshness stamp. Waiting for it costs nothing and keeps the install line
   // true; the catalogue below is drawn first either way.
   if (page === "dev") {
-    loadMetrics().then(() => {
-      const start = renderStartHere();
+    loadSummary().then((data) => {
+      const start = renderStartHere(data);
       if (start) atlasNode.prepend(start);
     });
   }
@@ -1994,15 +2009,17 @@ function renderPoster() {
 // The Developer Resources page listed packages and left the reader to work out where to begin.
 // Three ways in, each one built from the data rather than written down here, so the package
 // name, its version and the number of examples cannot drift from what is actually published.
-function renderStartHere() {
-  const file = METRICS;
+function renderStartHere(data) {
   const assembler = (atlas.modules || []).find((m) => m.id === "wdk");
-  const published = file && file.repos && file.repos.wdk;
+  // Either shape works: the summary names the assembler directly, the full metrics file keeps
+  // it among every repo.
+  const published = (data && data.assembler) || (data && data.repos && data.repos.wdk) || null;
   const pkg = published && published.package;
   const version = published && published.version;
   const examplesRepo = (atlas.modules || []).find((m) => m.id === "wdk-examples");
-  const snap = latestSnapshot();
-  const exampleCount = snap && typeof snap.examples === "number" ? snap.examples : null;
+  const exampleCount = data && typeof data.examples === "number"
+    ? data.examples
+    : (() => { const snap = latestSnapshot(); return snap && typeof snap.examples === "number" ? snap.examples : null; })();
   const starters = (atlas.modules || []).filter((m) => m.section === "app" && m.status === "shipped");
 
   const cards = [];
@@ -2234,7 +2251,9 @@ async function main() {
 
   if (page === "roadmap" || page === "results") await loadMetrics();
   renderPoster();
-  loadMetrics().then(renderFreshness);
+  // A page that needs nothing else reads the small file instead of the large one.
+  const needsFullMetrics = !["map", "dev"].includes(page);
+  (needsFullMetrics ? loadMetrics() : loadSummary()).then(renderFreshness);
   const togglePending = document.querySelector("#toggle-pending");
   function applyToggles() {
     poster.classList.toggle("hide-pending", !togglePending.checked);
