@@ -74,6 +74,11 @@ function tokens(block) {
 }
 
 const SURFACE_TOKENS = ["bg", "surface", "card", "card-elevated"];
+// Where a rule paints no background and none can be traced, these are the surfaces to judge it
+// against. --card-elevated is deliberately absent: nothing rests on it, it appears only under a
+// cursor or behind a tooltip, and both of those paint their own text white. Where a rule really
+// does sit on it, backgroundOf resolves that directly and it is checked properly.
+const RESTING_SURFACES = ["bg", "surface", "card"];
 
 // The token values are the WDK design system's and are not Atlas's to change: they are
 // byte-identical to the custom properties wdk.tether.io ships. So this gate does not ask
@@ -128,7 +133,7 @@ function contrastGate() {
     // colour on its own, and failing both, every surface the element could sit on.
     const against = own
       ? [{ name: own === t[fg[1]] ? "its own colour" : "its background", rgb: own }]
-      : SURFACE_TOKENS.filter((s) => t[s]).map((s) => ({ name: `--${s}`, rgb: t[s] }));
+      : RESTING_SURFACES.filter((s) => t[s]).map((s) => ({ name: `--${s}`, rgb: t[s] }));
     for (const surface of against) {
       const ratio = contrast(t[fg[1]], surface.rgb);
       if (ratio >= MIN_CONTRAST) continue;

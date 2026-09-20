@@ -1028,19 +1028,19 @@ h1 {
 .swatch.ecosystem {
   width: auto;
   height: auto;
-  padding: 0 2px;
+  padding: 1px 5px;
   border: 0;
-  background: none;
-  font: 600 9.5px/14px var(--font-mono);
+  background: color-mix(in srgb, var(--ecosystem) 22%, var(--card));
+  font: 600 12px/1.3 var(--font-mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ecosystem);
+  color: var(--text-muted);
 }
 
 .error {
   margin: 16px 32px;
   padding: 12px 14px;
-  background: color-mix(in srgb, var(--error) 14%, var(--card));
+  background: color-mix(in srgb, var(--error) 14%, var(--bg));
   border: 1px solid color-mix(in srgb, var(--error) 40%, transparent);
   border-radius: var(--radius-control);
   color: var(--error);
@@ -1356,10 +1356,13 @@ h1 {
 }
 
 .mod .pub {
-  font: 600 9.5px/1 var(--font-mono);
-  letter-spacing: 0.08em;
+  padding: 1px 5px;
+  border-radius: var(--radius-btn);
+  font: 600 12px/1.3 var(--font-mono);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--ecosystem);
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--ecosystem) 22%, var(--card));
 }
 
 .mod .pend {
@@ -1676,7 +1679,8 @@ h1 {
 }
 
 .drawer a:hover {
-  color: var(--accent-hover);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .drawer .relations {
@@ -2011,12 +2015,18 @@ summary .module-stack {
   color: var(--secondary);
 }
 
+/* Third party. The purple stays as the signal, but as a tint behind the name rather than as
+   the name's own colour: at this size purple text reaches only 3.47:1, while the same purple
+   as a wash behind readable grey reaches 5.45:1. */
 .ecosystem-mark,
 .publisher {
-  font: 600 9.5px/1 var(--font-mono);
-  letter-spacing: 0.08em;
+  padding: 1px 5px;
+  border-radius: var(--radius-btn);
+  font: 600 12px/1.3 var(--font-mono);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--ecosystem);
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--ecosystem) 22%, var(--card));
 }
 
 .chains {
@@ -2295,7 +2305,7 @@ body.page-dashboard .atlas { max-width: none; }
 
 .delta { display: inline-flex; align-items: center; align-self: flex-start; gap: 4px; padding: 2px 8px; border-radius: 10px; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em; color: var(--secondary); background: var(--surface); }
 .delta.good { color: var(--success); background: color-mix(in srgb, var(--success) 14%, var(--card)); }
-.delta.bad { color: var(--error); background: color-mix(in srgb, var(--error) 14%, var(--card)); }
+.delta.bad { color: var(--error); background: color-mix(in srgb, var(--error) 14%, var(--bg)); }
 .delta.flat, .delta.none { color: var(--secondary); }
 
 .dash-section { display: block; padding-top: 6px; border-top: 1px solid var(--line); }
@@ -2393,8 +2403,10 @@ body.page-dashboard .atlas { max-width: none; }
   margin: 0;
   font-size: 12px;
   line-height: 16px;
-  /* The map's third-party colour: purple always means someone outside Tether. Amber is taken by "in progress". */
-  color: var(--ecosystem);
+  /* Purple always means someone outside Tether; amber is taken by "in progress". The colour is
+     carried by .partner-mark, the dot beside this line, because purple text at 12px reaches only
+     3.47:1 on a card. The words themselves stay readable. */
+  color: var(--text-muted);
 }
 
 .partner-mark {
