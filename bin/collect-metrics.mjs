@@ -76,6 +76,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const hashLogin = (login) => createHash("sha256").update(String(login).toLowerCase()).digest("hex");
 const SNAPSHOT_DAILY_DAYS = 90;  // every snapshot for this long, then one per month
 const SERIES_DAYS = 400;         // daily series kept this long (a year plus a margin)
+// Fields kept on every snapshot rather than only the newest: the two the dashboard charts over
+// time, and two scalars that cost nothing and are already key results.
+const SNAPSHOT_HISTORY = ["openIssues", "contributors", "dependents", "examples"];
 // npm serves an arbitrary date range (up to 18 months per call), so downloads are fetched for the whole
 // retention window every run rather than the trailing 30 days. One request per package, self-healing,
 // and it backfills history the first time it runs.
@@ -432,6 +435,21 @@ try {
     const month = d.slice(0, 7);
     if (seenMonth.has(month)) delete file.snapshots[d];
     else seenMonth.add(month);
+  }
+
+  // Only the newest snapshot keeps everything. The older ones keep the four fields anything
+  // reads across time; the rest are per-repo maps the site only ever asks the newest for, and
+  // writing them again every day was 90% of a snapshot for nothing. Measured before the change:
+  // 20.9 KB a day, 1.84 MB at the ninety-day cap. After: 2.1 KB a day, under 0.2 MB.
+  //
+  // This discards the history we hold for those maps. Nothing reads it and no page can draw it,
+  // and every one of them is a current-state fact that GitHub and npm will answer for again on
+  // the next run. A trend for version currency, if it is ever wanted, is far cheaper as one
+  // number per day than as a map of thirty-eight.
+  const snapDaysNow = Object.keys(file.snapshots).sort();
+  for (const d of snapDaysNow.slice(0, -1)) {
+    const old = file.snapshots[d];
+    file.snapshots[d] = Object.fromEntries(SNAPSHOT_HISTORY.filter((k) => old[k] !== undefined).map((k) => [k, old[k]]));
   }
   const seriesCut = cutoff(SERIES_DAYS);
   for (const perRepo of Object.values(file.daily)) {
