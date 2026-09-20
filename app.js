@@ -1637,12 +1637,12 @@ function groupedBars(categories, series, { height = 190 } = {}) {
 // a second line repeating it in prose doubled the height of every chart to tell the reader
 // nothing they could act on. Whatever else is known about a row stays in the export, where a
 // column costs nothing and a reader has asked for the detail.
-function hBars(rows, { color = SERIES[0] } = {}) {
-  const max = Math.max(1, ...rows.map((r) => r.value));
+function hBars(rows, { color = SERIES[0], unit = "", scale = null } = {}) {
+  const max = scale || Math.max(1, ...rows.map((r) => r.value));
   return el("div", { class: "hbars" }, rows.map((r) => el("div", { class: "hbar" },
     el("span", { class: "hbar-label" }, r.label),
     el("span", { class: "hbar-track" }, el("span", { class: "hbar-fill", style: `width:${pct((100 * r.value) / max)}%;background:${color}` })),
-    el("span", { class: "hbar-value" }, fmtNum(r.value)))));
+    el("span", { class: "hbar-value" }, `${fmtNum(r.value)}${unit}`))));
 }
 
 // Handing a file to the reader. The address is a blob this page built a moment ago from its
@@ -1873,6 +1873,30 @@ function buildDashboard(file, selected) {
     .filter((row) => row.value > 0).sort((a, b) => b.value - a.value).slice(0, 8);
   const byPackage = rank("direct");
   const byInduced = rank("induced");
+  // Retention, as far as public data can show it.
+  //
+  // Weighted by chosen installs rather than by all of them. An install that another WDK package
+  // pinned is on an old version by construction, so weighting by the raw total would measure
+  // our own dependency graph and call it a reader failing to upgrade.
+  const onLatest = latest.onLatest || {};
+  const currencyRepos = withPackages.filter((r) => typeof onLatest[r] === "number");
+  const weight = (r) => Math.max(partOf(r, "direct"), 0);
+  const weighted = currencyRepos.reduce((n, r) => n + (onLatest[r] / 100) * weight(r), 0);
+  const weightTotal = currencyRepos.reduce((n, r) => n + weight(r), 0);
+  const currencyPct = weightTotal ? Math.round((100 * weighted) / weightTotal) : null;
+  // The middle of an even set is the mean of the two middle values, so that a reader who
+  // recomputes it from the export gets the same number we printed.
+  const median = (xs) => {
+    if (!xs.length) return null;
+    const v = [...xs].sort((a, b) => a - b), i = Math.floor(v.length / 2);
+    return v.length % 2 ? v[i] : Math.round((v[i - 1] + v[i]) / 2);
+  };
+  const medianShare = median(currencyRepos.map((r) => onLatest[r]));
+  const medianFresh = median(withPackages.map((r) => (latest.currency || {})[r]).filter((v) => typeof v === "number"));
+  const byCurrency = currencyRepos
+    .map((r) => ({ label: unscoped(file.repos[r].package), value: onLatest[r] }))
+    .sort((a, b) => a.value - b.value).slice(0, 8);
+
   const splitHint = Object.keys(edges).length
     ? el("span", null,
         el("span", withTip({ class: "split-part" }, defTip(defFor("downloads-direct")), "chosen"), `${fmtNum(chosenTotal)} or more chosen`),
@@ -1887,6 +1911,9 @@ function buildDashboard(file, selected) {
   const tiles = el("div", { class: "tiles" },
     latest.dependents != null && statTile(defFor("dependents"), "Projects depending on WDK", fmtNum(latest.dependents), el("span", { class: "delta none" }, "public repos outside the org"), "repos whose package.json names a WDK package, from GitHub code search"),
     statTile(defFor("downloads"), `npm downloads, last full ${unit}`, dlLast.now == null ? "—" : fmtNum(dlLast.now), trendPill("downloads", dl), splitHint || (dlLast.key ? `${dlLast.key} · ${withPkg} packages` : coverageNote(dlCov))),
+    currencyPct != null && statTile(defFor("version-currency"), "Version currency", `${currencyPct}%`,
+      el("span", { class: "delta none" }, `${currencyRepos.length} packages`),
+      `of chosen installs are on the latest release · median ${medianShare}% per package${medianFresh == null ? "" : ` · ${medianFresh}% on a release under 30 days old`}`),
     statTile(defFor("external-prs-merged"), `External pull requests merged, last ${unit}`, lastTwo(xM).now == null ? "—" : String(lastTwo(xM).now), trendPill("external-prs-merged", xM), lastTwo(xM).now == null ? coverageNote(evCov) : `${lastTwo(xO).now ?? 0} opened · Tether team excluded`, feeds("external-prs")),
     statTile(defFor("contributors"), "Contributors", String(people), trendPill("contributors", contribSeries), "people with commits, bots excluded, unique across the selection"),
     statTile(defFor("packages-published"), "Packages published", String(published), el("span", { class: "delta none" }, `${stable} stable · ${published - stable} in beta`), `${(atlas.modules || []).filter((m) => m.publisher && m.publisher !== file.org && m.status === "shipped").length} more by third parties, not in this count`, feeds("stable")),
@@ -1905,6 +1932,9 @@ function buildDashboard(file, selected) {
       { ...exportMeta, columns: ["period", "downloads"], rows: dl.map((p) => [p.key, p.y]) }),
     chartCard(defFor("downloads-direct"), `Chosen installs by package, last full ${unit}`, fmtNum(chosenTotal), null, hBars(byPackage, { color: SERIES[1] }), "Downloads left after subtracting those another WDK package pinned. A lower bound: a cache means a dependent install does not always fetch its dependency again.",
       { ...exportMeta, columns: ["package", "title", "chosen installs, at least"], rows: byPackage.map((r) => [r.label, r.hint, r.value]) }),
+    byCurrency.length ? chartCard(defFor("version-currency"), "Installs on the latest release, by package", currencyPct == null ? null : `${currencyPct}%`, null,
+      hBars(byCurrency, { color: SERIES[0], unit: "%", scale: 100 }), "The eight furthest behind, worst first. A package nobody has released for a while can still score well here: this asks whether readers take what we ship, not how often we ship.",
+      { ...exportMeta, columns: ["package", "share of installs on the latest release"], rows: byCurrency.map((r) => [r.label, r.value]) }) : null,
     byInduced.length ? chartCard(defFor("downloads-induced"), `Pulled in as a dependency, last full ${unit}`, fmtNum(inducedTotal), null, hBars(byInduced, { color: SERIES[2] }), "Attributable to another WDK package pinning this exact version. Nobody chose these; they arrive with something else.",
       { ...exportMeta, columns: ["package", "title", "pulled in, at most"], rows: byInduced.map((r) => [r.label, r.hint, r.value]) }) : null,
     chartCard(defFor("stars"), "Stars by repository", fmtNum(sum(latest.stars)), null, hBars(byStars, { color: SERIES[2] }), "Top eight of the selection.",
