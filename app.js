@@ -464,7 +464,7 @@ function applyMapSearch(query, count) {
 
 // The compact module: status dot, plain title, publisher for ecosystem modules, pending count.
 // A private repo gets a lock, so a reader knows the link will not open for them.
-const lockMark = () => el("span", { class: "lock", title: "Private repository", "aria-label": "private" });
+const lockMark = () => el("span", withTip({ class: "lock", "aria-label": "private" }, "Private repository", "private"));
 
 function renderChip(module, context) {
   const ecosystem = isEcosystem(module);
@@ -472,15 +472,20 @@ function renderChip(module, context) {
   const classes = ["mod", module.status || "planned", ecosystem ? "ecosystem" : "", module.placeholder ? "placeholder" : ""]
     .filter(Boolean)
     .join(" ");
+  // The package name and the pending work share the chip's own tip rather than each carrying
+  // their own: a second tip inside a button would give one chip two tab stops, and the pending
+  // count is meaningless without the list behind it.
+  const tip = [module.name || module.id, pending.length ? `Pending: ${pending.map((entry) => entry.label).join(", ")}` : ""]
+    .filter(Boolean)
+    .join("\n");
   return el(
     "button",
-    withTip({ class: classes, type: "button", "data-id": module.id, "data-node": module.id, "aria-expanded": "false", "data-search": searchTextOf(module) }, module.name || module.id, module.title || module.id),
+    withTip({ class: classes, type: "button", "data-id": module.id, "data-node": module.id, "aria-expanded": "false", "data-search": searchTextOf(module) }, tip, module.title || module.id),
     el("i", { class: "dot", "aria-hidden": "true" }),
     el("span", { class: "mod-title" }, shortTitle(module, context)),
     module.private && lockMark(),
     ecosystem && el("span", { class: "pub" }, module.publisher),
-    pending.length > 0 &&
-      el("span", { class: "pend", title: pending.map((entry) => entry.label).join(", ") }, String(pending.length))
+    pending.length > 0 && el("span", { class: "pend" }, String(pending.length))
   );
 }
 
@@ -757,7 +762,7 @@ function toggleColumn(th) {
 function moduleChip(ref) {
   const id = typeof ref === "string" ? ref : ref.id;
   const module = itemById(id);
-  if (!module) return el("span", { class: "roadmap-module missing", title: "not in the atlas" }, id);
+  if (!module) return el("span", withTip({ class: "roadmap-module missing" }, "Not on the map", id), id);
   const status = (typeof ref === "string" ? null : ref.status) || null;
   return el(
     "button",
@@ -855,14 +860,14 @@ function renderRoadmapItem(item, childItems = []) {
       { class: "roadmap-card-state" },
       el("span", { class: `state-dot ${item.status || "planned"}`, "aria-hidden": "true" }),
       el("span", { class: "roadmap-card-status" }, stateLabel(item)),
-      late && el("span", { class: "late-badge", title: `Planned for ${quarterLabel(item.quarter)}, not done` }, `late · ${quarterLabel(item.quarter)}`),
+      late && el("span", { class: "late-badge" }, `late · ${quarterLabel(item.quarter)}`),
       childItems.length > 0 && el("span", { class: "roadmap-card-progress" }, `${doneChildren} of ${childItems.length} done`)
     ),
     item.summary && el("p", { class: "roadmap-card-summary" }, item.summary),
     partners.length > 0 &&
-      el("p", { class: "roadmap-partners", title: "This cannot be finished by the WDK team alone" },
+      el("p", withTip({ class: "roadmap-partners" }, "This cannot be finished by the WDK team alone", "Partners"),
         el("span", { class: "partner-mark", "aria-hidden": "true" }), "Needs ", partners.join(", ")),
-    owners.length > 0 && el("p", { class: "roadmap-owners", title: "From the CODEOWNERS files of the repos this touches" }, "Owner ", owners.join(", ")),
+    owners.length > 0 && el("p", withTip({ class: "roadmap-owners" }, "From the CODEOWNERS files of the repos this touches", "Owner"), "Owner ", owners.join(", ")),
     modules.length > 0 && el("div", { class: "roadmap-modules" }, modules),
     children.length > 0 && el("div", { class: "roadmap-children" }, children)
   );
@@ -1381,7 +1386,7 @@ function renderResults() {
 
   const strip = el("ul", { class: "kr-strip-summary" },
     el("li", null, el("strong", null, `${measured} of ${all.length}`), " measured"),
-    stars.map((star, i) => { const krs = keyResultsOf(star); const m = krs.filter((kr) => kr.progress != null).length; return el("li", null, el("a", { href: `#${star.id}`, title: star.title }, el("strong", null, `${m}/${krs.length}`), ` star ${String(i + 1).padStart(2, "0")}`)); }));
+    stars.map((star, i) => { const krs = keyResultsOf(star); const m = krs.filter((kr) => kr.progress != null).length; return el("li", null, el("a", withTip({ href: `#${star.id}` }, star.title, `star ${String(i + 1).padStart(2, "0")}`), el("strong", null, `${m}/${krs.length}`), ` star ${String(i + 1).padStart(2, "0")}`)); }));
 
   const head = el("div", { class: "kr-line kr-head" },
     el("div", { class: "kr-main" }, "Key result"), el("div", { class: "kr-col" }, "Status"), el("div", { class: "kr-col" }, "Current · target"), el("div", { class: "kr-col" }, "Progress"), el("div", { class: "kr-col" }, "Source"));
@@ -1429,7 +1434,7 @@ function deltaPill(now, before, { invert = false, note = "" } = {}) {
   const good = invert ? dir === "down" : dir === "up";
   const arrow = dir === "up" ? "↑" : dir === "down" ? "↓" : "→";
   const sign = diff > 0 ? "+" : diff < 0 ? "−" : "";
-  return el("span", { class: `delta ${dir === "flat" ? "flat" : good ? "good" : "bad"}`, title: note || null }, `${arrow} ${sign}${fmtNum(Math.abs(diff))}${pct == null ? "" : ` (${sign}${Math.abs(pct)}%)`}`, note && el("span", { class: "delta-note" }, note));
+  return el("span", withTip({ class: `delta ${dir === "flat" ? "flat" : good ? "good" : "bad"}` }, note || "", "change"), `${arrow} ${sign}${fmtNum(Math.abs(diff))}${pct == null ? "" : ` (${sign}${Math.abs(pct)}%)`}`, note && el("span", { class: "delta-note" }, note));
 }
 
 // Trend against the average of the previous four periods, which is what a reader means by "is it up".
@@ -1528,8 +1533,8 @@ function groupedBars(categories, series, { height = 190 } = {}) {
 // Horizontal bars, one series, direct value labels.
 function hBars(rows, { color = SERIES[0] } = {}) {
   const max = Math.max(1, ...rows.map((r) => r.value));
-  return el("div", { class: "hbars" }, rows.map((r) => el("div", { class: "hbar", title: `${r.hint ? r.hint + " · " : ""}${r.label}: ${r.value.toLocaleString()}` },
-    el("span", { class: "hbar-label" }, r.label),
+  return el("div", { class: "hbars" }, rows.map((r) => el("div", { class: "hbar" },
+    el("span", { class: "hbar-label" }, r.label, r.hint ? el("small", { class: "hbar-hint" }, r.hint) : null),
     el("span", { class: "hbar-track" }, el("span", { class: "hbar-fill", style: `width:${pct((100 * r.value) / max)}%;background:${color}` })),
     el("span", { class: "hbar-value" }, fmtNum(r.value)))));
 }
@@ -1651,7 +1656,7 @@ function renderRepoPanel(file, selected, onChange) {
       boxes.set(n, box);
       const r = file.repos[n];
       const pkgLabel = unscoped(r.package);
-      return el("label", { class: "repo-row", title: n }, box, el("span", { class: "repo-title" }, r.title), pkgLabel && pkgLabel !== r.title && el("span", { class: "repo-pkg" }, pkgLabel));
+      return el("label", withTip({ class: "repo-row" }, n, r.title), box, el("span", { class: "repo-title" }, r.title), pkgLabel && pkgLabel !== r.title && el("span", { class: "repo-pkg" }, pkgLabel));
     }))));
   const tools = el("div", { class: "repo-tools" },
     el("button", { type: "button", class: "linkish" }, "All"), el("button", { type: "button", class: "linkish" }, "None"), el("button", { type: "button", class: "linkish" }, "On the map only"));
@@ -1838,7 +1843,7 @@ function briefItem(item) {
     el("span", { class: `state-dot ${item.status || "planned"}`, "aria-hidden": "true" }),
     el("a", { href: `./?page=roadmap#${item.id}` }, item.label),
     late && el("span", { class: "late-badge" }, `late · ${quarterLabel(item.quarter)}`),
-    (item.partners || []).length > 0 && el("span", { class: "partner-mark", title: `Needs ${item.partners.join(", ")}`, "aria-label": `needs ${item.partners.join(", ")}` }));
+    (item.partners || []).length > 0 && el("span", { class: "partner-mark", "aria-label": `needs ${item.partners.join(", ")}` }));
 }
 
 function briefList(title, items, more, empty) {
