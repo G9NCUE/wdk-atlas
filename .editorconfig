@@ -13,9 +13,5 @@ indent_size = 2
 [*.md]
 trim_trailing_whitespace = false # two trailing spaces are a line break in Markdown
 
-[*.{json,yaml,yml}]
-indent_size = 2
-
 [data/*.json]
-insert_final_newline = true
 trim_trailing_whitespace = false # written by the collector, not by hand

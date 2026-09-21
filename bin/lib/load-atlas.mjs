@@ -19,14 +19,14 @@ function yaml() {
   return parser;
 }
 
-export function readAtlasText(root = ROOT) {
-  return readFileSync(join(root, "atlas.yaml"), "utf8");
+export function readAtlasText() {
+  return readFileSync(join(ROOT, "atlas.yaml"), "utf8");
 }
 
 export function parseAtlas(text) {
   return yaml().load(text);
 }
 
-export function loadAtlas(root = ROOT) {
-  return parseAtlas(readAtlasText(root));
+export function loadAtlas() {
+  return parseAtlas(readAtlasText());
 }
