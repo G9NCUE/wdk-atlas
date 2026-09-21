@@ -1,25 +1,16 @@
-// app.js is a module, but importing it runs it: it mounts its markup and reaches for document
-// on the way down, so Node cannot hold it. Until safeHref moves to lib/ the test lifts the
-// function out of the source and runs it. The regex fails loudly if the function is renamed or
-// reshaped, which is the behaviour we want: a test that quietly stops testing is worse than
-// one that breaks.
+// safeHref decides which addresses from atlas.yaml are allowed to become links. It lives in
+// src/dom.mjs, which touches the document only when it is called, so Node can import the real
+// function. This test used to lift it out of app.js with a regular expression and eval it.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { ROOT } from "../bin/lib/load-atlas.mjs";
-
-const source = readFileSync(join(ROOT, "app.js"), "utf8");
-const match = /function safeHref\(value\) \{[\s\S]*?\n\}/.exec(source);
-assert.ok(match, "safeHref was not found in app.js; update this test with it");
-const safeHref = new Function(`${match[0]}; return safeHref;`)();
+import { safeHref } from "../src/dom.mjs";
 
 test("keeps https addresses", () => {
   for (const href of [
     "https://github.com/tetherto/wdk",
     "https://docs.wallet.tether.io/guide",
     "HTTPS://EXAMPLE.COM/x",
-  ]) assert.equal(safeHref(href), href.trim());
+  ]) assert.equal(safeHref(href), href);
 });
 
 test("keeps addresses that stay on this site", () => {

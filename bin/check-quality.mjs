@@ -6,18 +6,43 @@
 //
 // Usage: node bin/check-quality.mjs [--json]
 // Prints one line per gate, ids from the product spec, and exits 1 if any gate fails.
-import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { ROOT } from "./lib/load-atlas.mjs";
+import { shippedSource, shippedScripts, importClosure, pageModule } from "./lib/shipped.mjs";
 
 const read = (rel) => (existsSync(join(ROOT, rel)) ? readFileSync(join(ROOT, rel), "utf8") : "");
-const size = (rel) => (existsSync(join(ROOT, rel)) ? statSync(join(ROOT, rel)).size : 0);
 const html = read("index.html");
 const css = read("styles.css");
-const js = read("app.js");
+// Every script the site serves, as one text: app.js is a shell over src/ now, and a gate that
+// read the shell alone would pass whatever the pages did.
+const js = shippedSource();
+const entry = read("app.js");
+// Both stylesheets, comments out, for the gates about what a reader sees. The top bar's rules
+// moved to page.css and these gates went on reading styles.css alone.
+const cssAll = `${css}\n${read("page.css")}`.replace(/\/\*[\s\S]*?\*\//g, "");
+
+// Every style rule with the declarations that are its own. A pattern over innermost braces read
+// a parent's declarations as part of its first child's selector, so a font-size set directly on
+// a rule that also nests others was seen by nothing.
+function cssRules(source) {
+  const rules = [];
+  const open = [{ selector: "", body: "" }];
+  let piece = "";
+  for (const ch of source) {
+    if (ch === "{") { open.push({ selector: piece.trim().replace(/\s+/g, " "), body: "" }); piece = ""; }
+    else if (ch === "}") { const rule = open.pop(); rule.body += piece; piece = ""; rules.push(rule); }
+    else if (ch === ";") { open[open.length - 1].body += `${piece};`; piece = ""; }
+    else piece += ch;
+  }
+  return rules.filter((r) => r.selector && !r.selector.startsWith("@"));
+}
+// What follows Atlas into somebody else's page. site.js looks things up by id and marks the
+// body, as a site may; the rules about being a guest are for everything but it.
+const guest = shippedSource({ guestOnly: true });
 
 const KB = 1024;
 const MIN_FONT_PX = 12;
@@ -39,30 +64,16 @@ const VENDOR = {
 // What a reader actually downloads for a page, compressed, excluding fonts. GitHub Pages
 // serves these gzipped, so measuring the raw bytes overstated every page by three or four
 // times and turned a respectable site into six failures.
-// The light bars are the originals. The heavy ones moved by 2 KB on 2026-09-20, and the reason
-// is a counting change rather than bloat: the gate had been measuring five files while the
-// browser fetched twelve, about 12 KB short of what a reader actually paid.
 //
-// Measured at the correction, light pages were 100.3 and heavy 141.3, and I raised the bars to
-// 105 and 150. That was far more slack than the overage argued for, and the deletions in the
-// next commit then cut the bytes I had said could not be cut. Re-measured: 99.6 and 140.7. So
-// light needs no raise at all, and heavy needs two, which is where these sit. The next thing
-// added to the shell should have to argue for itself.
-//
-// 2026-09-20, light 100 -> 102. What bought it, measured at 101.35: the not-found page (P1.9),
-// a description per page rather than one for all six (P1.1), and the drawer taking the focus
-// and becoming a sheet on a phone (P2.4). 1.9 KB before trimming, 0.9 after.
-//
-// 2026-09-20, light 102 -> 104 and heavy 142 -> 144. What bought it: the chain filter, the
-// planned toggle, the search text and the dashboard's repository selection all moved into the
-// address (P2.6), so a link reproduces what the sender was looking at. A copy-link control went
-// in beside it and came straight back out at the PM's call, which is why the measurement below
-// is under the bar rather than against it: 102.66 and 142.73.
-//
-// The 1.3 KB of slack is deliberate and is the only slack here: atlas.yaml sits in the shell and
-// grows every time the roadmap does, and a content edit should not fail a performance gate.
-// Anything else added has to argue for itself and move these numbers in its own commit.
-const BUDGET_KB = { map: 104, dev: 104, overview: 144, roadmap: 144, results: 144, dashboard: 144 };
+// 2026-09-21, every bar down, and one per page. app.js was split into a shell and a module per
+// page, fetched with import() when that page is the one shown, and this gate now follows the
+// imports instead of charging every page for every script. Measured: map 73.31, dev 71.80,
+// overview 133.59, roadmap 136.15, results 132.21, dashboard 137.76. The map lost 33 KB because
+// it had been downloading the charts, the key results and the metric registry to draw none of
+// them. Each bar sits about 1.5 KB over its measurement, for atlas.yaml to grow into: it is in
+// every page's download and grows with the roadmap, and a content edit should not fail a
+// performance gate. How the bars got here is in this file's history.
+const BUDGET_KB = { map: 75, dev: 74, overview: 135, roadmap: 138, results: 134, dashboard: 139 };
 
 // ---------------------------------------------------------------- colour
 // WCAG relative luminance and contrast, from hsl() as the tokens are written.
@@ -82,7 +93,7 @@ const contrast = (fg, bg) => {
   return (a + 0.05) / (b + 0.05);
 };
 
-// Tokens as written in the :root block, resolved one level of var() indirection.
+// Tokens as written in the block that declares them, resolved one level of var() indirection.
 function tokens(block) {
   const source = css.slice(css.indexOf(block), css.indexOf("}", css.indexOf(block)));
   const found = {};
@@ -113,14 +124,13 @@ const RESTING_SURFACES = ["bg", "surface", "card"];
 // text is being used to carry text, which is a usage bug and fixable without touching the
 // palette. --secondary, also part of the system, clears 6:1 on every surface.
 function contrastGate() {
-  const t = tokens(":root {");
-  if (!t.bg) return { pass: false, detail: "no colour tokens found in the :root block" };
+  const t = tokens(".wdk-atlas-site {");
+  if (!t.bg) return { pass: false, detail: "no colour tokens found in the token block" };
 
   // Read each rule on its own terms. A rule that paints its own background is judged against
   // that background, which is how dark text on the orange accent stays correct. A rule that
   // does not is judged against every surface it could sit on.
-  const source = css.replace(/\/\*[\s\S]*?\*\//g, ""); // comments would otherwise read as selectors
-  const rules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({ selector: selector.trim(), body }));
+  const rules = cssRules(cssAll);
 
   // The colour a background declaration actually paints, where that can be worked out:
   // a token, or a colour-mix of a token with another token or with the surface behind it.
@@ -154,9 +164,8 @@ function contrastGate() {
   for (const { selector, body } of rules) {
     // SVG paints text with fill, not color, so a chart label is invisible to a check that only
     // looks for one of them. Anything with a font declared alongside its fill is text.
-    const painted = /(?:^|[;\s])color:\s*var\(--([\w-]+)\)/.exec(body)
+    const fg = /(?:^|[;\s])color:\s*var\(--([\w-]+)\)/.exec(body)
       || (/font(?:-family|-size)?:/.test(body) ? /(?:^|[;\s])fill:\s*var\(--([\w-]+)\)/.exec(body) : null);
-    const fg = painted;
     if (!fg || !t[fg[1]]) continue;
     if (/::(?:before|after|placeholder)/.test(selector)) continue; // decoration, not body text
     const own = backgroundOf(body, null) || ancestorBackground(selector);
@@ -201,22 +210,20 @@ const CHART_SCALE = 366 / 520;
 function fontFloorGate() {
   const small = [];
   // Read the stylesheet rule by rule so a size is attributed to the selector that declares it.
-  for (const [, selector, body] of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+  for (const { selector, body } of cssRules(cssAll)) {
     const inChart = /(^|[\s,>])\.chart(?![\w-])/.test(selector);
     for (const m of body.matchAll(/font(?:-size)?:[^;]*?([\d.]+)px/g)) {
       const declared = Number(m[1]);
       const seen = inChart ? declared * CHART_SCALE : declared;
       if (seen >= MIN_FONT_PX) continue;
-      small.push(`styles.css ${selector.trim().split(",")[0].trim()}: ${declared}px${inChart ? ` in drawing units, seen as ${seen.toFixed(1)}px` : ""}`);
+      small.push(`${selector.split(",")[0].trim()}: ${declared}px${inChart ? ` in drawing units, seen as ${seen.toFixed(1)}px` : ""}`);
     }
   }
-  for (const source of [["app.js", js]]) {
-    for (const m of source[1].matchAll(/font-size:\s*([\d.]+)px/g)) {
-      if (Number(m[1]) < MIN_FONT_PX) small.push(`${source[0]}: ${m[1]}px`);
-    }
-    for (const m of source[1].matchAll(/font-size="([\d.]+)"/g)) {
-      if (Number(m[1]) < MIN_FONT_PX) small.push(`${source[0]}: ${m[1]}px in SVG`);
-    }
+  for (const m of js.matchAll(/font-size:\s*([\d.]+)px/g)) {
+    if (Number(m[1]) < MIN_FONT_PX) small.push(`script: ${m[1]}px`);
+  }
+  for (const m of js.matchAll(/font-size="([\d.]+)"/g)) {
+    if (Number(m[1]) < MIN_FONT_PX) small.push(`script: ${m[1]}px in SVG`);
   }
   const unique = [...new Set(small)];
   return { pass: unique.length === 0, detail: unique.length ? unique.join(", ") : `nothing below ${MIN_FONT_PX}px` };
@@ -224,23 +231,12 @@ function fontFloorGate() {
 
 const gz = (rel) => (existsSync(join(ROOT, rel)) ? gzipSync(readFileSync(join(ROOT, rel)), { level: 9 }).length : 0);
 
-// Every module app.js pulls in. They are separate requests a reader pays for, and until this
-// was added the budget counted five files while the browser fetched twelve: six ES modules and
-// page.css, 12 KB compressed, invisible to the gate that exists to notice exactly that.
-//
-// Deduplicated, both quote styles, any depth under lib/. The first version of this matched only
-// double quotes and a flat lower-case name, so a module imported with single quotes or from a
-// subdirectory went uncounted, and gz() answers 0 for a path it cannot find rather than
-// throwing — which is the same silent under-counting this function exists to end.
-function shippedModules() {
-  const src = existsSync(join(ROOT, "app.js")) ? readFileSync(join(ROOT, "app.js"), "utf8") : "";
-  return [...new Set([...src.matchAll(/from ["']\.\/(lib\/[\w./-]+\.mjs)["']/g)].map((m) => m[1]))];
-}
-
 function pageWeightGate() {
-  const modules = shippedModules();
-  const shell = gz("index.html") + gz("page.css") + gz("styles.css") + gz("app.js") + gz("vendor/js-yaml.min.js") + gz("atlas.yaml")
-    + modules.reduce((n, rel) => n + gz(rel), 0);
+  // What every page fetches whatever it shows, then, per page, the scripts that page reaches:
+  // the two entry points, the module app.js fetches for it with import(), and everything those
+  // import in turn. The map is no longer charged for the charts it never downloads.
+  const fixed = gz("index.html") + gz("page.css") + gz("styles.css") + gz("vendor/js-yaml.min.js") + gz("atlas.yaml");
+  const scriptsFor = (page) => importClosure(["site.js", "app.js", pageModule(page)]).reduce((n, rel) => n + gz(rel), 0);
   const metrics = gz("data/metrics.json");
   const summary = gz("data/summary.json");
   // Only the Map and Developer Resources can be served by the small file; every other page
@@ -249,7 +245,7 @@ function pageWeightGate() {
   const rows = [];
   for (const [page, budget] of Object.entries(BUDGET_KB)) {
     const data = lightPages.includes(page) && summary ? summary : metrics;
-    const total = (shell + data) / KB;
+    const total = (fixed + scriptsFor(page) + data) / KB;
     rows.push({ page, kb: Math.round(total), budget, pass: total <= budget });
   }
   const over = rows.filter((r) => !r.pass);
@@ -296,27 +292,30 @@ function readmeClaimGate() {
 }
 
 // ---------------------------------------------------------------- the asset version
-// index.html carries ?v=N on the stylesheet and the script, and app.js reads that N back off
-// its own URL and puts it on atlas.yaml too. So one number busts the cache for all four files,
-// and a change to any of them that does not move it leaves every returning reader on the copy
-// they already have. That is not theoretical: f01208e shipped an atlas.yaml written to take
+// index.html carries ?v=N on the two stylesheets and on site.js, which hands it to app.js, which
+// puts it on atlas.yaml. The modules under src/ and lib/ are imported by name and carry no
+// version, so for them the number only records that a release happened; GitHub Pages keeps a
+// copy for ten minutes either way. A change to any of these that does not move the number
+// leaves a returning reader on the copy they already have. That is not theoretical: f01208e shipped an atlas.yaml written to take
 // people's names out of the published data and left the version where it was.
 //
 // Answering this needs the history, not the files, so the gate runs git. Where there is no
 // history to read it reports "not run" rather than passing.
-const VERSIONED = ["app.js", "styles.css", "page.css", "atlas.yaml"];
+// Files, and the two folders the script now mostly lives in. A change under src/ or lib/ with
+// no bump used to pass: the gate was watching 2 of 22 shipped scripts.
+const VERSIONED = ["site.js", "app.js", "src", "lib", "styles.css", "page.css", "atlas.yaml"];
 
 const git = (args) => {
   try {
     return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   } catch { return null; }
 };
-const versionIn = (text) => (/\bapp\.js\?v=(\d+)/.exec(text || "") || [])[1] || null;
+const versionIn = (text) => (/\bsite\.js\?v=(\d+)/.exec(text || "") || /\bapp\.js\?v=(\d+)/.exec(text || "") || [])[1] || null; // app.js: revisions from before site.js existed
 
 function assetVersionGate() {
   if (git(["rev-parse", "--is-inside-work-tree"]) !== "true") return { skipped: true, detail: "no git history here, so the version cannot be compared with anything" };
   const current = versionIn(html);
-  if (!current) return { pass: false, detail: "index.html does not carry ?v=N on app.js" };
+  if (!current) return { pass: false, detail: "index.html does not carry ?v=N on site.js" };
 
   // Every copy of the version has to agree, or the reader gets a fresh script against a cached
   // stylesheet. examples/embed.html loads both from the same folder and counts as a copy.
@@ -324,15 +323,19 @@ function assetVersionGate() {
   for (const rel of ["index.html", "examples/embed.html"]) {
     const text = read(rel);
     if (!text) continue;
-    for (const m of text.matchAll(/(?:app\.js|styles\.css|page\.css)\?v=(\d+)/g)) {
+    for (const m of text.matchAll(/(?:site\.js|app\.js|styles\.css|page\.css)\?v=(\d+)/g)) {
       if (m[1] !== current) disagree.push(`${rel} has ?v=${m[1]}`);
     }
   }
   if (disagree.length) return { pass: false, detail: `the version is not the same everywhere: ${[...new Set(disagree)].join(", ")} against ?v=${current}` };
 
   // Uncommitted work first: what is on disk is what the next commit ships.
-  const dirty = new Set((git(["status", "--porcelain"]) || "").split("\n").map((l) => l.slice(3).trim()).filter(Boolean));
-  const touched = VERSIONED.filter((rel) => dirty.has(rel));
+  // Names only, from the two commands that print nothing else. Parsing `status --porcelain` cut
+  // a letter off the first file: git() trims, the first line lost its leading space, slice(3)
+  // took one character too many, and a lone edit to app.js was never seen.
+  const dirty = new Set([...(git(["diff", "--name-only", "HEAD"]) || "").split("\n"), ...(git(["ls-files", "--others", "--exclude-standard"]) || "").split("\n")].filter(Boolean));
+  const covered = (rel) => VERSIONED.some((v) => rel === v || rel.startsWith(`${v}/`));
+  const touched = [...dirty].filter(covered);
   if (touched.length && !dirty.has("index.html")) {
     return { pass: false, detail: `${touched.join(", ")} changed in the working tree and index.html still says ?v=${current}` };
   }
@@ -373,8 +376,17 @@ const has = (source, re) => re.test(source);
 // ---------------------------------------------------------------- gates
 const GATES = [
   { id: "P1.1", what: "each page sets its own title and description",
-    run: () => ({ pass: has(js, /document\.title\s*=/) && has(html, /<meta\s+name="description"/i),
-      detail: [has(js, /document\.title\s*=/) ? null : "no page sets document.title", has(html, /<meta\s+name="description"/i) ? null : "index.html has no meta description"].filter(Boolean).join("; ") || "title and description are set" }) },
+    run: () => {
+      const problems = [];
+      if (!has(js, /document\.title\s*=/)) problems.push("no page sets document.title");
+      if (!has(html, /<meta\s+name="description"/i)) problems.push("index.html has no meta description");
+      // The tag being there says nothing about each page setting its own, which is the gate's name.
+      if (!has(js, /setAttribute\("content",\s*pageDescriptions\[page\]\)/)) problems.push("the description is never set per page");
+      const described = (/const pageDescriptions = \{([\s\S]*?)\n\s*\};/.exec(js) || ["", ""])[1];
+      const missing = ["overview", "roadmap", "results", "dashboard", "map", "dev"].filter((p) => !new RegExp(`\\b${p}:\\s*"[^"]{20,}"`).test(described));
+      if (missing.length) problems.push(`no description for ${missing.join(", ")}`);
+      return { pass: problems.length === 0, detail: problems.join("; ") || "title and description are set per page" };
+    } },
   { id: "P1.5", what: "a shared link previews correctly",
     run: () => {
       const missing = [];
@@ -389,7 +401,21 @@ const GATES = [
       return { pass: missing.length === 0, detail: missing.length ? `missing ${missing.join(", ")}` : "link preview tags are present" };
     } },
   { id: "P1.8", what: "the pages print legibly",
-    run: () => ({ pass: has(css, /@media\s+print/), detail: has(css, /@media\s+print/) ? "a print stylesheet exists" : "no @media print rule" }) },
+    run: () => {
+      // The re-inked tokens are one print block and always there, so the word alone proved
+      // nothing: the whole print stylesheet could be deleted under it. Rules have to be inside.
+      const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+      const inside = []; // the text between the braces of each @media print, and nothing after it
+      for (const m of bare.matchAll(/@media\s+print\s*\{/g)) {
+        let depth = 1, i = m.index + m[0].length;
+        const from = i;
+        for (; i < bare.length && depth > 0; i += 1) depth += bare[i] === "{" ? 1 : bare[i] === "}" ? -1 : 0;
+        inside.push(bare.slice(from, i - 1));
+      }
+      const printed = cssRules(inside.join("\n")).filter((r) => !/^\.wdk-atlas(?:-site)?(?:\s*,\s*\.wdk-atlas(?:-site)?)*$/.test(r.selector));
+      const hidesControls = inside.some((block) => /display:\s*none/.test(block));
+      return { pass: printed.length > 3 && hidesControls, detail: printed.length > 3 && hidesControls ? `a print stylesheet of ${printed.length} rules` : "no print rules beyond the re-inked tokens" };
+    } },
   { id: "P1.10", what: "the README matches the shipped data", run: readmeClaimGate },
   { id: "P2.1", what: `text tokens clear ${MIN_CONTRAST}:1`, run: contrastGate },
   { id: "P2.2a", what: `no type below ${MIN_FONT_PX}px`, run: fontFloorGate },
@@ -404,8 +430,9 @@ const GATES = [
     run: () => ({ pass: has(html, /class="skip[^"]*"|href="#main"/), detail: "no skip link in index.html" }) },
   { id: "P3.2", what: "reduced motion is honoured everywhere",
     run: () => {
-      const blocks = (css.match(/@media\s*\(prefers-reduced-motion/g) || []).length;
-      const globalRule = /@media\s*\(prefers-reduced-motion[^{]*\{\s*[^}]*\*/.test(css);
+      const bare = css.replace(/\/\*[\s\S]*?\*\//g, ""); // a comment's asterisk used to count as the rule
+      const blocks = (bare.match(/@media\s*\(prefers-reduced-motion/g) || []).length;
+      const globalRule = /@media\s*\(prefers-reduced-motion[^{]*\{\s*\*\s*,/.test(bare);
       return { pass: blocks > 0 && globalRule, detail: globalRule ? "a global rule disables motion" : `${blocks} reduced-motion block(s), none of them global` };
     } },
   { id: "P3.3", what: "no information lives only in a title attribute",
@@ -417,15 +444,25 @@ const GATES = [
       // A title only becomes a tooltip when it is handed to el() beside other attributes, so a
       // line is counted when it also carries class, href, type or an aria- attribute. A plain
       // object with a title field, such as a page heading or a stand-in north star, is data.
-      const found = js.split("\n")
-        .map((line, i) => ({ line, n: i + 1 }))
-        .filter(({ line }) => /\btitle:\s*(?!null\b)/.test(line))
-        .filter(({ line }) => !/\btitle:\s*""/.test(line))
-        .filter(({ line }) => /\bel\(|class:|href:|aria-/.test(line));
-      return { pass: found.length === 0, detail: found.length ? `${found.length} tooltip(s) unreachable by touch or keyboard, at app.js lines ${found.map((f) => f.n).join(", ")}` : "nothing depends on a title attribute" };
+      // File by file, so a finding names a line someone can open: read as one text, it reported
+      // "app.js line 2123" for a file of 395.
+      const found = [];
+      for (const rel of shippedScripts()) {
+        const lines = read(rel).split("\n");
+        lines.forEach((line, i) => {
+          const inline = /\btitle:\s*(?!null\b|"")/.test(line) && /\bel\(|class:|href:|aria-/.test(line);
+          // The attribute on a line of its own, inside an el( call opened just above.
+          const ownLine = /^\s*title:\s*(?!null\b|"")/.test(line) && lines.slice(Math.max(0, i - 3), i).some((l) => /\b(?:el|svgEl)\([^)]*\{\s*$/.test(l));
+          const assigned = /(?<!document)\.title\s*=(?!=)|setAttribute\(\s*["']title["']/.test(line);
+          if (inline || ownLine || assigned) found.push(`${rel}:${i + 1}`);
+        });
+      }
+      return { pass: found.length === 0, detail: found.length ? `${found.length} tooltip(s) unreachable by touch or keyboard: ${found.join(", ")}` : "nothing depends on a title attribute" };
     } },
   { id: "P5.2", what: "links built from data are scheme-checked",
-    run: () => ({ pass: has(js, /safeHref|isHttps|allowedScheme/), detail: "no scheme allow-list guards href values" }) },
+    // Where el() sets the attribute, not anywhere in the file: the name survives in its own
+    // definition, so the guard could be unhooked and the old pattern still found the word.
+    run: () => ({ pass: has(js, /key === "href"[^\n]*\{\s*const safe = safeHref\(value\);\s*if \(safe\) node\.setAttribute\(key, safe\);/), detail: "el() sets href without passing it through safeHref" }) },
   { id: "P5.3", what: "nothing is built with innerHTML",
     run: () => {
       const count = (js.match(/\.innerHTML\s*=/g) || []).length;
@@ -449,7 +486,7 @@ const GATES = [
     } },
   { id: "P5.5", what: "data-driven style values are clamped",
     run: () => {
-      const raw = [...js.matchAll(/width:\$\{(?!clamp|pct|Math)[^}]+\}/g)].map((m) => m[0]);
+      const raw = [...js.matchAll(/(?<![-\w])(?:width|height|left|right|top|bottom)\s*:\s*\$\{(?!clamp|pct|Math)[^}]+\}/g)].map((m) => m[0]);
       return { pass: raw.length === 0, detail: raw.length ? `${raw.length} unclamped width value(s): ${raw.slice(0, 2).join(", ")}` : "style values pass through a clamp" };
     } },
   { id: "P5.6", what: "a referrer policy is set",
@@ -465,32 +502,39 @@ const GATES = [
     run: () => {
       // A module has its own scope, so nothing it declares reaches a host page. What would
       // leak is an explicit assignment to window or globalThis.
-      const isModule = /<script[^>]*type="module"[^>]*app\.js/.test(html);
+      const site = read("site.js");
+      const isModule = /<script[^>]*type="module"[^>]*site\.js/.test(html) && /import\(`\.\/app\.js/.test(site);
       const assigns = [...js.matchAll(/\b(?:window|globalThis)\.([\w$]+)\s*=/g)].map((m) => m[1]);
       const problems = [];
-      if (!isModule) problems.push("app.js is not loaded as a module, so everything it declares is global");
+      if (!isModule) problems.push("index.html does not load site.js as a module, or site.js does not import app.js");
       if (assigns.length) problems.push(`assigns to ${[...new Set(assigns)].join(", ")}`);
-      return { pass: problems.length === 0, detail: problems.join("; ") || "a module, and nothing is written to the global object" };
+      return { pass: problems.length === 0, detail: problems.join("; ") || "modules, and nothing is written to the global object" };
     } },
   { id: "P7.2", what: "styling cannot reach a host page",
     run: () => {
-      // Rules for a whole page belong in page.css, which only this site loads. Anything in
-      // styles.css that selects html, body or a bare element would follow Atlas into a host.
-      const page = read("page.css");
-      if (!page) return { pass: false, detail: "page.css is missing, so the page-level rules are still in styles.css" };
+      // styles.css follows Atlas into every page that embeds it, so what it may say at the top
+      // level is a short list: the fonts, the keyframes (prefixed, because their names are
+      // global), the tokens, and the .wdk-atlas root that everything else is nested inside.
+      // This used to look for html, body and bare elements; it passed while .search, .nav and
+      // .legend sat at the top level, which a host is as likely to be using as we are.
+      if (!read("page.css")) return { pass: false, detail: "page.css is missing, so the site's own rules have nowhere to live but styles.css" };
       const source = css.replace(/\/\*[\s\S]*?\*\//g, "");
-      const bleeding = [];
-      for (const [, selector] of source.matchAll(/([^{}]+)\{[^{}]*\}/g)) {
-        for (const one of selector.split(",")) {
-          const sel = one.trim();
-          if (!sel || sel.startsWith("@") || sel.startsWith("%")) continue;
-          if (/^(?:html|body|\*)\b(?![\w-])/.test(sel)) { bleeding.push(sel); continue; }
-          // A bare element selector with no class anywhere in it restyles the host's own markup.
-          if (/^[a-z][a-z0-9]*(?:\s*[,>+~]\s*[a-z][a-z0-9]*)*$/i.test(sel) && !/[.#\[]/.test(sel)) bleeding.push(sel);
-        }
+      const top = []; // [selector, body] of every top-level block
+      let depth = 0, start = 0, open = 0;
+      for (let i = 0; i < source.length; i += 1) {
+        if (source[i] === "{") { if (depth === 0) { top.push([source.slice(start, i).trim().replace(/\s+/g, " "), ""]); open = i + 1; } depth += 1; }
+        else if (source[i] === "}") { depth -= 1; if (depth === 0) { top[top.length - 1][1] = source.slice(open, i); start = i + 1; } }
       }
-      const unique = [...new Set(bleeding)];
-      return { pass: unique.length === 0, detail: unique.length ? `${unique.length} rule(s) in styles.css reach past Atlas: ${unique.slice(0, 6).join(", ")}` : "every rule in styles.css is reached through Atlas's own root" };
+      const isRoot = (sel) => sel.split(",").every((one) => /^\.wdk-atlas(?:-site)?$/.test(one.trim()));
+      const allowed = (sel) => sel === "@font-face" || /^@keyframes wdk-atlas-[\w-]+$/.test(sel) || sel === "@media print" || isRoot(sel);
+      const stray = top.map(([sel]) => sel).filter((sel) => !allowed(sel));
+      // The print block at the top level re-inks the tokens and does nothing else.
+      for (const [sel, body] of top) {
+        if (sel !== "@media print") continue;
+        for (const m of body.matchAll(/([^{}]+)\{[^{}]*\}/g)) if (!isRoot(m[1].trim().replace(/\s+/g, " "))) stray.push(`@media print { ${m[1].trim()} }`);
+      }
+      if (/:root\b/.test(source)) stray.push(":root");
+      return { pass: stray.length === 0, detail: stray.length ? `${stray.length} rule(s) in styles.css sit outside Atlas's root: ${stray.slice(0, 6).join(" · ")}` : "every rule in styles.css is nested inside .wdk-atlas" };
     } },
   { id: "P7.3", what: "the data path is configurable",
     run: () => ({ pass: /import\.meta\.url/.test(js) && /searchParams\.get\("base"\)/.test(js),
@@ -504,7 +548,15 @@ const GATES = [
         if (example.includes("page.css")) problems.push("the example loads page.css, which belongs to this site alone");
         const tags = [...example.matchAll(/<script[^>]*src="([^"]+)"/g)].map((m) => m[1]);
         if (tags.length !== 1) problems.push(`the example loads ${tags.length} scripts; one is the point`);
-        if (!/function mount\(/.test(js)) problems.push("app.js does not build its own markup when a page has none");
+        if (!/export function mount\(/.test(entry)) problems.push("app.js does not export mount()");
+        // What mount() promises a host: nothing looked up by id, nothing hung on the body, and
+        // the address left alone unless the host said otherwise.
+        if (/getElementById\(|querySelector(?:All)?\(\s*["'`]#/.test(guest)) problems.push("app.js looks something up by id, which a second instance or a host page could also own");
+        if (/document\.(?:body|documentElement)\.(?:classList|className|style|setAttribute|dataset)/.test(guest)) problems.push("a class, a style or an attribute is put on the host's body or root element");
+        const writes = guest.split("\n").filter((l) => /history\.(?:replace|push)State|location\.(?:href|hash|search|pathname)\s*=|location\.(?:assign|replace|reload)\(/.test(l));
+        const guarded = guest.includes("if (!syncUrl) return;") && guest.includes("if (syncUrl) { location.href = href; return; }");
+        if (writes.length !== 2 || !guarded) problems.push("app.js writes to the address somewhere that is not behind syncUrl");
+        if (!existsSync(join(ROOT, "examples/mount.html"))) problems.push("examples/mount.html, the programmatic example, is missing");
       }
       return { pass: problems.length === 0, detail: problems.join("; ") || "one script tag, its own markup, and no page-level styling" };
     } },

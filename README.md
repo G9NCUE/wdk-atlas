@@ -67,8 +67,9 @@ node bin/collect-metrics.mjs --npm-only
 ## Editing the map
 
 `atlas.yaml` is the source of truth: modules, sections, relations, mission, north stars, key results
-and roadmap items. Its header comment documents every field. After changing it, `app.js` or
-`styles.css`, bump the `?v=N` suffixes in `index.html` so GitHub Pages stops serving cached copies.
+and roadmap items. Its header comment documents every field. After changing it, `app.js`, `site.js`,
+anything under `src/` or `lib/`, `styles.css` or `page.css`, bump the `?v=N` suffixes in `index.html` and `examples/embed.html`; a
+gate fails if you forget.
 
 The image a shared link shows is `assets/og.png`, drawn from `og-source.html` with the site's own
 stylesheet so it cannot drift from the design. To redraw it after editing that file, serve the repo
@@ -80,20 +81,46 @@ chrome --headless=new --window-size=1200,630 --screenshot=assets/og.png http://l
 
 ## Embed it in another site
 
-One script tag. Atlas resolves its data against its own location, builds the few elements it
-needs if the page has none, and fetches the YAML parser itself:
+Atlas is one stylesheet and one entry module, `app.js`, which fetches what it needs from `src/`
+and `lib/` beside it: serve the folder as it is. Every rule in `styles.css` is nested inside a single
+`.wdk-atlas` root and the design tokens are declared on that root, so nothing of Atlas's reaches
+the host page and nothing of the host's reaches Atlas. It claims no ids, puts nothing on `body`,
+and leaves the address bar, the title and the host's keyboard alone.
+
+**One tag.** Atlas renders where the tag sits, or inside an element marked `data-wdk-atlas`.
+`data-page` on that element picks the page; links between pages are followed inside the frame.
 
 ```html
 <link rel="stylesheet" href="https://example.com/atlas/styles.css" />
+<div data-wdk-atlas data-page="map"></div>
 <script type="module" src="https://example.com/atlas/app.js"></script>
 ```
 
-It renders where the tag sits, or inside an element marked `data-wdk-atlas` if there is one.
-`page.css` is not loaded: it holds the rules for a whole page, so a host keeps its own box
-model, colour scheme, background and typography. Add `?base=` to the script URL if the data
-lives somewhere other than beside `app.js`.
+**Or call it.** From a framework component, or anywhere a page wants to decide for itself:
 
-`examples/embed.html` is a working page in another directory.
+```js
+import { mount } from "https://example.com/atlas/app.js";
+
+const atlas = mount(element, { page: "roadmap" });
+atlas.setPage("dashboard");
+atlas.destroy(); // removes the frame and every listener
+```
+
+| Option | Default | |
+|---|---|---|
+| `page` | `"overview"` | `overview`, `roadmap`, `results`, `dashboard`, `map` or `dev` |
+| `base` | beside `app.js` | where `atlas.yaml`, `data/` and `vendor/` live |
+| `syncUrl` | `false` | read the page, filters and open module from the address, and write them back |
+| `setTitle` | `false` | set `document.title` and the meta description per page |
+| `sourceUrl` | none | a link for the footer's "source" |
+
+A page can hold several. Sticky headers stop at `--wdk-atlas-sticky-top` (default `0px`); set it
+on `.wdk-atlas` to the height of a fixed bar of your own. This site is itself a consumer:
+`index.html` is a top bar and an empty `<main>`, `site.js` calls `mount()` with `syncUrl` and
+`setTitle`, and `page.css` styles the bar. None of the three is needed by a host.
+
+`examples/embed.html` is the one-tag form. `examples/mount.html` mounts two instances in a
+light-themed page that has a `.nav`, a `.search` and an `--accent` of its own.
 
 ## Security
 

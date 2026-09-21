@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Atlas mounted by a host page</title>
+    <!-- The other way in. embed.html drops one script tag and takes what it gets; this page imports
+         mount() and decides: which page, where, how many, and when it goes away again. The host
+         here is deliberately light, with a .nav, a .search and an --accent of its own, which are
+         three names Atlas also uses. Neither side should notice the other. -->
+    <link rel="stylesheet" href="../styles.css" />
+    <style>
+      :root { --accent: rebeccapurple; }
+      body { margin: 0; font-family: Georgia, serif; background: #fff; color: #222; }
+      .host { max-width: 960px; margin: 0 auto; padding: 24px; }
+      .nav { display: flex; gap: 8px; margin: 16px 0; }
+      .nav button { padding: 6px 12px; border: 1px solid var(--accent); background: none; color: var(--accent); font: inherit; cursor: pointer; }
+      .search { width: 100%; padding: 8px; border: 1px solid #999; font: inherit; }
+      .slot { margin: 16px 0; }
+    </style>
+  </head>
+  <body>
+    <div class="host">
+      <h1>A host page with a look of its own</h1>
+      <input class="search" placeholder="The host's own search box: typing / in here stays in here" />
+      <div class="nav" id="pages">
+        <button data-page="overview">Overview</button>
+        <button data-page="roadmap">Roadmap</button>
+        <button data-page="map">Map</button>
+        <button data-page="dashboard">Dashboard</button>
+        <button id="remove">Remove the first Atlas</button>
+      </div>
+      <div class="slot" id="first"></div>
+      <p>Host content between the two. The address bar above has not changed, whatever was clicked.</p>
+      <div class="slot" id="second"></div>
+    </div>
+    <script type="module">
+      import { mount } from "../app.js";
+
+      let first = mount(document.querySelector("#first"), { page: "overview" });
+      mount(document.querySelector("#second"), { page: "dev" });
+
+      document.querySelector("#pages").addEventListener("click", (event) => {
+        if (event.target.id === "remove") { first.destroy(); first = null; return; }
+        const page = event.target.dataset.page;
+        if (page && first) first.setPage(page);
+      });
+    </script>
+  </body>
+</html>

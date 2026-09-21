@@ -6,31 +6,27 @@
 // that cannot determine the answer is "not run", and is never counted as a pass, because the
 // whole point of this file is that we stop taking our own word for things.
 //
-// Static only, dependency-free. Where a gate reads app.js it reads it as text: the contract it
+// Static only, dependency-free. Where a gate reads the pages it reads them as text: the contract it
 // enforces is that a rendered figure names its registry id at the call site, which is cheap to
 // grep for and impossible to satisfy by accident.
 
 import { readFileSync, existsSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { METRICS, REQUIRED, DEMOTED } from "../lib/metrics-defs.mjs";
 import { runGates as runQualityGates } from "./check-quality.mjs";
-import { loadAtlas } from "./lib/load-atlas.mjs";
+import { loadAtlas, ROOT } from "./lib/load-atlas.mjs";
+import { shippedSource } from "./lib/shipped.mjs";
 import { uncovered, metricsOf } from "../lib/origins.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => (existsSync(join(ROOT, rel)) ? readFileSync(join(ROOT, rel), "utf8") : null);
 
-const APP = read("app.js") || "";
+// The pages live in src/ and app.js is the shell over them, so "what the site renders" is all of it.
+const APP = shippedSource();
 const COLLECTOR = read("bin/collect-metrics.mjs") || "";
 
 const pass = (detail, note) => ({ state: "pass", detail, note });
 const fail = (detail, note) => ({ state: "fail", detail, note });
 const notRun = (detail) => ({ state: "not run", detail });
-
-/** Occurrences of a call, ignoring the line that declares the function itself. */
-export const callSites = (src, name) =>
-  src.split("\n").filter((l) => l.includes(`${name}(`) && !/^\s*(export\s+)?(async\s+)?function\s/.test(l)).length;
 
 /** Registry ids named at a render site, through the one helper pages are allowed to use. */
 export const referencedIds = (src) => [...src.matchAll(/defFor\("([a-z0-9-]+)"\)/g)].map((m) => m[1]);
@@ -59,7 +55,7 @@ function m1() {
   // named one twice: the real page had four occurrences of that slack, so four tiles could
   // have gone unregistered with the gate still green.
   const sites = renderSites(APP);
-  if (!sites.length) return notRun("found no tile or chart call sites in app.js; the parser needs updating");
+  if (!sites.length) return notRun("found no tile or chart call sites in the pages; the parser needs updating");
   const named = sites.filter((l) => /defFor\("[a-z0-9-]+"\)/.test(l));
   const known = new Set(METRICS.map((m) => m.id));
   const unknown = [...new Set(referencedIds(APP))].filter((id) => !known.has(id));
@@ -97,8 +93,8 @@ function m3() {
 // 53% of WDK download volume is the dependency graph echoing. Published whole, it misleads.
 function m4() {
   const publishesDownloads = /npm downloads/.test(APP);
-  // Triggered by a label in app.js, so a rename would silence it. Absence is "not run".
-  if (!publishesDownloads) return notRun("found no download figure in app.js; the parser needs updating");
+  // Triggered by a label in the pages, so a rename would silence it. Absence is "not run".
+  if (!publishesDownloads) return notRun("found no download figure in the pages; the parser needs updating");
   const ids = new Set(referencedIds(APP));
   const have = ["downloads-direct", "downloads-induced"].filter((id) => ids.has(id));
   return have.length === 2
@@ -122,7 +118,7 @@ export function pillSites(src) {
 
 function m5() {
   const { total, named, ids } = pillSites(APP);
-  if (!total) return notRun("found no change indicator in app.js; the parser needs updating");
+  if (!total) return notRun("found no change indicator in the pages; the parser needs updating");
   const guardInHelper = /const pct = [^;]*mayShowChange\(/.test(APP);
   const known = new Set(METRICS.map((m) => m.id));
   const unknown = [...new Set(ids)].filter((id) => !known.has(id));
@@ -135,8 +131,12 @@ function m5() {
 // ---- M6 ---------------------------------------------------------------------------------
 // The tile row is what a reader takes away in ten seconds. It is not the place for a trophy.
 function m6() {
-  const block = balancedBlock(APP, 'el("div", { class: "tiles" }');
-  if (!block) return notRun("could not find the tile row in app.js");
+  // Every tile row. The marker was the Dashboard's exact class string and the first hit only, so
+  // the Overview's row, class "tiles brief-tiles", was never looked at.
+  const rows = [];
+  for (let at = APP.indexOf('el("div", { class: "tiles'); at >= 0; at = APP.indexOf('el("div", { class: "tiles', at + 1)) rows.push(balancedBlock(APP.slice(at), 'el("div", { class: "tiles'));
+  if (!rows.length || rows.some((r) => !r)) return notRun("could not find the tile rows in the pages");
+  const block = rows.join("\n");
   const labels = new Map(METRICS.map((m) => [m.id, m.label]));
   const present = DEMOTED.filter((id) => block.includes(`defFor("${id}")`) || block.includes(`"${labels.get(id)}"`));
   return present.length

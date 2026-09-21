@@ -1,22 +1,10 @@
 // The gates decide whether a number may be published, so a gate that miscounts is worse than
-// no gate: it would report a pass over a page nobody had checked. These tests cover the three
+// no gate: it would report a pass over a page nobody had checked. These tests cover the
 // pieces of text handling the gates rely on, including the cases that would quietly inflate a
 // count and turn a fail into a pass.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { callSites, referencedIds, balancedBlock, pillSites } from "../bin/check-metrics.mjs";
-
-test("counts a call once per line and ignores the line that declares it", () => {
-  const src = [
-    "function statTile(label, value) {",
-    '  statTile("a", 1),',
-    '  statTile("b", 2),',
-    "export function deltaPill(a, b) {",
-    "  deltaPill(1, 2)",
-  ].join("\n");
-  assert.equal(callSites(src, "statTile"), 2);
-  assert.equal(callSites(src, "deltaPill"), 1);
-});
+import { referencedIds, balancedBlock, pillSites } from "../bin/check-metrics.mjs";
 
 test("reads registry ids only through the helper, never from any quoted string", () => {
   const src = 'defFor("downloads"), "stars", defFor("dependents"), metricDef("not-this-one")';

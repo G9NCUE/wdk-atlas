@@ -18,6 +18,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { ROOT, readAtlasText, parseAtlas } from "./lib/load-atlas.mjs";
+import { shippedScripts } from "./lib/shipped.mjs";
 
 const REVIEW_DIR = process.env.ATLAS_REVIEW_DIR || "";
 const QUARTERS_AHEAD = 3; // a public date further out than this reads as a commitment
@@ -187,7 +188,7 @@ function scanStructure(findings) {
 // ---------------------------------------------------------------- run
 export function scan() {
   const findings = [];
-  for (const rel of ["atlas.yaml", "README.md", "index.html", "app.js", "styles.css"]) scanText(rel, findings);
+  for (const rel of ["atlas.yaml", "README.md", "index.html", "styles.css", "page.css", ...shippedScripts()]) scanText(rel, findings);
   scanStructure(findings);
   // Two sources, unioned. The private list in the review directory carries a note beside each
   // fingerprint saying why it was decided, which is why it is not committed. public-reviewed.txt
