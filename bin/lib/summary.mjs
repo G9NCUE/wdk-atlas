@@ -5,9 +5,10 @@
 // only file that held them also holds a year of daily series for 55 repositories. This is the
 // same facts in about a kilobyte, so a page that needs nothing else fetches nothing else.
 //
-// One definition, used by the collector when it writes and by the site when it reads.
+// One definition of what goes in it, used by the collector when it writes. The site reads the
+// file it produces; nothing under bin/ is served.
 
-export const SUMMARY_SCHEMA = 1;
+const SUMMARY_SCHEMA = 1;
 
 export function summarise(file) {
   const days = Object.keys(file.snapshots || {}).sort();

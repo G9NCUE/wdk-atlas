@@ -11,8 +11,7 @@
 // Env: GITHUB_TOKEN raises the API rate limit; private repos are visible only if that token can see them.
 // No dependencies: bin/lib/load-atlas.mjs parses the YAML with the bundle the site already ships.
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { loadAtlas, ROOT } from "./lib/load-atlas.mjs";
+import { loadAtlas } from "./lib/load-atlas.mjs";
 
 const TOKEN = process.env.GITHUB_TOKEN || "";
 const JSON_OUT = process.argv.includes("--json");

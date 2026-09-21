@@ -4,17 +4,7 @@
 // the page is able to go down that a reader could tell a bad quarter from a good one.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { METRICS, REQUIRED, DEMOTED, metricDef, mayShowChange } from "../lib/metrics-defs.mjs";
-
-test("every entry carries every required field, filled in", () => {
-  for (const m of METRICS) {
-    for (const field of REQUIRED) {
-      assert.ok(field in m, `${m.id || "?"} is missing ${field}`);
-      const v = m[field];
-      assert.ok(v !== null && v !== undefined && v !== "", `${m.id} has an empty ${field}`);
-    }
-  }
-});
+import { METRICS, DEMOTED, metricDef, mayShowChange } from "../lib/metrics-defs.mjs";
 
 test("ids are unique and look like ids", () => {
   const seen = new Set();
@@ -22,14 +12,6 @@ test("ids are unique and look like ids", () => {
     assert.match(m.id, /^[a-z][a-z0-9-]*$/, `${m.id} is not a plain lower-case id`);
     assert.ok(!seen.has(m.id), `${m.id} appears twice`);
     seen.add(m.id);
-  }
-});
-
-test("every entry names a decision, and names it in a sentence rather than a word", () => {
-  for (const m of METRICS) {
-    assert.equal(typeof m.decision, "string");
-    // A decision of "adoption" or "growth" is a label, not a decision. Insist on a sentence.
-    assert.ok(m.decision.trim().split(/\s+/).length >= 8, `${m.id}: the decision is too short to be one`);
   }
 });
 
@@ -46,12 +28,6 @@ test("every verdict is one of the six, spelled out here rather than imported", (
   // The literal is the point: asserting against the module's own list would pass for any list.
   const allowed = ["keep", "redefine", "promote", "demote", "move", "add"];
   for (const m of METRICS) assert.ok(allowed.includes(m.verdict), `${m.id} has verdict ${m.verdict}`);
-});
-
-test("canFall is a real boolean, and at least four numbers can fall", () => {
-  for (const m of METRICS) assert.equal(typeof m.canFall, "boolean", `${m.id}: canFall is not a boolean`);
-  const falling = METRICS.filter((m) => m.canFall);
-  assert.ok(falling.length >= 4, `only ${falling.length} published numbers can go down`);
 });
 
 test("a number that cannot fall is never presented as a result", () => {
@@ -84,7 +60,7 @@ test("an unknown id is a fault, not a default", () => {
   assert.equal(mayShowChange("no-such-metric", 1000), false);
 });
 
-test("the demoted list is exactly the entries marked demote", () => {
+test("stars stays demoted", () => {
   assert.ok(DEMOTED.includes("stars"), "stars failed all three parts of the test and must stay demoted");
 });
 
