@@ -29,6 +29,185 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ---- The site's own furniture: top bar, navigation, skip link ----------------------------------
+   These lived in styles.css, which follows Atlas into every page that embeds it, and a host has
+   a .nav and a .brand of its own. */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  width: 100%;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  transition: background-color 0.2s, border-color 0.2s, backdrop-filter 0.2s;
+}
+
+.topbar.is-scrolled {
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  border-bottom-color: var(--line);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.topbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 76px;
+  padding: 0 32px;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.brand {
+  display: inline-flex;
+  flex: none;
+  width: 100px;
+  height: 35px;
+  border-radius: 4px;
+}
+
+.brand:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.brand-logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav a {
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  padding: 10px 12px;
+  border-radius: var(--radius-btn);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 19px;
+  letter-spacing: 0.5px;
+  transition: background-color 0.2s ease-out;
+}
+
+.nav a:hover,
+.nav a[aria-current] {
+  background: var(--dark-grey);
+}
+
+.nav a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Out of the way until someone tabs to it, then the first thing they meet. Without it a
+   keyboard reader crosses the whole navigation on every page before reaching the content. */
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -64px;
+  z-index: 100;
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--bg);
+  font: 600 14px/1 var(--font-sans);
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+
+.skip-link:focus {
+  top: 12px;
+}
+
+main:focus {
+  outline: none;
+}
+
+/* ---- GitHub link, top right of the bar -------------------------------------------------------- */
+.gh-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin-left: auto;
+  border-radius: var(--radius-btn);
+  color: var(--secondary);
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.gh-link:hover {
+  color: var(--ink);
+  background: var(--white-5);
+}
+
+.gh-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---- Menu button: the nav folds behind it on narrow screens ------------------------------------ */
+.nav-toggle { display: none; }
+
+@media (max-width: 1024px) {
+  .topbar-inner { position: relative; }
+  .topbar-left { flex: 1 1 auto; justify-content: space-between; gap: 12px; }
+  .nav-toggle { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; margin-left: auto; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--surface); cursor: pointer; }
+  .nav-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .nav-toggle-bar, .nav-toggle-bar::before, .nav-toggle-bar::after { display: block; width: 18px; height: 2px; border-radius: 1px; background: var(--ink); transition: transform 0.2s ease, background-color 0.2s ease; }
+  .nav-toggle-bar { position: relative; }
+  .nav-toggle-bar::before, .nav-toggle-bar::after { content: ""; position: absolute; left: 0; }
+  .nav-toggle-bar::before { top: -6px; }
+  .nav-toggle-bar::after { top: 6px; }
+  .nav-toggle[aria-expanded="true"] .nav-toggle-bar { background: transparent; }
+  .nav-toggle[aria-expanded="true"] .nav-toggle-bar::before { transform: translateY(6px) rotate(45deg); }
+  .nav-toggle[aria-expanded="true"] .nav-toggle-bar::after { transform: translateY(-6px) rotate(-45deg); }
+  #primary-nav { display: none; position: absolute; top: 100%; right: 0; left: 0; padding: 6px 16px 14px; border-bottom: 1px solid var(--line); background: var(--bg); box-shadow: var(--shadow-pop); }
+  .nav { flex-direction: column; align-items: stretch; gap: 2px; }
+  .nav a { height: 44px; padding: 0 12px; font-size: 16px; }
+}
+
+@media (max-width: 900px) {
+  .topbar-inner {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+/* styles.css honours this inside Atlas's frame, and only there, so that it cannot still a host's
+   animations. The bar above the frame is this site's, so it is asked here as well. */
+@media (prefers-reduced-motion: reduce) {
+  .topbar,
+  .topbar *,
+  .skip-link {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* How far down Atlas's sticky headers stop: under this site's top bar. A host with a bar of its
+   own sets the same property; one without leaves it at zero. */
+.wdk-atlas {
+  --wdk-atlas-sticky-top: 76px;
+}
+
 /* The top bar folds its navigation behind a button on a narrow screen. Only this site has one. */
 @media (max-width: 1024px) {
   body.menu-open #primary-nav { display: block; }
@@ -37,4 +216,9 @@ body {
 
 @media print {
   body { background: #fff; }
+
+  /* Controls cannot be operated on paper. */
+  .topbar,
+  .skip-link,
+  .nav-toggle { display: none !important; }
 }
