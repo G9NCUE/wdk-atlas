@@ -33,7 +33,6 @@ test("consecutive ranges add up to the whole without double counting the join", 
   const q2 = sumSeries(series, "2026-04-01", "2026-07-01");
   const q3 = sumSeries(series, "2026-07-01", "2026-10-01");
   assert.deepEqual([q1, q2, q3], [1, 6, 8]);
-  assert.equal(q1 + q2 + q3, 15, "the day on each boundary is counted once");
 });
 
 test("a gap in collection never becomes NaN on the page", () => {
