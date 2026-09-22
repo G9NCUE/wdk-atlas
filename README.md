@@ -57,6 +57,10 @@ GITHUB_TOKEN=$(gh auth token) node bin/check-atlas.mjs
 GITHUB_TOKEN=$(gh auth token) node bin/collect-metrics.mjs --dry
 ```
 
+The collector writes three files under `data/`: `metrics.json` for the org's own repos,
+`summary.json` with the few values every page needs, and `third-party.json` for the packages
+built by others, kept apart so no first-party figure can count one of them.
+
 `--npm-only` refreshes just the figures that come from the npm registry, reusing the repository
 list already in `data/metrics.json` and asking GitHub for nothing, so it needs no token:
 

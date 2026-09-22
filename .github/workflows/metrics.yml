@@ -46,10 +46,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Both files, because the collector writes both. data/summary.json had been left out
-          # since it was introduced: thirty commits to metrics.json against two to the summary,
-          # which is what the Map and the Developer Resources pages read their date from.
-          git add data/metrics.json data/summary.json
+          # Every file the collector writes. data/summary.json had been left out since it was
+          # introduced: thirty commits to metrics.json against two to the summary, which is what
+          # the Map and the Developer Resources pages read their date from. data/third-party.json
+          # holds the packages built by others, which the Dashboard reads on its own.
+          git add data/metrics.json data/summary.json data/third-party.json
           # Nothing to commit is a quiet day, not a failure: npm can report the same numbers
           # twice, and a red cross on an unchanged day teaches everyone to ignore the crosses.
           if git diff --cached --quiet; then

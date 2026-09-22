@@ -54,6 +54,10 @@ export function createData(ctx) {
   // about a kilobyte; an older deployment without it still works, from the full file.
   const loadSummary = () => fetchJsonOnce(dataUrl("data/summary.json")).then((file) => file || loadMetrics());
 
+  // The packages built by others, in a file of their own so that nothing reading metrics.json
+  // can mistake one for ours. Null until the collector has written it once.
+  const loadThirdParty = () => fetchJsonOnce(dataUrl("data/third-party.json")).then((file) => (file && file.schema === 1 ? file : null));
+
   function publishedRepos() { return Object.entries((METRICS && METRICS.repos) || {}).filter(([, r]) => r.version).map(([n]) => n).sort(); }
 
   function latestSnapshot() { const snaps = (METRICS && METRICS.snapshots) || {}; const days = Object.keys(snaps).sort(); return days.length ? snaps[days[days.length - 1]] : null; }
@@ -71,6 +75,6 @@ export function createData(ctx) {
   const metrics = () => METRICS;
 
   return {
-    latestSnapshot, loadMetrics, loadSummary, metrics, publishedRepos, readinessFact,
+    latestSnapshot, loadMetrics, loadSummary, loadThirdParty, metrics, publishedRepos, readinessFact,
   };
 }
