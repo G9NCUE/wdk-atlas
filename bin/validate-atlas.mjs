@@ -132,7 +132,7 @@ export function validate(atlas) {
       id: ["string", true], name: ["string", true], title: ["string", true], short: ["string", false], section: ["string", true],
       band: ["string", false], kind: ["string", false], status: ["string", true], publisher: ["string", true], chains: ["array", false],
       summary: ["string", true], notes: ["array", false], repo: ["string", false], docs: ["string", false], relations: ["array", false],
-      progress: ["number", false], private: ["boolean", false], placeholder: ["boolean", false],
+      progress: ["number", false], private: ["boolean", false], placeholder: ["boolean", false], package: ["string", false],
     })) return;
     oneOf(errors, `${where}.status`, m.status, STATUS_MODULE);
     if (typeof m.section === "string") {

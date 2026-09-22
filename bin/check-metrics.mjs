@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Gates M1 to M11 from the measurement specification: do the numbers Atlas publishes mean
-// what they appear to mean?
+// Gates M1 to M11 from the measurement specification, and M12 from the third-party list the
+// Dashboard added later: do the numbers Atlas publishes mean what they appear to mean?
 //
 // Three results, never two. A gate that runs and finds the condition false is a fail. A gate
 // that cannot determine the answer is "not run", and is never counted as a pass, because the
@@ -16,6 +16,7 @@ import { METRICS, REQUIRED, DEMOTED } from "../lib/metrics-defs.mjs";
 import { runGates as runQualityGates } from "./check-quality.mjs";
 import { loadAtlas, ROOT } from "./lib/load-atlas.mjs";
 import { shippedSource } from "./lib/shipped.mjs";
+import { thirdPartyModules } from "./lib/packages.mjs";
 import { uncovered, metricsOf } from "../lib/origins.mjs";
 
 const read = (rel) => (existsSync(join(ROOT, rel)) ? readFileSync(join(ROOT, rel), "utf8") : null);
@@ -220,6 +221,29 @@ function m11() {
     : pass(`all ${metrics.length} measurements name a public endpoint`);
 }
 
+// ---- M12 --------------------------------------------------------------------------------
+// Not from the specification. The Dashboard promises a list of every package built by others,
+// and a list that quietly lost a module is a list nobody can trust, so every third-party module
+// on the map must be in the file: measured, or named with the reason it could not be.
+function m12() {
+  let atlas;
+  try { atlas = loadAtlas(); } catch (e) { return notRun(`could not read atlas.yaml: ${e.message}`); }
+  const org = (atlas.audit && atlas.audit.org) || "tetherto";
+  const expected = thirdPartyModules(atlas.modules, org).map((m) => m.id);
+  if (!expected.length) return notRun("the map names no third-party module with a repository");
+  const raw = read("data/third-party.json");
+  if (!raw) return notRun("no data/third-party.json to check against");
+  let file;
+  try { file = JSON.parse(raw); } catch (e) { return notRun(`data/third-party.json did not parse: ${e.message}`); }
+  const measured = new Set(Object.values(file.packages || {}).map((p) => p.module));
+  const explained = new Set((file.unmeasured || []).map((u) => u.module));
+  const missing = expected.filter((id) => !measured.has(id) && !explained.has(id));
+  if (missing.length) return fail(`${missing.length} of ${expected.length} third-party modules are in neither list: ${missing.join(", ")}`);
+  const ours = Object.values(file.packages || {}).filter((p) => !p.publisher || p.publisher.toLowerCase() === org.toLowerCase());
+  if (ours.length) return fail(`${ours.length} packages in the third-party file are the organisation's own`);
+  return pass(`${measured.size} of ${expected.length} third-party modules measured` + (explained.size ? `, ${explained.size} named with a reason` : ""));
+}
+
 const GATES = [
   { id: "M1", what: "every rendered number has a registry entry", run: m1 },
   { id: "M2", what: "every entry names a decision, a window, a source and a definition", run: m2 },
@@ -232,6 +256,7 @@ const GATES = [
   { id: "M9", what: "pages stay inside their compressed weight budget", run: m9 },
   { id: "M10", what: "every figure carries its collection date and window", run: m10 },
   { id: "M11", what: "every key result names a public source, not one of our pages", run: m11 },
+  { id: "M12", what: "every third-party module on the map is measured, or says why not", run: m12 },
 ];
 
 export function runMetricGates() {

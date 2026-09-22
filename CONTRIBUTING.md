@@ -57,6 +57,8 @@ node bin/check-public.mjs        # nothing internal reached a shipped file
 - `lib/` is arithmetic with no DOM at all, shared with the collector and the gates.
 - `site.js`, `index.html` and `page.css` are this site's top bar and nothing else.
 - `bin/` holds the collector and the gates, `test/` the unit tests. Neither is served on purpose.
+- `data/` is what the collector wrote: `metrics.json` for the org's repos, `summary.json` for the
+  stamp and the install line, `third-party.json` for the packages others built. Never edited by hand.
 
 A new page is a file in `src/pages/` whose default export takes the context and returns
 `{ render(), mounted?(), hashChanged?() }`, plus one line in `PAGE_MODULES` in `app.js`.

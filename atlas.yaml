@@ -12,6 +12,8 @@
 #   flag when it stops matching GitHub, so it cannot drift silently.
 # chains: chain labels (EVM, BTC, TON, …); they place a module in the columns of the engine grid.
 # short: optional shorter title for the grid, where the row and column already say the rest.
+# package: the npm package, only when the repo root is not it (a monorepo). Otherwise bin/collect-metrics.mjs
+#   reads the name from the root package.json. Third-party packages are measured from npm alone.
 # roadmap: one list at the root (below). Each item names the modules it touches; the chips
 # under a module box and the "Pending work" list in its drawer are derived from it.
 #   id, label, summary, quarter (2026Q1 … 2027Q2 | backlog), status (planned | wip | done),
@@ -520,6 +522,7 @@ modules:
     notes:
       - Not maintained by Tether
     repo: https://github.com/Swap-DK/wdk-wallets-swapdk
+    package: "@swapdk/wdk-wallet-cosmos"
 
   - id: wdk-wallet-arkade
     name: wdk-wallet-arkade

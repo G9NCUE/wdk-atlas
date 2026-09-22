@@ -32,6 +32,15 @@
 // Pruning keeps the file small: snapshots stay daily for 90 days then thin to one a month; daily
 // series are dropped after 400 days. The page fetches this file, so it must not grow without bound.
 //
+// data/third-party.json, schema 1: the packages built by others, kept apart from ours.
+//   The modules on the map whose publisher is not the org (bin/lib/packages.mjs decides), read
+//   from npm only: nothing here grades somebody else's CI, audits or issues, and the GitHub
+//   searches above are scoped to the org. A file of its own, so the four pages that read
+//   metrics.json do not pay for series only the Dashboard's third-party section draws, and so
+//   no first-party figure or key result can pick up an outside package by accident.
+//   packages:   { npm name: { module, title, publisher, repo, version, downloads: { "YYYY-MM-DD": n } } }
+//   unmeasured: [ { module, title, publisher, repo, reason } ]   on the map, but no package could be read
+//
 // Who is a teammate: GitHub's author_association only says MEMBER when the token can see the org's
 // membership. The Actions token cannot (memberships in this org are mostly private), so with it every
 // teammate reads CONTRIBUTOR and lands in the external charts. The list in `audit.team` (atlas.yaml) is
@@ -51,9 +60,11 @@ import { createHash } from "node:crypto";
 import { join, dirname } from "node:path";
 import { loadAtlas, ROOT } from "./lib/load-atlas.mjs";
 import { summarise } from "./lib/summary.mjs";
+import { thirdPartyModules, repoParts, packageNameOf, trimDownloads } from "./lib/packages.mjs";
 
 const OUT = join(ROOT, "data", "metrics.json");
 const SUMMARY_OUT = join(ROOT, "data", "summary.json");
+const THIRD_OUT = join(ROOT, "data", "third-party.json");
 const TOKEN = process.env.GITHUB_TOKEN || "";
 const DRY = process.argv.includes("--dry");
 // Refresh only what npm can answer. The GitHub half needs a token and a rate-limit budget; the
@@ -142,12 +153,13 @@ const npmJson = async (url, attempt = 0) => {
   const text = await res.text();
   return text ? JSON.parse(text) : null;
 };
-// One place that writes the two files, so a partial run and a full run cannot disagree about
+// One place that writes the three files, so a partial run and a full run cannot disagree about
 // how they are written, and the summary is always built from the object just saved.
-function writeOut(file) {
+function writeOut(file, third) {
   mkdirSync(dirname(OUT), { recursive: true });
   writeFileSync(OUT, JSON.stringify(file) + "\n");
   writeFileSync(SUMMARY_OUT, JSON.stringify(summarise(file)) + "\n");
+  writeFileSync(THIRD_OUT, JSON.stringify(third) + "\n");
 }
 
 // Give up on one package rather than on the run. Used for the per-version call, the only one
@@ -208,15 +220,7 @@ try {
     if (!r.package) continue;
     const from = new Date(Date.now() - SERIES_DAYS * 864e5).toISOString().slice(0, 10);
     const range = await npmJson(`https://api.npmjs.org/downloads/range/${from}:${today}/${r.package}`);
-    if (range && range.downloads) {
-      const days = {};
-      for (const d of range.downloads) days[d.day] = d.downloads;
-      // npm lags a few days: drop trailing zero days, then the last reported day too, which is usually still filling.
-      const sorted = Object.keys(days).sort().reverse();
-      for (const d of sorted) { if (days[d] === 0) delete days[d]; else break; }
-      const lastLeft = Object.keys(days).sort().pop(); if (lastLeft) delete days[lastLeft];
-      downloads[name] = days;
-    }
+    if (range && range.downloads) downloads[name] = trimDownloads(range);
     const meta = await npmJson(`https://registry.npmjs.org/${r.package.replace("/", "%2F")}`);
     const v = meta && meta["dist-tags"] ? meta["dist-tags"].latest : null;
     if (v && v !== "0.0.0") { published.push(name); repos[name].version = v; }
@@ -248,6 +252,34 @@ try {
     }
   }
 
+  // ---------------------------------------------------------------- third-party packages: modules built by others, npm only
+  // The package name comes from the repository's root package.json, or from `package:` on the
+  // module when the root is a monorepo. An npm-only run keeps the names the last run found.
+  let lastThird = { packages: {} };
+  if (existsSync(THIRD_OUT)) { try { const f = JSON.parse(readFileSync(THIRD_OUT, "utf8")); if (f.schema === 1) lastThird = f; } catch {} }
+  const known = new Map(Object.entries(lastThird.packages || {}).map(([pkg, info]) => [info.module, pkg]));
+  const third = { schema: 1, org: ORG, updated: null, packages: {}, unmeasured: [] };
+  for (const m of thirdPartyModules(atlas.modules, ORG)) {
+    const about = { module: m.id, title: m.title || m.id, publisher: m.publisher, repo: m.repo || null };
+    let pkg = m.package || null, reason = null;
+    if (!pkg && NPM_ONLY) { pkg = known.get(m.id) || null; reason = "not read by an npm-only run; a full run reads the repository"; }
+    if (!pkg && !NPM_ONLY) {
+      const { owner, name } = repoParts(m.repo);
+      const c = await gh(`/repos/${owner}/${name}/contents/package.json`);
+      let manifest = null;
+      if (c && c.content) { try { manifest = JSON.parse(Buffer.from(c.content, "base64").toString("utf8")); } catch {} }
+      ({ name: pkg, reason } = packageNameOf(manifest));
+    }
+    if (!pkg) { third.unmeasured.push({ ...about, reason }); continue; }
+    const from = new Date(Date.now() - SERIES_DAYS * 864e5).toISOString().slice(0, 10);
+    const meta = await npmJson(`https://registry.npmjs.org/${pkg.replace("/", "%2F")}`);
+    if (!meta || !meta["dist-tags"]) { third.unmeasured.push({ ...about, reason: `${pkg} is not on npm` }); continue; }
+    const range = await npmJson(`https://api.npmjs.org/downloads/range/${from}:${today}/${pkg}`);
+    third.packages[pkg] = { ...about, version: meta["dist-tags"].latest || null, downloads: trimDownloads(range) };
+    await sleep(120);
+  }
+  third.updated = new Date().toISOString();
+
   if (NPM_ONLY) {
     file.daily.downloads = downloads;
     file.releases = releases;
@@ -257,8 +289,8 @@ try {
     const latest = days.length ? file.snapshots[days[days.length - 1]] : null;
     if (latest) { latest.currency = currencyByRepo; latest.onLatest = latestByRepo; if (published.length) latest.published = published; }
     file.updated = new Date().toISOString();
-    writeOut(file);
-    console.log(`npm only: ${Object.keys(downloads).length} packages, ${Object.keys(deps).length} with WDK dependencies, currency for ${Object.keys(currencyByRepo).length}` + (softFailures.length ? `, ${softFailures.length} not collected` : ""));
+    writeOut(file, third);
+    console.log(`npm only: ${Object.keys(downloads).length} packages, ${Object.keys(deps).length} with WDK dependencies, currency for ${Object.keys(currencyByRepo).length}, ${Object.keys(third.packages).length} third-party packages` + (softFailures.length ? `, ${softFailures.length} not collected` : ""));
     // The script runs at the top level, so there is no function to return from. Both writes
     // above are synchronous and already on disk.
     process.exit(0);
@@ -474,14 +506,14 @@ try {
   for (const h of teamSeen) for (const login of Object.keys(file.authors)) if (hashLogin(login) === h) delete file.authors[login];
   file.team = [...teamSeen].sort();
   file.updated = new Date().toISOString();
-  if (DRY) console.log(JSON.stringify({ repos: Object.keys(repos).length, snapshot: snap }, null, 2));
+  if (DRY) console.log(JSON.stringify({ repos: Object.keys(repos).length, snapshot: snap, thirdParty: { packages: Object.keys(third.packages), unmeasured: third.unmeasured } }, null, 2));
   else {
     // The summary holds the few values every page needs, kept apart so a page that needs
     // nothing else fetches nothing else. Both files come from the same object.
-    writeOut(file);
+    writeOut(file, third);
     const stars = Object.values(snap.stars).reduce((a, b) => a + b, 0);
     const people = new Set(Object.values(contributorsByRepo).flat()).size;
-    console.log(`wrote data/metrics.json and data/summary.json: ${today}, ${Object.keys(repos).length} repos, ${published.length} published packages, ${stars} stars, ${people} contributors, ${Object.keys(file.snapshots).length} snapshot(s)`);
+    console.log(`wrote data/metrics.json, data/summary.json and data/third-party.json: ${today}, ${Object.keys(repos).length} repos, ${published.length} published packages, ${Object.keys(third.packages).length} third-party packages (${third.unmeasured.length} not measured), ${stars} stars, ${people} contributors, ${Object.keys(file.snapshots).length} snapshot(s)`);
   }
 } catch (error) {
   console.error(`collect-metrics: ${error && error.message ? error.message : error}`);

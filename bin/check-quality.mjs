@@ -73,7 +73,11 @@ const VENDOR = {
 // them. Each bar sits about 1.5 KB over its measurement, for atlas.yaml to grow into: it is in
 // every page's download and grows with the roadmap, and a content edit should not fail a
 // performance gate. How the bars got here is in this file's history.
-const BUDGET_KB = { map: 75, dev: 74, overview: 135, roadmap: 138, results: 134, dashboard: 139 };
+//
+// 2026-09-22, the dashboard bar up by five: it now also fetches data/third-party.json, the
+// packages built by others, which no other page reads and so no other page pays for. Measured
+// with the file at eleven packages and a year of days each: dashboard 142.
+const BUDGET_KB = { map: 75, dev: 74, overview: 135, roadmap: 138, results: 134, dashboard: 144 };
 
 // ---------------------------------------------------------------- colour
 // WCAG relative luminance and contrast, from hsl() as the tokens are written.
@@ -239,12 +243,14 @@ function pageWeightGate() {
   const scriptsFor = (page) => importClosure(["site.js", "app.js", pageModule(page)]).reduce((n, rel) => n + gz(rel), 0);
   const metrics = gz("data/metrics.json");
   const summary = gz("data/summary.json");
+  // The third-party packages are the Dashboard's alone, and the Dashboard alone pays for them.
+  const thirdParty = gz("data/third-party.json");
   // Only the Map and Developer Resources can be served by the small file; every other page
   // reads the series, the snapshots or the per-repo readiness facts.
   const lightPages = ["map", "dev"];
   const rows = [];
   for (const [page, budget] of Object.entries(BUDGET_KB)) {
-    const data = lightPages.includes(page) && summary ? summary : metrics;
+    const data = (lightPages.includes(page) && summary ? summary : metrics) + (page === "dashboard" ? thirdParty : 0);
     const total = (fixed + scriptsFor(page) + data) / KB;
     rows.push({ page, kb: Math.round(total), budget, pass: total <= budget });
   }
