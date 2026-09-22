@@ -4,7 +4,7 @@
 // assertions pin the contract instead of agreeing with whatever the code happens to do.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nextQuarter, sumSeries } from "../lib/quarters.mjs";
+import { nextQuarter, sumSeries, selectedQuarters } from "../lib/quarters.mjs";
 
 test("steps forward, rolling into January", () => {
   assert.equal(nextQuarter("2026Q1"), "2026Q2");
@@ -42,4 +42,21 @@ test("a gap in collection never becomes NaN on the page", () => {
   assert.equal(sumSeries({ r: null }, ...range), 0);
   // a string, a null and a NaN are skipped; only the real number counts
   assert.equal(sumSeries({ r: { "2026-08-01": null, "2026-08-02": "12", "2026-08-03": NaN, "2026-08-04": 3 } }, ...range), 3);
+});
+
+// selectedQuarters turns a ?quarters= value into the columns to draw. The timeline's own order
+// wins, unknown names vanish, and an empty or broken selection falls back to everything.
+test("keeps the timeline order and drops what it does not know", () => {
+  const all = ["2026Q1", "2026Q2", "2026Q3", "2026Q4", "2027Q1"];
+  assert.deepEqual(selectedQuarters("2027Q1,2026Q3", all), ["2026Q3", "2027Q1"]);
+  assert.deepEqual(selectedQuarters("2026Q4,2031Q1,backlog", all), ["2026Q4"]);
+});
+
+test("nothing valid means everything, and the result is a copy", () => {
+  const all = ["2026Q3", "2026Q4"];
+  for (const raw of ["", null, undefined, "nope", "2026Q9", " , "]) {
+    const out = selectedQuarters(raw, all);
+    assert.deepEqual(out, all, `selectedQuarters(${JSON.stringify(raw)})`);
+    assert.notEqual(out, all);
+  }
 });
