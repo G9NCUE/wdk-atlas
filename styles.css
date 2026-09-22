@@ -395,6 +395,39 @@
     color: var(--text-muted);
   }
 
+  /* Quarter chips: which columns the timeline draws. Same switch as the status legend, no dot;
+     the column on screen is the chip that is on, so the chip carries a filled background. */
+  .quarter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 12px;
+  }
+
+  .quarter-bar-label {
+    color: var(--text-muted);
+    font: 600 13px/1 var(--font-sans);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .quarter-filter {
+    flex-wrap: wrap;
+  }
+
+  .status-toggle.quarter[aria-pressed="true"] {
+    background: var(--card-elevated);
+  }
+
+  .status-toggle.quarter.is-now[aria-pressed="true"] {
+    box-shadow: inset 0 -2px 0 var(--accent);
+  }
+
+  .status-toggle.quarter-all {
+    color: var(--text-muted);
+  }
+
   .status-toggle[aria-pressed="false"] .state-dot {
     background: transparent;
     box-shadow: inset 0 0 0 1.5px var(--muted);

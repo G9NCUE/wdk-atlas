@@ -7,6 +7,7 @@ import { createSharedViews } from "../shared-views.mjs";
 import { createSeries } from "../series.mjs";
 import { createKeyResults } from "../key-results.mjs";
 import { use } from "../context.mjs";
+import { selectedQuarters } from "../../lib/quarters.mjs";
 
 export default function createRoadmapPage(ctx) {
   use(ctx, createModel);
@@ -171,6 +172,7 @@ export default function createRoadmapPage(ctx) {
 
   const filter = {
     query: "",
+    quarters: null, // the timeline columns to draw; null until the timeline knows which quarters exist
     statuses: (() => {
       const raw = (query.get("status") || "").split(",").filter((s) => STATUSES.includes(s));
       return new Set(raw.length ? raw : STATUSES);
@@ -186,7 +188,57 @@ export default function createRoadmapPage(ctx) {
     setUrlParams({
       status: filter.statuses.size === STATUSES.length ? null : STATUSES.filter((s) => filter.statuses.has(s)).join(","),
       partners: filter.partners ? "1" : null,
+      quarters: !filter.quarters || filter.quarters.all.length === filter.quarters.shown.length ? null : filter.quarters.shown.join(","),
     });
+  }
+
+  // One chip per quarter the timeline can draw, all on by default. Click switches one column off or
+  // on; shift-click keeps only the run between the last chip clicked and this one, which is how a
+  // reader narrows a year down to the quarter being discussed. "All" puts every column back. At
+  // least one stays on. The choice lives in ?quarters= so a focused roadmap can be shared as a link.
+  function renderQuarterFilter(now, redraw) {
+    const { all } = filter.quarters;
+    let last = null;
+    const chips = all.map((q) => {
+      const chip = el(
+        "button",
+        { class: `status-toggle quarter${q === now ? " is-now" : ""}`, type: "button", "data-quarter": q, "aria-pressed": filter.quarters.shown.includes(q) ? "true" : "false" },
+        quarterLabel(q)
+      );
+      chip.addEventListener("click", (event) => {
+        const on = new Set(filter.quarters.shown);
+        if (event.shiftKey && last && last !== q) {
+          const [a, b] = [all.indexOf(last), all.indexOf(q)].sort((x, y) => x - y);
+          on.clear();
+          for (const each of all.slice(a, b + 1)) on.add(each);
+        } else if (on.has(q)) {
+          if (on.size === 1) return; // nothing left to draw; keep the last column
+          on.delete(q);
+        } else {
+          on.add(q);
+        }
+        last = q;
+        filter.quarters.shown = all.filter((each) => on.has(each));
+        for (const c of chips) c.setAttribute("aria-pressed", filter.quarters.shown.includes(c.dataset.quarter) ? "true" : "false");
+        syncFilterUrl();
+        redraw();
+      });
+      return chip;
+    });
+    const reset = el("button", { class: "status-toggle quarter-all", type: "button", "aria-pressed": "false" }, "All");
+    reset.addEventListener("click", () => {
+      if (filter.quarters.shown.length === all.length) return;
+      filter.quarters.shown = all.slice();
+      for (const c of chips) c.setAttribute("aria-pressed", "true");
+      syncFilterUrl();
+      redraw();
+    });
+    return el(
+      "div",
+      { class: "quarter-bar" },
+      el("span", { class: "quarter-bar-label" }, "Quarters"),
+      el("div", { class: "status-filter quarter-filter", role: "group", "aria-label": "Quarters to show" }, chips, reset)
+    );
   }
 
   // Three toggles that read like a legend: switch a status off to hide its cards. At least one stays on.
@@ -299,7 +351,8 @@ export default function createRoadmapPage(ctx) {
     const wanted = getHash().replace(/^#/, "");
     if (view === "timeline" && wanted && items.some((item) => item.id === wanted && isBacklog(item))) view = "backlog";
     const used = new Set(items.filter((item) => !isBacklog(item)).map((item) => item.quarter));
-    const quarters = [...new Set([...QUARTERS, ...used])].sort((x, y) => quarterOrder(x).localeCompare(quarterOrder(y)));
+    const allQuarters = [...new Set([...QUARTERS, ...used])].sort((x, y) => quarterOrder(x).localeCompare(quarterOrder(y)));
+    if (!filter.quarters) filter.quarters = { all: allQuarters, shown: selectedQuarters(query.get("quarters"), allQuarters) };
 
     const byParent = new Map();
     for (const item of items) {
@@ -324,15 +377,23 @@ export default function createRoadmapPage(ctx) {
       )
     );
 
-    const rows = stars
-      .map((star, index) => [star, roots.filter((item) => item.northStar === star.id), index])
-      .filter(([, inStar]) => view === "timeline" || inStar.length > 0)
-      .map(([star, inStar, index]) => renderStarRow(star, inStar, byParent, quarters, now, index, view));
-    const orphans = roots.filter((item) => !stars.some((star) => star.id === item.northStar));
-    if (orphans.length) {
-      rows.push(renderStarRow({ id: "unassigned", title: "Not yet linked to a north star" }, orphans, byParent, quarters, now, stars.length, view));
-    }
-    if (!roots.length) rows.push(el("p", { class: "meta" }, view === "backlog" ? "The backlog is empty." : "No roadmap entries in atlas.yaml yet."));
+    // The timeline draws only the selected quarters, and its tallies count only what is on screen.
+    // The backlog view ignores the selection: nothing there has a quarter.
+    const buildRows = () => {
+      const quarters = view === "timeline" ? filter.quarters.shown : allQuarters;
+      const inView = view === "timeline" ? roots.filter((item) => quarters.includes(item.quarter)) : roots;
+      const rows = stars
+        .map((star, index) => [star, inView.filter((item) => item.northStar === star.id), index])
+        .filter(([, inStar]) => view === "timeline" || inStar.length > 0)
+        .map(([star, inStar, index]) => renderStarRow(star, inStar, byParent, quarters, now, index, view));
+      const orphans = inView.filter((item) => !stars.some((star) => star.id === item.northStar));
+      if (orphans.length) {
+        rows.push(renderStarRow({ id: "unassigned", title: "Not yet linked to a north star" }, orphans, byParent, quarters, now, stars.length, view));
+      }
+      if (!roots.length) rows.push(el("p", { class: "meta" }, view === "backlog" ? "The backlog is empty." : "No roadmap entries in atlas.yaml yet."));
+      return { quarters, rows };
+    };
+    let { quarters, rows } = buildRows();
 
     const shown = { done: 0, wip: 0, planned: 0, partners: 0 };
     for (const item of roots.flatMap((root) => [root, ...(byParent.get(root.id) || [])])) { shown[item.status || "planned"] += 1; if ((item.partners || []).length) shown.partners += 1; }
@@ -349,7 +410,17 @@ export default function createRoadmapPage(ctx) {
     const fit = () => scroller.style.setProperty("--viewport", `${scroller.clientWidth}px`);
     window.addEventListener("resize", fit, { passive: true, signal });
     requestAnimationFrame(() => { fit(); spotlightTarget(); });
-    return el("div", { class: "roadmap-page" }, intro, headWrap, scroller);
+    // A change of quarters redraws the header and the columns in place; the text and status filters are applied again on the new cards.
+    const redraw = () => {
+      ({ quarters, rows } = buildRows());
+      headWrap.replaceChildren(renderTimelineHead(quarters, now));
+      scroller.style.setProperty("--cols", String(quarters.length));
+      scroller.replaceChildren(el("div", { class: "timeline-track" }, rows));
+      applyFilters(filter.query, filter.count);
+      requestAnimationFrame(fit);
+    };
+    const quarterBar = renderQuarterFilter(now, redraw);
+    return el("div", { class: "roadmap-page" }, intro, quarterBar, headWrap, scroller);
   }
 
   // The timeline/backlog links are built from the query, so they go stale when a filter moves.
