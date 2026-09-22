@@ -71,6 +71,33 @@ audit:
   # Org repos that are not modules; not reported as missing from the atlas. This list is about the map
   # only: bin/collect-metrics.mjs ignores it and tracks every public wdk-* repo, wdk-docs included.
   ignoreRepos:
+    # Empty scaffolds and superseded prototypes agreed for deletion or archive on 2026-09-06; remove
+    # each line when its repo goes.
+    - wdk-protocol-bridge
+    - wdk-protocol-swap
+    - wdk-protocol-swap-dedust-ton
+    - wdk-protocol-swap-moonpay
+    - wdk-protocol-lending-morpho-evm
+    - wdk-signer-evm
+    - wdk-signer-tron
+    - wdk-local-signer-cpp
+    - wdk-wallet-rgb
+    - wdk-wallet-solana-jupiterz
+    - wdk-safe-protocol-kit
+    - wdk-safe-relay-kit
+    - wdk-protocol-lending-aave
+    - wdk-protocol-bridge-usdt0
+    - wdk-protocol-bridge-stargate
+    - wdk-protocol-bridge-allbridge
+    - wdk-demo-wallet
+    - wdk-backup-remote
+    # Test bench, private: one test suite per module, not a module.
+    - wdk-playground
+    # Private port of ethers for Bare, never published. Revisit if it is.
+    - wdk-bare-ethers
+    # New homes of the multisig modules, empty until the code moves; the map swaps ids then.
+    - wdk-wallet-multisig-safe
+    - wdk-wallet-multisig-squads
     - wdk-docs
     - wdk-docs-migration
     - wdk-site
@@ -573,6 +600,7 @@ modules:
       - { type: on, target: wdk-wallet-evm }
       - { type: requires, target: wdk-wallet-evm-erc-4337 }
       - { type: requires, target: wdk-wallet-evm }
+      - { type: requires, target: wdk-utils }
 
   - id: wdk-protocol-swidge-orchestra
     name: wdk-protocol-swidge-orchestra
@@ -606,6 +634,7 @@ modules:
     repo: https://github.com/rhinofi/wdk-protocol-swidge-rhinofi
     relations:
       - { type: on, target: wdk-wallet-evm }
+      - { type: requires, target: wdk-wallet-solana }
       - { type: requires, target: wdk-wallet-evm-erc-4337 }
       - { type: requires, target: wdk-wallet-tron }
       - { type: requires, target: wdk-wallet-evm }
@@ -730,6 +759,8 @@ modules:
     repo: https://github.com/tetherto/wdk-protocol-multisig-squads
     relations:
       - { type: on, target: wdk-wallet-solana }
+      - { type: requires, target: wdk-wallet-solana }
+      - { type: requires, target: wdk-failover-provider }
 
   - id: wdk-protocol-multisig-psbt
     name: wdk-protocol-multisig-psbt
@@ -818,7 +849,7 @@ modules:
     title: Balances & history
     section: platform
     band: services
-    status: shipped
+    status: wip
     publisher: tetherto
     summary: 'Asks Tether''s indexer for balances and token transfer history across many chains, so an app does not have to read each chain itself.'
     notes:
@@ -854,23 +885,30 @@ modules:
     band: native
     status: shipped
     publisher: tetherto
-    summary: 'The React Native side of the kit: hooks and helpers that start the worklet, create wallets, fetch balances, and pass every request across to it.'
+    summary: 'The React Native side of the kit: hooks and helpers that start the worklet, create wallets, fetch balances, and pass every request across to it. Secure storage behind the platform keychain is built in.'
     repo: https://github.com/tetherto/wdk-react-native-core
     relations:
       - { type: requires, target: pear-wrk-wdk }
-      - { type: requires, target: wdk-react-native-secure-storage }
 
-  - id: wdk-react-native-secure-storage
-    name: wdk-react-native-secure-storage
-    title: Secure storage, React Native
+  - id: wdk-secret-manager
+    name: wdk-secret-manager
+    title: Seed and secret manager
     section: platform
-    band: native
+    band: services
     status: shipped
     publisher: tetherto
-    summary: 'Keeps encrypted seeds and keys in the phone''s own secure store, behind the platform keychain.'
-    repo: https://github.com/tetherto/wdk-react-native-secure-storage
-    relations:
-      - { type: under, target: wdk-react-native-core }
+    summary: 'Generates, encrypts and stores wallet seeds and secrets, so an app never handles a plain seed phrase itself.'
+    repo: https://github.com/tetherto/wdk-secret-manager
+
+  - id: wdk-backup-cloud-react-native
+    name: wdk-backup-cloud-react-native
+    title: Cloud backup
+    section: platform
+    band: services
+    status: shipped
+    publisher: tetherto
+    summary: 'Backs up an encrypted wallet to the user''s own cloud storage from a React Native app, and restores it on a new phone.'
+    repo: https://github.com/tetherto/wdk-backup-cloud-react-native
 
   - id: wdk-uikit-react-native
     name: wdk-uikit-react-native
@@ -1036,7 +1074,7 @@ modules:
     title: Tools for AI agents
     section: dev
     band: tools
-    status: shipped
+    status: wip
     publisher: tetherto
     summary: 'Lets AI agents use wallets through the Model Context Protocol, the standard way agents call tools. Build a server, and an agent can act across chains.'
     repo: https://github.com/tetherto/wdk-mcp-toolkit
@@ -1087,14 +1125,14 @@ roadmap:
   - id: signers
     northStar: kit
     label: Abstract signers
-    summary: One signer interface on every wallet package, so seed, private key, hardware and remote signers plug into the same account.
+    summary: One signer interface on every wallet package, so seed, private key, hardware and remote signers plug into the same account. Merged on EVM, in review on Bitcoin. Solana has a proof of concept from the first design round (wdk-wallet-solana#31), never merged, to be redone against the final contract.
     quarter: 2026Q4
     status: wip
     priority: P0
     modules:
       - { id: wdk-wallet-btc, status: wip, progress: 80 }
       - { id: wdk-wallet-evm, status: wip, progress: 80 }
-      - { id: wdk-wallet-solana, status: wip, progress: 50 }
+      - { id: wdk-wallet-solana, status: planned }
       - wdk-wallet-evm-erc-4337
       - wdk-wallet-evm-7702-gasless
       - wdk-wallet-solana-gasless
@@ -1108,32 +1146,30 @@ roadmap:
     northStar: kit
     label: Ledger
     parent: signers
-    summary: Hardware signing through a standalone Ledger package, first on Bitcoin, EVM and Solana; other hardware wallets can follow the same path.
+    summary: Hardware signing through a standalone Ledger package, first on Bitcoin, EVM and Solana; other hardware wallets can follow. Draft signers exist for all three from the first design round, none merged. The package is not created yet, and Bitcoin and Solana wait on the abstract signer.
     quarter: 2026Q4
-    status: wip
+    status: planned
     priority: P2
     modules:
-      - { id: wdk-wallet-btc, status: wip, progress: 60 }
-      - { id: wdk-wallet-evm, status: wip, progress: 60 }
-      - { id: wdk-wallet-solana, status: wip, progress: 40 }
+      - { id: wdk-wallet-btc, status: planned }
+      - { id: wdk-wallet-evm, status: planned }
+      - { id: wdk-wallet-solana, status: planned }
   - id: passkey-signer
     northStar: kit
     label: Passkey signer
-    parent: signers
     summary: A pluggable passkey signer for EVM chains that expose the 256r1 precompile.
     quarter: 2027Q1
     status: planned
     priority: P2
     modules: [wdk-wallet-evm]
-  - id: mpc-signer
+  - id: remote-signers
     northStar: kit
-    label: MPC signer
-    parent: signers
-    summary: Spike on pluggable MPC signers, or recipes for using existing MPC services with WDK.
-    quarter: 2027Q2
-    status: planned
+    label: Remote signers
+    summary: MPC and custody providers signing through the abstract signer on EVM, proven with prototypes for Dfns, Fireblocks, Turnkey and Openfort. Whether Tether publishes vendor packages or leaves them to the ecosystem is still open.
+    quarter: 2026Q3
+    status: done
     priority: P2
-    modules: []
+    modules: [wdk-wallet-evm]
   - id: policy-engine
     northStar: kit
     label: Policy engine
@@ -1202,22 +1238,22 @@ roadmap:
     northStar: dx
     label: WDK doctor app, a worklet console
     summary: Plug a bundle into the worklet and poke at whatever is in it, so the team and contributor teams can dogfood and debug any package without a throwaway app per package.
-    quarter: 2026Q3
+    quarter: 2026Q4
     status: wip
     priority: P2
     modules: [wdk-doctor-app, wdk-worklet-bundler]
   - id: cli-completion
     northStar: dx
     label: CLI completion
-    summary: Swap, bridge, gasless transactions and x402 payments from the command line.
+    summary: Swap, bridge and gasless transactions from the command line.
     quarter: 2026Q3
     status: wip
     priority: P1
     modules: [wdk-cli]
-  - id: docs-revamp
+  - id: docs-seo-geo
     northStar: dx
-    label: Docs revamp
-    summary: Recipes and guides, core concepts explained, the docs rebuilt around what developers actually ask.
+    label: Docs SEO and GEO
+    summary: Make WDK resolve to the Wallet Development Kit wherever a search engine or an AI assistant looks. The full name in page titles, npm and GitHub descriptions, structured data and crawler rules.
     quarter: 2026Q3
     status: wip
     priority: P1
@@ -1261,14 +1297,6 @@ roadmap:
     status: planned
     priority: P2
     modules: []
-  - id: unified-usdt-balance
-    northStar: kit
-    label: Unified USDT balance
-    summary: 'Scope undefined: a title in the previous roadmap, no description anywhere. See the open questions.'
-    quarter: backlog
-    status: planned
-    priority: P2
-    modules: []
   - id: new-chains
     northStar: ecosystem
     label: New chains under review
@@ -1294,13 +1322,6 @@ roadmap:
     quarter: 2026Q1
     status: done
     modules: [wdk-core-swift]
-  - id: solana-signers-v1
-    northStar: kit
-    label: Universal and Ledger signers on Solana
-    summary: The first wallet package with a pluggable signer, and the first hardware signer.
-    quarter: 2026Q1
-    status: done
-    modules: [wdk-wallet-solana]
   - id: eip-7702
     northStar: kit
     label: EIP-7702 support and gasless module
@@ -1349,8 +1370,8 @@ roadmap:
     modules: [wdk-mcp-toolkit]
   - id: x402-support
     northStar: ecosystem
-    label: x402 payments
-    summary: Agents pay for HTTP resources with USD₮ through WDK.
+    label: x402 guide for WDK wallets
+    summary: A guide to paying and accepting x402 payments in USD₮0 with a WDK wallet, using the open x402 libraries and a community facilitator. No first-party x402 code yet.
     quarter: 2026Q1
     status: done
   - id: review-pipeline
@@ -1422,6 +1443,14 @@ roadmap:
     quarter: backlog
     status: planned
     priority: P1
+  - id: composability-spec
+    northStar: kit
+    label: Improved composability, specification
+    summary: 'A written specification for how wallets, protocols and modules compose in the assembler, so the team can argue over a draft before any code moves.'
+    quarter: backlog
+    status: planned
+    priority: P1
+    modules: [wdk]
   - id: docs-phase-1
     northStar: dx
     label: Docs revamp, phase 1
@@ -1462,7 +1491,7 @@ roadmap:
   - id: onramp-providers
     northStar: ecosystem
     label: Two new on-ramp providers
-    summary: Transak, which ships as a WDK module written by their own team. No Onramper module exists in the org; where that half landed is unconfirmed.
+    summary: Transak, as a module written by their own team. Onramper is in contributor review.
     quarter: 2026Q2
     status: done
   # ---- Q3 2026 items from the sheet that the atlas did not have yet.
@@ -1484,10 +1513,10 @@ roadmap:
     northStar: ecosystem
     label: Cards interface, with a first contributor
     partners: [a second consumer, unconfirmed]
-    summary: The form for connecting card providers, and one external module that fills it.
+    summary: The form for connecting card providers, and one external module that fills it. Partner-paced.
     quarter: 2026Q4
     status: wip
-    priority: P0
+    priority: P2
     modules: [wdk-wallet]
   - id: recipes
     northStar: dx
@@ -1497,20 +1526,27 @@ roadmap:
     status: planned
     priority: P0
     modules: [wdk-examples]
+  - id: agent-payments
+    northStar: ecosystem
+    label: Agents that pay
+    summary: 'Agents that hold a WDK wallet and pay in USD₮0, self-custodial, bounded by local policies. The corridor for 2027, in order: publish the toolkit, fix and extend the policy engine, a first-party x402 client, then the facilitator question.'
+    quarter: 2027Q1
+    status: wip
+    priority: P1
+  - id: x402-client
+    northStar: ecosystem
+    label: First-party x402 client
+    summary: An x402 client package for WDK wallets, replacing the community example code the guide points to today.
+    quarter: 2027Q2
+    status: planned
+    priority: P1
   - id: x402-facilitator
     northStar: ecosystem
     label: x402 facilitator on EVM or Solana
     summary: Needs Tether's stance first.
-    quarter: backlog
+    quarter: 2027Q2
     status: planned
-    priority: P1
-  - id: browser-extension
-    northStar: kit
-    label: Browser extension
-    summary: 'Scope undefined: a title in the previous roadmap, no description anywhere. See the open questions.'
-    quarter: backlog
-    status: planned
-    priority: P1
+    priority: P2
   - id: keet
     northStar: ecosystem
     label: Wallet features for Keet
@@ -1541,7 +1577,7 @@ roadmap:
     label: Public roadmap
     summary: This roadmap, published and kept current, so anyone building on WDK can see what is coming and what shipped. The atlas is the first version.
     quarter: 2026Q3
-    status: wip
+    status: done
     priority: P1
   - id: contribution-guidelines
     northStar: ecosystem
@@ -1576,19 +1612,19 @@ roadmap:
   - id: kotlin-beta
     northStar: kit
     label: Kotlin core to beta
-    summary: The Android side brought up to a beta bar, one step behind the Swift core's parity target.
+    summary: 'The Android side brought up to a beta bar, one step behind the Swift core: docs current, QuickJS engine, minSdk 31.'
     quarter: 2026Q4
     status: wip
     priority: P0
     modules: [wdk-core-kotlin]
   - id: sda-implementations
-    northStar: kit
+    northStar: ecosystem
     label: Smart deposit addresses, partner implementations
     partners: [Rhino.fi, Candide]
-    summary: 'The interface shipped in Q3; these are the first partner modules that fill it, so a deposit on one chain arrives on another. Rhino.fi and Candide are in the pipeline.'
+    summary: 'The interface shipped in Q3; these are the first partner modules that fill it, so a deposit on one chain arrives on another. Rhino.fi and Candide are in the pipeline. Partner-paced.'
     quarter: 2026Q4
     status: planned
-    priority: P0
+    priority: P2
     modules: [wdk-wallet]
   - id: repo-cleanup
     northStar: ecosystem
@@ -1597,36 +1633,44 @@ roadmap:
     quarter: 2026Q4
     status: wip
     priority: P1
-  - id: publish-indexer-npm
+  - id: publish-mcp-toolkit-npm
     northStar: dx
-    label: Publish the indexer client to npm
-    summary: The client is on the map as live but has never been published, so the open indexer API has no installable client. Help has been offered.
+    label: Publish the MCP toolkit to npm
+    summary: The toolkit is in the repo and documented as installable, but npm only holds an empty placeholder since May 2026. Publish beta.1 so agents can actually use it.
     quarter: 2026Q4
-    status: planned
+    status: wip
     priority: P1
-    modules: [wdk-indexer-http]
+    modules: [wdk-mcp-toolkit]
   - id: publish-swift-spm
     northStar: kit
     label: Publish the Swift core on Swift Package Manager
-    partners: [an Apple Developer account under Tether]
-    summary: Makes the iOS side installable with one line in a Swift project, now that the repo is public. Nothing can be published until the Apple developer account exists.
+    summary: Installable with one line in a Swift project from a Git URL and a tag. Needs a first tag and a pinned bare-kit-swift version; no Apple account required for the package itself.
     quarter: 2026Q4
     status: wip
     priority: P1
     modules: [wdk-core-swift]
+  - id: publish-kotlin-maven
+    northStar: kit
+    label: Publish the Kotlin core on Maven Central
+    summary: Publish the Kotlin core on Maven Central under to.tether.wdk. Needs a Sonatype namespace owner at Tether and a maven-publish setup; neither exists yet.
+    quarter: 2026Q4
+    status: planned
+    priority: P1
+    modules: [wdk-core-kotlin]
+  - id: docs-revamp
+    northStar: dx
+    label: Docs revamp
+    summary: Recipes and guides, core concepts explained, the docs rebuilt around what developers actually ask.
+    quarter: 2026Q4
+    status: wip
+    priority: P1
+    modules: []
   # ---- 2027: the three north stars, from the same presentation.
   - id: coverage-95
     northStar: kit
     label: Function coverage above 95%
     summary: The coverage bar the presentation commits to, alongside testnet transactions running in CI.
     quarter: 2027Q1
-    status: planned
-    priority: P1
-  - id: dev-portal
-    northStar: dx
-    label: Developer portal live
-    summary: 'The portal itself, separate from the docs rewrite. Ownership unclear: it may belong to the developer portal team rather than to WDK. In the backlog until that is settled.'
-    quarter: backlog
     status: planned
     priority: P1
   - id: bounties-programme
