@@ -88,7 +88,18 @@ const gh = async (path, attempt = 0) => {
     headers: { accept: "application/vnd.github+json", "user-agent": "wdk-atlas-metrics", ...(TOKEN ? { authorization: `Bearer ${TOKEN}` } : {}) },
   });
   if (res.status === 404) return null;
-  if (res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0") throw new Error("GitHub rate limit exhausted; set GITHUB_TOKEN");
+  if (res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0") {
+    // The search quota is thirty calls a minute and is back within the minute; the hourly core
+    // quota is not. Wait for the first, give up on the second. A local run with a personal
+    // token hit the first and died four minutes in, having asked for nothing unreasonable.
+    const wait = Number(res.headers.get("x-ratelimit-reset")) * 1000 - Date.now();
+    if (wait > 0 && wait <= 120000 && attempt < 2) {
+      console.error(`collect-metrics: GitHub quota spent on ${path.split("?")[0]}; back in ${Math.ceil(wait / 1000)}s`);
+      await sleep(wait + 1000);
+      return gh(path, attempt + 1);
+    }
+    throw new Error("GitHub rate limit exhausted; set GITHUB_TOKEN");
+  }
   if (res.status === 429 || res.status === 403) {
     // Secondary rate limit (code search trips it easily): GitHub says how long to wait, in a header or
     // in the message. Wait it out and retry twice; the job has hours, the data has one shot a day.
