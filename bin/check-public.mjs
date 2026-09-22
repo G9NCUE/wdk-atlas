@@ -176,7 +176,11 @@ function scanStructure(findings) {
   let metrics = null;
   try { metrics = JSON.parse(readFileSync(metricsPath, "utf8")); } catch { return; }
   const contributors = metrics.contributors && typeof metrics.contributors === "object" ? Object.values(metrics.contributors) : [];
-  const names = new Set(contributors.flat().filter((v) => typeof v === "string"));
+  // A hash is not a name. The collector hashes every contributor precisely so that this file
+  // is not a roster, and until 2026-09-22 this counted the hashes as names anyway: the
+  // finding's text carried the count, so the day the count moved the daily run failed on a
+  // finding nobody could review away.
+  const names = new Set(contributors.flat().filter((v) => typeof v === "string" && !/^[a-f\d]{64}$/.test(v)));
   if (names.size) findings.push({ category: "aggregated-identities", why: `gathers ${names.size} account names from ${contributors.length} repos into one downloadable file`,
     file: "data/metrics.json", line: 1, evidence: `contributors: ${names.size} unique names` });
   const hashed = Array.isArray(metrics.team) ? metrics.team.filter((v) => typeof v === "string" && /^[a-f\d]{64}$/.test(v)) : [];

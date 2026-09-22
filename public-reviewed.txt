@@ -4,7 +4,8 @@
 #
 # A fingerprint is sha256(category, file, text) truncated, so it changes the moment the text
 # does: editing a reviewed line makes it a new finding and the gate asks again.
-# 20 decided on 2026-09-20 by the WDK PM.
+# 20 decided on 2026-09-20 by the WDK PM. One of them, "gathers N account names", retired on
+# 2026-09-22 when the rule learned that a hash is not a name; the file holds no names.
 f04ec40ebc18
 4a9cfb91f7f5
 99ab429a75ba
@@ -24,4 +25,3 @@ a7cc8e91865c
 c2de225b0e59
 7375cf1f5eb5
 28bce35db1ca
-8729a4e581d1
