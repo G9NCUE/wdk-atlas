@@ -6,20 +6,23 @@ import { createData } from "../data.mjs";
 import { createSeries } from "../series.mjs";
 import { createKeyResults } from "../key-results.mjs";
 import { use } from "../context.mjs";
+import { createThirdParty } from "../third-party.mjs";
 import { weightedCurrency } from "../../lib/adoption.mjs";
 import { responseStats } from "../../lib/support.mjs";
+import { median } from "../../lib/steady.mjs";
 
 export default function createDashboardPage(ctx) {
   use(ctx, createModel);
   use(ctx, createData);
   use(ctx, createSeries);
   use(ctx, createKeyResults);
+  use(ctx, createThirdParty);
 
   const { query, setUrlParams, atlas, onUrlChange, poster, unscoped, walletRepos, loadMetrics, loadThirdParty,
     readinessFact, SERIES, fmtNum, deltaPill, trendPill, defFor, defTip, statTile, lineChart,
     releaseMarks, groupedBars, hBars, exportControls, chartCard, dashSection, GRAINS, grain,
     bucketKey, bucketLabel, coverageOf, seriesBuckets, lastTwo, snapshotSeries, coverageNote,
-    splitInstalls, keyResultsOf, firstFullMonth, unit } = ctx;
+    splitInstalls, keyResultsOf, firstFullMonth, unit, renderThirdParty } = ctx;
 
   const SEL_KEY = "atlas:dash:repos";
 
@@ -34,10 +37,11 @@ export default function createDashboardPage(ctx) {
     try { selected.length === all.length ? localStorage.removeItem(SEL_KEY) : localStorage.setItem(SEL_KEY, JSON.stringify(selected)); } catch {}
   }
 
-  // Monthly is offered once event collection covers a whole calendar month; before that every event
-  // chart would only say "no complete month yet". The URL still accepts range=monthly.
+  // Monthly is offered once the download series covers a whole calendar month; the event charts
+  // say "no complete month yet" for themselves until they do.
   function monthlyReady(file) {
-    const since = file.since; if (!since) return false;
+    const [since] = coverageOf((file.daily || {}).downloads, file, false);
+    if (!since) return false;
     const [, done] = firstFullMonth(since);
     return new Date().toISOString().slice(0, 10) >= done.toISOString().slice(0, 10);
   }
@@ -138,13 +142,6 @@ export default function createDashboardPage(ctx) {
     const onLatest = latest.onLatest || {};
     const currencyRepos = withPackages.filter((r) => typeof onLatest[r] === "number");
     const currencyPct = weightedCurrency(onLatest, Object.fromEntries(withPackages.map((r) => [r, Math.max(partOf(r, "direct"), 0)])));
-    // The middle of an even set is the mean of the two middle values, so that a reader who
-    // recomputes it from the export gets the same number we printed.
-    const median = (xs) => {
-      if (!xs.length) return null;
-      const v = [...xs].sort((a, b) => a - b), i = Math.floor(v.length / 2);
-      return v.length % 2 ? v[i] : Math.round((v[i - 1] + v[i]) / 2);
-    };
     const medianShare = median(currencyRepos.map((r) => onLatest[r]));
     const byCurrency = currencyRepos
       .map((r) => ({ label: unscoped(file.repos[r].package), value: onLatest[r] }))
@@ -186,7 +183,7 @@ export default function createDashboardPage(ctx) {
     const series2 = (cats, a, b, ca, cb) => ({ ...exportMeta, columns: ["period", ca, cb], rows: cats.map((c, i) => [c, a[i], b[i]]) });
 
     const adoption = dashSection("Adoption & growth", [
-      chartCard(defFor("downloads"), `npm downloads per ${unit}`, fmtNum(dlLast.now), trendPill("downloads", dl), dl.length ? lineChart(dl, { marks: releaseMarks(file, selected) }) : el("p", { class: "chart-foot" }, coverageNote(dlCov)), "Ticks mark releases. The current period is left out; npm reports late.",
+      chartCard(defFor("downloads"), `npm downloads per ${unit}`, fmtNum(dlLast.now), trendPill("downloads", dl), dl.length ? lineChart(dl, { marks: releaseMarks((r) => (file.releases || {})[r], selected, (r) => unscoped(file.repos[r] && file.repos[r].package) || r) }) : el("p", { class: "chart-foot" }, coverageNote(dlCov)), "Ticks mark releases. The current period is left out; npm reports late.",
         { ...exportMeta, columns: ["period", "downloads"], rows: dl.map((p) => [p.key, p.y]) }),
       chartCard(defFor("downloads-direct"), `Chosen installs by package, last full ${unit}`, fmtNum(chosenTotal), null, hBars(byPackage, { color: SERIES[1] }), "Top eight. A lower bound.",
         { ...exportMeta, columns: ["package", "title", "chosen installs, at least"], rows: byPackage.map((r) => [r.label, r.hint, r.value]) }),
@@ -218,56 +215,6 @@ export default function createDashboardPage(ctx) {
     const readiness = renderReadiness(file, selected, latest);
     const note = el("p", { class: "dash-note" }, `${selected.length} of ${Object.keys(file.repos).length} public WDK repos · npm and GitHub only · collected ${String(file.updated).slice(0, 10)} · snapshots since ${snapDays[0]}`);
     return [tiles, adoption, renderThirdParty(third), community, support, readiness, note];
-  }
-
-  // The packages built by others, from their own file. They are never part of the selection
-  // above, and no figure or key result elsewhere counts them as ours: this section is the one
-  // place they are summed, and it says so.
-  function renderThirdParty(third) {
-    if (!third) return dashSection("Third-party packages", [el("p", { class: "chart-foot" }, "Not collected yet; the next metrics run adds data/third-party.json.")]);
-    const packages = third.packages || {};
-    const names = Object.keys(packages);
-    const perPkg = Object.fromEntries(names.map((p) => [p, packages[p].downloads || {}]));
-    const cov = coverageOf(perPkg, third, false);
-    const total = seriesBuckets(perPkg, names, { coverage: cov });
-    const last = lastTwo(total);
-    // Each package's figure is read at the same period as the total, so a package quiet in the
-    // last period shows zero rather than its last busy one.
-    const inLast = (p) => (last.key ? (seriesBuckets({ [p]: perPkg[p] }, [p], { coverage: cov }).find((pt) => pt.key === last.key) || {}).y || 0 : null);
-    const rows = names.map((p) => { const { module, title, publisher, repo, version } = packages[p]; return { pkg: p, module, title, publisher, repo, version, last: inLast(p) }; })
-      .sort((a, b) => (b.last || 0) - (a.last || 0) || a.pkg.localeCompare(b.pkg));
-    const collected = String(third.updated || "").slice(0, 10);
-    const exportMeta = { collected, scope: `${names.length} third-party packages` };
-    const head = el("tr", null, ["Package", "Publisher", "Module", "Version", `Downloads, last full ${unit}`].map((h) => el("th", null, h)));
-    const table = el("div", { class: "table-wrap" }, el("table", { class: "ready" }, el("thead", null, head), el("tbody", null, rows.map((r) =>
-      el("tr", null,
-        el("td", null, r.repo ? el("a", { href: r.repo }, r.pkg) : r.pkg),
-        el("td", null, r.publisher),
-        el("td", null, el("a", { href: `./?page=map#${encodeURIComponent(r.module)}` }, r.title)),
-        el("td", { class: "mono" }, r.version || "—"),
-        el("td", { class: "mono" }, r.last == null ? "·" : fmtNum(r.last)))))));
-    // The same volume gathered by who built it, which is the split the section exists for. A
-    // bar per package was here too and read as a copy: ten of the eleven publishers ship one
-    // package, and the table below lists every package anyway.
-    const perPublisher = new Map();
-    for (const r of rows) { const p = perPublisher.get(r.publisher) || { label: r.publisher, value: 0, n: 0 }; p.value += r.last || 0; p.n += 1; perPublisher.set(r.publisher, p); }
-    const byPublisher = [...perPublisher.values()].filter((p) => p.value > 0).sort((a, b) => b.value - a.value).slice(0, 8).map((p) => ({ label: p.label, hint: `${p.n} package${p.n === 1 ? "" : "s"}`, value: p.value }));
-    const unmeasured = (third.unmeasured || []).map((u) => `${u.title} (${u.publisher}): ${u.reason}`);
-    const listExport = { title: "Third-party packages", ...exportMeta, columns: ["package", "publisher", "module", "version", `downloads, last full ${unit}`],
-      rows: rows.map((r) => [r.pkg, r.publisher, r.module, r.version || "", r.last == null ? "" : r.last]) };
-    return dashSection("Third-party packages", [
-      chartCard(defFor("third-party-downloads"), `npm downloads of third-party packages per ${unit}`, last.now == null ? "—" : fmtNum(last.now), trendPill("third-party-downloads", total),
-        total.length ? lineChart(total) : el("p", { class: "chart-foot" }, coverageNote(cov)), `${names.length} packages, summed. Not part of the selection above.`,
-        { ...exportMeta, columns: ["period", "downloads"], rows: total.map((p) => [p.key, p.y]) }),
-      chartCard(defFor("third-party-downloads"), `By publisher, last full ${unit}`, String(perPublisher.size), null,
-        byPublisher.length ? hBars(byPublisher, { color: SERIES[2] }) : el("p", { class: "chart-foot" }, "No downloads in the period."), "Every package a publisher ships, summed.",
-        { ...exportMeta, columns: ["publisher", "packages", "downloads"], rows: byPublisher.map((r) => [r.label, r.hint, r.value]) }),
-      el("div", { class: "ready-card" },
-        el("div", { class: "ready-tools" }, rows.length ? exportControls(defFor("third-party-downloads"), listExport) : null),
-        table,
-        el("p", { class: "chart-foot" }, `Every shipped module on the map whose publisher is not ${third.org || "the organisation"}, read from npm alone; the map and the drawer say who built each one.`
-          + (unmeasured.length ? ` Not measured: ${unmeasured.join("; ")}.` : "") + ` Collected ${collected}.`)),
-    ]);
   }
 
   // Release readiness: the facts behind the "production-grade kit" key results, one row per published package.

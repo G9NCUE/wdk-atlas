@@ -77,7 +77,10 @@ const VENDOR = {
 // 2026-09-22, the dashboard bar up by five: it now also fetches data/third-party.json, the
 // packages built by others, which no other page reads and so no other page pays for. Measured
 // with the file at eleven packages and a year of days each: dashboard 142.
-const BUDGET_KB = { map: 75, dev: 74, overview: 135, roadmap: 138, results: 134, dashboard: 144 };
+// 2026-09-23, up by six more: fourteen packages in that file, three of them the org-hosted
+// exceptions, each with an all-time total, a dependents count and its release dates, and a table
+// of its own module that sorts and filters. The roadmap grew for the offsite too. Measured: 149.07.
+const BUDGET_KB = { map: 75, dev: 74, overview: 135, roadmap: 138, results: 134, dashboard: 151 };
 
 // ---------------------------------------------------------------- colour
 // WCAG relative luminance and contrast, from hsl() as the tokens are written.

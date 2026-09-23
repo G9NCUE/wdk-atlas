@@ -3,15 +3,13 @@
 // The Dashboard and the Overview both draw from here, and the key results read the buckets.
 
 import { el, pct, svgEl, withTip } from "./dom.mjs";
-import { createModel } from "./model.mjs";
+import { isoWeekOf } from "./../lib/steady.mjs";
 import { use } from "./context.mjs";
 import { metricDef, mayShowChange } from "./../lib/metrics-defs.mjs";
 import { metricCsv, metricJson, fileName } from "./../lib/export.mjs";
 
 export function createSeries(ctx) {
-  use(ctx, createModel);
-
-  const { query, unscoped } = ctx;
+  const { query } = ctx;
 
   // Kept as references, not as resolved values, and applied through style rather than through a
   // fill attribute. A resolved value would be frozen at load: the print stylesheet redefines
@@ -50,7 +48,7 @@ export function createSeries(ctx) {
   // number nobody has had to justify, so it renders saying exactly that rather than looking
   // finished; bin/check-metrics.mjs refuses the build long before a reader would see it.
   function defFor(id) {
-    return metricDef(id) || { id, label: id, definition: "No definition recorded for this figure.", source: "unknown", window: "unknown" };
+    return metricDef(id) || { id, label: id, tip: "No definition recorded for this figure.", definition: "No definition recorded for this figure.", source: "unknown", window: "unknown" };
   }
 
   // Counted, not collected. Rows in atlas.yaml say what we have written down; figures from npm
@@ -59,17 +57,21 @@ export function createSeries(ctx) {
   // so the warning comes from there rather than being written out again here.
   const countedTip = () => defTip(defFor("atlas-counts"));
 
-  // What is counted, then where it came from and over what window on one line. Kept to two lines
-  // because a tile that needs a paragraph to be read is not a tile.
-  const defTip = (def) => `${def.definition}\n${def.source} · ${def.window}`;
+  // The hover is the one-line tip; the definition, the source and the window travel with every export.
+  const defTip = (def) => def.tip;
 
   function statTile(def, label, value, delta, hint, feeds) {
     return el("div", { class: "tile" }, el("div", withTip({ class: "tile-label" }, defTip(def), label), label), el("div", { class: "tile-value" }, value), delta, hint && el("div", { class: "tile-hint" }, hint),
       feeds && el("a", withTip({ class: "tile-feeds", href: `./?page=results#${feeds.id}` }, feeds.label, "Key result"), "\u2192"));
   }
 
-  // Axis labels thin out when there are many buckets: every point up to 12, then every nth, always the last.
-  const labelEvery = (n, i) => n <= 12 || i === n - 1 || i % Math.ceil(n / 8) === 0;
+  // Which category labels an axis draws: the last, and enough of the rest to read without
+  // overlapping. A month label ("Sep 25") is twice the width of a week's ("W37"), so the monthly
+  // axis keeps five where the others keep eight; twelve months at full width ran into each other.
+  const labelEvery = (n, i) => {
+    const [all, room] = grain === "monthly" ? [5, 5] : [12, 8];
+    return n <= all || i === n - 1 || i % Math.ceil(n / room) === 0;
+  };
 
   // Inline SVG line chart, one series, hover titles on points, selective direct labels (first and last).
   function lineChart(points, { marks = null } = {}) {
@@ -106,12 +108,13 @@ export function createSeries(ctx) {
     return el("div", { class: "chart-box" }, svg);
   }
 
-  // Which npm releases fall in each bucket of the current grain, for the selected repos.
-  function releaseMarks(file, selected) {
+  // Which npm releases fall in each bucket of the current grain: `releasesOf(name)` is that
+  // name's { day: version } map, `labelOf(name)` what the tick calls it.
+  function releaseMarks(releasesOf, names, labelOf = (n) => n) {
     const marks = new Map();
-    for (const r of selected) for (const [d, ver] of Object.entries((file.releases || {})[r] || {})) {
+    for (const n of names) for (const [d, ver] of Object.entries(releasesOf(n) || {})) {
       const k = bucketKey(d); if (!marks.has(k)) marks.set(k, []);
-      marks.get(k).push(`${unscoped(file.repos[r] && file.repos[r].package) || r} ${ver}`);
+      marks.get(k).push(`${labelOf(n)} ${ver}`);
     }
     return marks;
   }
@@ -176,7 +179,7 @@ export function createSeries(ctx) {
   function exportControls(def, data) {
     const meta = { title: data.title, collected: data.collected, scope: data.scope };
     const make = (label, ext, mime, build) => {
-      const button = el("button", withTip({ class: "export-btn", type: "button" }, `${def.definition}\nSource: ${def.source}\nWindow: ${def.window}`, `Download ${label}`), label);
+      const button = el("button", withTip({ class: "export-btn", type: "button" }, `${label} with the definition, the source and the window inside`, `Download ${label}`), label);
       button.addEventListener("click", () => downloadText(fileName(def, meta, ext), mime, build(def, meta, data.columns, data.rows)));
       return button;
     };
@@ -201,15 +204,6 @@ export function createSeries(ctx) {
 
   const grain = GRAINS[query.get("range")] ? query.get("range") : "weekly";
   const unit = { daily: "day", weekly: "week", monthly: "month" }[grain];
-
-  function isoWeekOf(dayStr) {
-    const d = new Date(dayStr + "T00:00:00Z");
-    const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-    const wd = t.getUTCDay() || 7;
-    t.setUTCDate(t.getUTCDate() + 4 - wd);
-    const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
-    return `${t.getUTCFullYear()}-W${String(Math.ceil(((t - y0) / 864e5 + 1) / 7)).padStart(2, "0")}`;
-  }
 
   const bucketKey = (dayStr) => (grain === "daily" ? dayStr : grain === "weekly" ? isoWeekOf(dayStr) : dayStr.slice(0, 7));
 
