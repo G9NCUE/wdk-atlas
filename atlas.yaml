@@ -1680,6 +1680,14 @@ roadmap:
     quarter: 2027Q2
     status: planned
     priority: P2
+  - id: publish-indexer-npm
+    northStar: dx
+    label: Publish the indexer client to npm
+    summary: "@tetherto/wdk-indexer-http is a WDK client for the indexer API: 1.0.0-beta.1 in the repo, npm install in its README, nothing on npm. Publishing the client is WDK work; the service behind it is not."
+    quarter: 2026Q4
+    status: planned
+    priority: P1
+    modules: [wdk-indexer-http]
   - id: indexer-swagger
     northStar: dx
     label: Indexer API reference in the docs
