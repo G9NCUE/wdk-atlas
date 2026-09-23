@@ -74,7 +74,12 @@ export function validate(atlas) {
   if (shape(errors, "audit", atlas.audit, {
     org: ["string", true], repoPattern: ["string", true], team: ["array", false], ignoreRepos: ["array", false],
     implicitRequires: ["array", false], consumerSections: ["array", false], ignorePattern: ["string", false],
+    thirdPartyRepos: ["object", false],
   })) {
+    for (const [repo, who] of Object.entries(atlas.audit.thirdPartyRepos || {})) {
+      if (typeof who !== "string" || !who.trim()) errors.push(`audit.thirdPartyRepos.${repo}: expected the builder's name`);
+      if (!list(atlas.modules).some((m) => m && typeof m.repo === "string" && m.repo.endsWith(`/${repo}`))) errors.push(`audit.thirdPartyRepos.${repo}: no module names this repo`);
+    }
     for (const key of ["repoPattern", "ignorePattern"]) {
       if (typeof atlas.audit[key] === "string") { try { new RegExp(atlas.audit[key]); } catch { errors.push(`audit.${key}: not a valid regular expression`); } }
     }

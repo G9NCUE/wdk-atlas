@@ -12,7 +12,7 @@
 
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { METRICS, REQUIRED, DEMOTED } from "../lib/metrics-defs.mjs";
+import { METRICS, REQUIRED, DEMOTED, TIP_MAX } from "../lib/metrics-defs.mjs";
 import { runGates as runQualityGates } from "./check-quality.mjs";
 import { loadAtlas, ROOT } from "./lib/load-atlas.mjs";
 import { shippedSource } from "./lib/shipped.mjs";
@@ -75,8 +75,9 @@ function m2() {
     const missing = REQUIRED.filter((f) => m[f] === undefined || m[f] === null || m[f] === "");
     if (missing.length) bad.push(`${m.id}: ${missing.join(", ")}`);
     else if (String(m.decision).trim().split(/\s+/).length < 8) bad.push(`${m.id}: decision is a label, not a decision`);
+    else if (String(m.tip).length > TIP_MAX) bad.push(`${m.id}: tip is ${String(m.tip).length} characters, over ${TIP_MAX}`);
   }
-  return bad.length ? fail(bad.join("; ")) : pass(`${METRICS.length} entries, each naming a decision, a window, a source and a definition`);
+  return bad.length ? fail(bad.join("; ")) : pass(`${METRICS.length} entries, each naming a decision, a window, a source, a definition and a tip under ${TIP_MAX} characters`);
 }
 
 // ---- M3 ---------------------------------------------------------------------------------
@@ -229,7 +230,7 @@ function m12() {
   let atlas;
   try { atlas = loadAtlas(); } catch (e) { return notRun(`could not read atlas.yaml: ${e.message}`); }
   const org = (atlas.audit && atlas.audit.org) || "tetherto";
-  const expected = thirdPartyModules(atlas.modules, org).map((m) => m.id);
+  const expected = thirdPartyModules(atlas.modules, org, (atlas.audit && atlas.audit.thirdPartyRepos) || {}).map((m) => m.id);
   if (!expected.length) return notRun("the map names no third-party module with a repository");
   const raw = read("data/third-party.json");
   if (!raw) return notRun("no data/third-party.json to check against");
@@ -246,7 +247,7 @@ function m12() {
 
 const GATES = [
   { id: "M1", what: "every rendered number has a registry entry", run: m1 },
-  { id: "M2", what: "every entry names a decision, a window, a source and a definition", run: m2 },
+  { id: "M2", what: "every entry names a decision, a window, a source, a definition and a one-line tip", run: m2 },
   { id: "M3", what: "every entry records whether it can fall, and at least four can", run: m3 },
   { id: "M4", what: "downloads are published with their direct and induced parts", run: m4 },
   { id: "M5", what: "no percentage change is shown below the entry's floor", run: m5 },

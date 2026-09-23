@@ -108,6 +108,13 @@ audit:
     - wdk-ansible-playbooks
     - wdk-module-templates
     - wdk-lib-lookup-storage
+  # Org repos that hold a partner's module: the org hosts the repo and publishes the package, so the map
+  # keeps them as the org's, but the Dashboard measures them with the third-party packages, under the
+  # partner's name, and leaves them out of every first-party number. Repo name: who built it.
+  thirdPartyRepos:
+    wdk-protocol-fiat-moonpay: MoonPay
+    wdk-protocol-lending-aave-evm: Aave
+    wdk-protocol-swap-velora-evm: Velora
   # Dependencies never drawn as `requires`. Foundation modules are implicit already.
   implicitRequires: []
   # Sections whose modules consume many packages (apps, developer tools): only their stale `requires` are reported.

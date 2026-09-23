@@ -33,13 +33,19 @@
 // series are dropped after 400 days. The page fetches this file, so it must not grow without bound.
 //
 // data/third-party.json, schema 1: the packages built by others, kept apart from ours.
-//   The modules on the map whose publisher is not the org (bin/lib/packages.mjs decides), read
-//   from npm only: nothing here grades somebody else's CI, audits or issues, and the GitHub
+//   The modules on the map whose publisher is not the org, plus the org-hosted repos that
+//   audit.thirdPartyRepos names as a partner's (bin/lib/packages.mjs decides), read from npm only:
+//   nothing here grades somebody else's CI, audits or issues, and the GitHub
 //   searches above are scoped to the org. A file of its own, so the four pages that read
 //   metrics.json do not pay for series only the Dashboard's third-party section draws, and so
 //   no first-party figure or key result can pick up an outside package by accident.
-//   packages:   { npm name: { module, title, publisher, repo, version, downloads: { "YYYY-MM-DD": n } } }
-//   unmeasured: [ { module, title, publisher, repo, reason } ]   on the map, but no package could be read
+//   packages:   { npm name: { module, title, publisher, repo, downloads: { "YYYY-MM-DD": n },
+//                             since: the day npm first saw it, allTime: downloads from that day to the last reported one,
+//                             releases: { "YYYY-MM-DD": version } inside the retention window,
+//                             dependents: public repos outside the org whose package.json names it, its own left out (code search;
+//                             kept from the last run when the search cannot be made or by an npm-only one; null when never measured),
+//                             hostedByOrg: true when the org hosts and publishes it for the partner (audit.thirdPartyRepos) } }
+//   unmeasured: [ { module, title, publisher, repo, hostedByOrg?, reason } ]   on the map, but no package could be read
 //
 // Who is a teammate: GitHub's author_association only says MEMBER when the token can see the org's
 // membership. The Actions token cannot (memberships in this org are mostly private), so with it every
@@ -54,13 +60,13 @@
 // including torvalds/linux (two repos answer 200, unexplained). GraphQL reports stargazerCount but
 // an empty stargazers connection. So these series can only grow forward, one point per run.
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { internalDeps, currency, latestShare, publishDates } from "../lib/adoption.mjs";
+import { internalDeps, currency, latestShare, publishDates, releasesSince } from "../lib/adoption.mjs";
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { join, dirname } from "node:path";
 import { loadAtlas, ROOT } from "./lib/load-atlas.mjs";
 import { summarise } from "./lib/summary.mjs";
-import { thirdPartyModules, repoParts, packageNameOf, trimDownloads } from "./lib/packages.mjs";
+import { measuredUnder, thirdPartyModules, repoParts, packageNameOf, trimDownloads, rangeChunks } from "./lib/packages.mjs";
 
 const OUT = join(ROOT, "data", "metrics.json");
 const SUMMARY_OUT = join(ROOT, "data", "summary.json");
@@ -82,6 +88,8 @@ const REPO_PATTERN = new RegExp((atlas.audit && atlas.audit.repoPattern) || "^(w
 // numbers. Private repos never appear here: the query below asks GitHub for public ones only.
 const isBot = (login) => !login || login.endsWith("[bot]");
 const EXAMPLES_REPO = (atlas.audit && atlas.audit.examplesRepo) || "wdk-examples";
+// Org repos measured as a partner's: repo name to builder. The exception list, kept in the atlas.
+const THIRD_PARTY_REPOS = (atlas.audit && atlas.audit.thirdPartyRepos) || {};
 const EXAMPLES_IGNORE = new Set((atlas.audit && atlas.audit.examplesIgnore) || ["shared"]);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const hashLogin = (login) => createHash("sha256").update(String(login).toLowerCase()).digest("hex");
@@ -197,7 +205,11 @@ try {
   // Public repos only: the workflow token cannot see private ones, and the dashboard publishes nothing private.
   // An npm-only run asks GitHub for nothing at all and reuses the repository list already on
   // disk, so a figure that came from the registry can be rechecked without a token.
-  const wdkRepos = NPM_ONLY ? [] : (await ghAll(`/orgs/${ORG}/repos?type=public`)).filter((r) => REPO_PATTERN.test(r.name) && !r.archived && !r.fork);
+  // A repo the org hosts for a partner's module (audit.thirdPartyRepos), or a module whose
+  // publisher is not the org, is measured with the third-party packages below, never here.
+  const theirs = (name) => Boolean(measuredUnder(byRepoName.get(name.toLowerCase()), ORG, THIRD_PARTY_REPOS));
+  const wdkRepos = NPM_ONLY ? [] : (await ghAll(`/orgs/${ORG}/repos?type=public`)).filter((r) => REPO_PATTERN.test(r.name) && !r.archived && !r.fork && !theirs(r.name));
+  if (NPM_ONLY) for (const name of Object.keys(file.repos || {})) if (theirs(name)) delete file.repos[name];
   const repos = NPM_ONLY ? JSON.parse(JSON.stringify(file.repos || {})) : {};
   if (NPM_ONLY && !Object.keys(repos).length) throw new Error("npm-only needs an existing data/metrics.json to take the repository list from");
   for (const r of wdkRepos) {
@@ -216,9 +228,9 @@ try {
   const currencyByRepo = {};  // repo -> share of installs on a release under 30 days old
   const latestByRepo = {};    // repo -> share of installs on the version npm serves as latest
   const ourPackages = new Set(Object.values(repos).map((r) => r.package).filter(Boolean));
+  const from = new Date(Date.now() - SERIES_DAYS * 864e5).toISOString().slice(0, 10); // the retention window
   for (const [name, r] of Object.entries(repos)) {
     if (!r.package) continue;
-    const from = new Date(Date.now() - SERIES_DAYS * 864e5).toISOString().slice(0, 10);
     const range = await npmJson(`https://api.npmjs.org/downloads/range/${from}:${today}/${r.package}`);
     if (range && range.downloads) downloads[name] = trimDownloads(range);
     const meta = await npmJson(`https://registry.npmjs.org/${r.package.replace("/", "%2F")}`);
@@ -244,12 +256,7 @@ try {
       if (onLatest !== null) latestByRepo[name] = onLatest;
     }
     // Publish dates inside the retention window, for release markers on the charts.
-    if (meta && meta.time) {
-      const from = new Date(Date.now() - SERIES_DAYS * 864e5).toISOString().slice(0, 10);
-      const dated = {};
-      for (const [ver, t] of Object.entries(meta.time)) { if (ver === "created" || ver === "modified") continue; const d = day(t); if (d >= from) dated[d] = ver; }
-      if (Object.keys(dated).length) releases[name] = Object.fromEntries(Object.entries(dated).sort());
-    }
+    if (meta && meta.time) { const rel = releasesSince(meta.time, from); if (Object.keys(rel).length) releases[name] = rel; }
   }
 
   // ---------------------------------------------------------------- third-party packages: modules built by others, npm only
@@ -259,8 +266,8 @@ try {
   if (existsSync(THIRD_OUT)) { try { const f = JSON.parse(readFileSync(THIRD_OUT, "utf8")); if (f.schema === 1) lastThird = f; } catch {} }
   const known = new Map(Object.entries(lastThird.packages || {}).map(([pkg, info]) => [info.module, pkg]));
   const third = { schema: 1, org: ORG, updated: null, packages: {}, unmeasured: [] };
-  for (const m of thirdPartyModules(atlas.modules, ORG)) {
-    const about = { module: m.id, title: m.title || m.id, publisher: m.publisher, repo: m.repo || null };
+  for (const m of thirdPartyModules(atlas.modules, ORG, THIRD_PARTY_REPOS)) {
+    const about = { module: m.id, title: m.title || m.id, publisher: m.publisher, repo: m.repo || null, ...(m.hostedByOrg ? { hostedByOrg: true } : {}) };
     let pkg = m.package || null, reason = null;
     if (!pkg && NPM_ONLY) { pkg = known.get(m.id) || null; reason = "not read by an npm-only run; a full run reads the repository"; }
     if (!pkg && !NPM_ONLY) {
@@ -271,11 +278,25 @@ try {
       ({ name: pkg, reason } = packageNameOf(manifest));
     }
     if (!pkg) { third.unmeasured.push({ ...about, reason }); continue; }
-    const from = new Date(Date.now() - SERIES_DAYS * 864e5).toISOString().slice(0, 10);
     const meta = await npmJson(`https://registry.npmjs.org/${pkg.replace("/", "%2F")}`);
     if (!meta || !meta["dist-tags"]) { third.unmeasured.push({ ...about, reason: `${pkg} is not on npm` }); continue; }
     const range = await npmJson(`https://api.npmjs.org/downloads/range/${from}:${today}/${pkg}`);
-    third.packages[pkg] = { ...about, version: meta["dist-tags"].latest || null, downloads: trimDownloads(range) };
+    // All time: from the day npm first saw the package, in the pieces its range endpoint will
+    // answer. One or two extra calls per package, and only here, where there are a dozen.
+    const created = day(meta.time && meta.time.created);
+    let allTime = null;
+    if (created) {
+      allTime = 0;
+      for (const [a, b] of rangeChunks(created, today)) {
+        const part = await npmSoft(`https://api.npmjs.org/downloads/range/${a}:${b}/${pkg}`);
+        if (!part || !part.downloads) { allTime = null; break; }
+        for (const d of part.downloads) allTime += d.downloads;
+        await sleep(120);
+      }
+    }
+    // Dependents come from GitHub code search further down; until then, the last run's count.
+    third.packages[pkg] = { ...about, since: created || null, allTime, dependents: lastThird.packages?.[pkg]?.dependents ?? null,
+      releases: releasesSince(meta.time, from), downloads: trimDownloads(range) };
     await sleep(120);
   }
   third.updated = new Date().toISOString();
@@ -361,6 +382,17 @@ try {
   await sleep(6500);
   const dependents = await codeSearch(`"@${ORG}/wdk" filename:package.json -org:${ORG}`);
   if (dependents) snap.dependents = dependents.size;
+  // The same question per third-party package, with the same answer shape as the first-party
+  // one: public repos outside the org whose manifest names it, the package's own repo left out
+  // too. One search per package at ten a minute, so this is the slow part of the run.
+  for (const [pkg, info] of Object.entries(third.packages)) {
+    await sleep(6500);
+    const found = await codeSearch(`"${pkg}" filename:package.json -org:${ORG}`, 3);
+    if (!found) { console.error(`collect-metrics: code search unavailable; dependents of ${pkg} kept from the last run`); continue; }
+    const own = repoParts(info.repo);
+    if (own) found.delete(`${own.owner}/${own.name}`);
+    info.dependents = found.size;
+  }
   const repoOf = (item) => (item.repository_url || "").split("/").pop();
   const inScope = (item) => repoSet.has(repoOf(item));
   // Teammates (see the header). The member list counts only when the token holder is an org member:

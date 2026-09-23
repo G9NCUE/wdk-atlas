@@ -2,7 +2,31 @@
 // never appears, or one of ours counted as somebody else's.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { repoParts, thirdPartyModules, packageNameOf, trimDownloads } from "../bin/lib/packages.mjs";
+import { repoParts, measuredUnder, thirdPartyModules, packageNameOf, trimDownloads, rangeChunks } from "../bin/lib/packages.mjs";
+
+test("splits a long range into pieces npm will answer, touching every day once", () => {
+  const chunks = rangeChunks("2024-01-01", "2026-09-23");
+  assert.deepEqual(chunks, [["2024-01-01", "2025-06-23"], ["2025-06-24", "2026-09-23"]]);
+  assert.deepEqual(rangeChunks("2026-09-01", "2026-09-23"), [["2026-09-01", "2026-09-23"]]);
+  assert.deepEqual(rangeChunks("2026-09-23", "2026-09-23"), [["2026-09-23", "2026-09-23"]]);
+  assert.deepEqual(rangeChunks("2026-09-24", "2026-09-23"), []);
+});
+
+const hosted = { id: "wdk-protocol-fiat-moonpay", publisher: "tetherto", status: "shipped", repo: "https://github.com/tetherto/wdk-protocol-fiat-moonpay" };
+const EXCEPTIONS = { "wdk-protocol-fiat-moonpay": "MoonPay" };
+
+test("an org-hosted repo named in the exception list is measured under the partner, and the module itself is left as written", () => {
+  assert.equal(measuredUnder(hosted, "tetherto"), null, "without the list it is ours");
+  assert.equal(measuredUnder(hosted, "tetherto", EXCEPTIONS), "MoonPay");
+  const [m] = thirdPartyModules([hosted], "tetherto", EXCEPTIONS);
+  assert.equal(m.publisher, "MoonPay");
+  assert.equal(m.hostedByOrg, true);
+  assert.equal(hosted.publisher, "tetherto", "the atlas entry must not be rewritten");
+});
+
+test("the exception list matches the exact repo name", () => {
+  assert.equal(measuredUnder({ ...hosted, repo: "https://github.com/tetherto/wdk-protocol-fiat-moonpay-v2" }, "tetherto", EXCEPTIONS), null);
+});
 
 const ours = { id: "wdk-wallet-btc", publisher: "tetherto", status: "shipped", repo: "https://github.com/tetherto/wdk-wallet-btc" };
 const theirs = { id: "wdk-wallet-rgb", publisher: "UTEXO", status: "shipped", repo: "https://github.com/UTEXO-Protocol/wdk-wallet-rgb" };
