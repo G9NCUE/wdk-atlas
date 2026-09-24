@@ -1336,7 +1336,7 @@ roadmap:
     summary: The external audit itself, then the packages leave beta. Q4 lays the groundwork; this is the audit and the 1.0.0 release.
     quarter: 2027Q1
     status: planned
-    priority: P1
+    priority: P0
     modules: []
   - id: asset-registry-api
     northStar: dx
@@ -1348,8 +1348,8 @@ roadmap:
     modules: [wdk-wallet]
   - id: ci-testnet
     northStar: kit
-    label: Testnet transactions in CI
-    summary: End-to-end transactions on testnets as a scheduled job, to catch chain runtime changes.
+    label: Real transactions in CI, from the playground
+    summary: Every release sends real transactions before it ships. Bitcoin on a local regtest, the other chains on local or test networks, using the playground's environment and scripts as the harness rather than building a second one.
     quarter: 2027Q1
     status: planned
     priority: P2
@@ -1578,8 +1578,8 @@ roadmap:
   - id: recipes
     northStar: dx
     label: Recipes and examples
-    summary: Claw and Hermes agents with the CLI, a QVAC example, transaction simulation APIs.
-    quarter: backlog
+    summary: Six more examples by the end of the quarter, to be agreed with the Dev Rel team.
+    quarter: 2027Q1
     status: planned
     priority: P0
     modules: [wdk-examples]
@@ -1716,12 +1716,44 @@ roadmap:
     modules: [wdk-core-kotlin]
   - id: docs-revamp
     northStar: dx
-    label: Docs revamp
-    summary: Recipes and guides, core concepts explained, the docs rebuilt around what developers actually ask.
+    label: Docs revamp, phase 1, clearer and simpler
+    summary: Make docs.wdk.tether.io easier to follow. Fewer pages, one path from install to first transaction, the core ideas explained once and plainly. Trim what nobody reads.
     quarter: 2026Q4
     status: wip
     priority: P1
     modules: []
+  - id: docs-revamp-2
+    northStar: dx
+    label: Docs revamp, phase 2, the starter path
+    summary: Every platform reachable from the docs with a starter and a recipe that runs. Browser, Node, React Native, Android and iPhone, each with the same first-transaction walkthrough.
+    quarter: 2027Q1
+    status: planned
+    priority: P1
+    modules: [wdk-starter-react-native, wdk-starter-kotlin, wdk-starter-swift, wdk-examples]
+  - id: starter-swift
+    northStar: dx
+    label: Starter app, iPhone
+    summary: The iPhone starter wallet, alongside the React Native and Android ones, so an iOS developer has a working app to begin from.
+    quarter: 2026Q4
+    status: wip
+    priority: P1
+    modules: [wdk-starter-swift]
+  - id: starter-web
+    northStar: dx
+    label: Starter for the browser and Node
+    summary: A web starter and a plain Node starter, the two platforms with none today. The playground already has a Vite app that runs WDK in a browser; make that the seed.
+    quarter: 2027Q1
+    status: planned
+    priority: P1
+    modules: [wdk-examples]
+  - id: wdk-in-browser
+    northStar: kit
+    label: WDK in the browser
+    summary: The engine and the signer running inside a web page, not only in Node and on phones, so a web wallet can be built on the kit without a server in between.
+    quarter: 2027Q2
+    status: planned
+    priority: P2
+    modules: [wdk, pear-wrk-wdk]
   # ---- 2027: the three north stars, from the same presentation.
   - id: coverage-95
     northStar: kit
@@ -1734,7 +1766,7 @@ roadmap:
     northStar: ecosystem
     label: Bounties programme
     summary: 'The programme behind the key result: fund five community projects built on WDK. Needs a template, a budget and someone to run it.'
-    quarter: 2027Q2
+    quarter: backlog
     status: planned
     priority: P2
   - id: publish-indexer-npm
