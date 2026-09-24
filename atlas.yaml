@@ -95,9 +95,6 @@ audit:
     - wdk-playground
     # Private port of ethers for Bare, never published. Revisit if it is.
     - wdk-bare-ethers
-    # New homes of the multisig modules, empty until the code moves; the map swaps ids then.
-    - wdk-wallet-multisig-safe
-    - wdk-wallet-multisig-squads
     - wdk-docs
     - wdk-docs-migration
     - wdk-site
@@ -736,8 +733,8 @@ modules:
       - Not maintained by Tether
     repo: https://github.com/Transak/wdk-protocol-fiat-transak
 
-  - id: wdk-protocol-multisig-safe
-    name: wdk-protocol-multisig-safe
+  - id: wdk-wallet-multisig-safe
+    name: wdk-wallet-multisig-safe
     title: Shared approval via Safe
     section: core
     band: protocols
@@ -747,13 +744,13 @@ modules:
     chains: [EVM]
     progress: 80
     summary: 'Shared wallets on Ethereum-like chains where several people must approve each transaction, built on Safe as a smart account.'
-    repo: https://github.com/tetherto/wdk-protocol-multisig-safe
+    repo: https://github.com/tetherto/wdk-wallet-multisig-safe
     relations:
       - { type: on, target: wdk-wallet-evm }
       - { type: requires, target: wdk-wallet-evm }
 
-  - id: wdk-protocol-multisig-squads
-    name: wdk-protocol-multisig-squads
+  - id: wdk-wallet-multisig-squads
+    name: wdk-wallet-multisig-squads
     title: Shared approval via Squads
     section: core
     band: protocols
@@ -763,7 +760,7 @@ modules:
     chains: [SOL]
     progress: 80
     summary: 'Shared wallets on Solana where several people must approve each transaction, built on Squads. In progress.'
-    repo: https://github.com/tetherto/wdk-protocol-multisig-squads
+    repo: https://github.com/tetherto/wdk-wallet-multisig-squads
     relations:
       - { type: on, target: wdk-wallet-solana }
       - { type: requires, target: wdk-wallet-solana }
@@ -1177,13 +1174,66 @@ roadmap:
     status: done
     priority: P2
     modules: [wdk-wallet-evm]
-  - id: policy-engine
+  # ---- Agent wallets. From the team's staged discussion of September 2026: a proposal, drawn here so it can
+  # be checked, not a decision. The umbrella carries the plan and this quarter's steps; the tiers stand on
+  # their own in 2027, since a child is always drawn under its parent's quarter.
+  - id: agent-wallet-plan
     northStar: kit
-    label: Policy engine
-    summary: Phase 2 is a library of common rules in wdk-policies, the engine staying in the conductor; phase 3 a policy language; phase 4 policies in the developer portal. Parked on 2026-09-16, awaiting clarity on next steps.
-    quarter: backlog
+    label: Agent wallets, the proposed plan
+    summary: 'Let an agent spend a small, fixed part of a wallet, and take it back whenever you like. What makes it safe: the check happens where the agent cannot touch it. Tier 0 is what we currently have, improvements to come in 2027.'
+    quarter: 2026Q4
     status: planned
     priority: P0
+    modules: [wdk, wdk-cli, wdk-mcp-toolkit]
+  - id: policy-engine-promise
+    northStar: kit
+    label: Say what the policy engine promises today
+    parent: agent-wallet-plan
+    summary: Write down in the docs what the policy engine does and does not protect against. Today it runs in the same process as the agent, so a compromised agent can get around it. Say so, and say it is not ready for agents running on their own.
+    quarter: 2026Q4
+    status: planned
+    priority: P0
+    modules: [wdk, wdk-mcp-toolkit]
+  - id: agent-default-deny
+    northStar: kit
+    label: Default deny on the agent path
+    parent: agent-wallet-plan
+    summary: An agent that reaches an account with no policy should be allowed nothing, not everything. And the seed, and the switch that says yes to every confirmation, should not sit where the agent can read them.
+    quarter: 2026Q4
+    status: planned
+    priority: P1
+    modules: [wdk-mcp-toolkit, wdk-cli]
+  - id: policy-tier-1
+    northStar: kit
+    label: Policy engine tier 1, the Vault
+    summary: 'Step two. The keys and the policy engine move into their own process, the daemon behind the command line, out of the agent''s reach. The agent gets a token and four calls: limits, address, balance, send. It asks for a transfer; WDK builds it. One account per agent, revocable alone.'
+    quarter: 2027Q1
+    status: planned
+    priority: P0
+    modules: [wdk-cli, wdk]
+  - id: policy-tier-2
+    northStar: kit
+    label: Policy engine tier 2, the boundary hardened
+    summary: Step three. Same token, but the Vault runs under its own user, or the agent runs in a container, so even an agent that can run code cannot read the keys. How far to go, a separate user or a secure enclave, is the question to settle here.
+    quarter: 2027Q2
+    status: planned
+    priority: P1
+    modules: [wdk-cli, wdk]
+  - id: mobile-boundary
+    northStar: kit
+    label: The boundary on mobile
+    summary: Open question. On a phone an app cannot start a separate Vault process, and the worklet runs as a thread inside the app, where anything in the app can read its memory. How do we get the same wall on iOS and Android?
+    quarter: backlog
+    status: planned
+    priority: P2
+    modules: [wdk-react-native-core, wdk-core-swift]
+  - id: policy-engine
+    northStar: kit
+    label: Policy rules, language and portal
+    summary: 'Once the Vault is in place: ready-made rules in wdk-policies, then a way to write your own, then policies in the developer portal.'
+    quarter: 2027Q2
+    status: planned
+    priority: P1
     modules: [wdk, wdk-policies]
   - id: error-handling
     northStar: kit
@@ -1216,7 +1266,7 @@ roadmap:
     quarter: 2026Q3
     status: wip
     priority: P1
-    modules: [wdk-protocol-multisig-safe]
+    modules: [wdk-wallet-multisig-safe]
   - id: multisig-squads
     northStar: kit
     label: Squads multisig on Solana
@@ -1224,7 +1274,7 @@ roadmap:
     quarter: 2026Q3
     status: wip
     priority: P1
-    modules: [wdk-protocol-multisig-squads]
+    modules: [wdk-wallet-multisig-squads]
   - id: multisig-psbt
     northStar: kit
     label: PSBT multisig on Bitcoin
@@ -1536,7 +1586,7 @@ roadmap:
   - id: agent-payments
     northStar: ecosystem
     label: Agents that pay
-    summary: 'Agents that hold a WDK wallet and pay in USD₮0, self-custodial, bounded by local policies. The corridor for 2027, in order: publish the toolkit, fix and extend the policy engine, a first-party x402 client, then the facilitator question.'
+    summary: Agents that hold a WDK wallet and pay in USD₮0, self-custodial, bounded by a policy engine the agent cannot reach.
     quarter: 2027Q1
     status: wip
     priority: P1

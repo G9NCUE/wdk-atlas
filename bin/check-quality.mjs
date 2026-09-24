@@ -80,7 +80,10 @@ const VENDOR = {
 // 2026-09-23, up by six more: fourteen packages in that file, three of them the org-hosted
 // exceptions, each with an all-time total, a dependents count and its release dates, and a table
 // of its own module that sorts and filters. The roadmap grew for the offsite too. Measured: 149.07.
-const BUDGET_KB = { map: 75, dev: 74, overview: 135, roadmap: 138, results: 134, dashboard: 151 };
+// 2026-09-24, every bar re-based: atlas.yaml is 18.2 KB compressed, up 2.5 KB in three days of
+// roadmap writing, and had used the headroom the bars left it. Measured: map 75.39, dev 73.79,
+// overview 135.17, roadmap 138.59, results 133.65, dashboard 150.74; each bar 1.5 KB above.
+const BUDGET_KB = { map: 77, dev: 75, overview: 137, roadmap: 140, results: 135, dashboard: 152 };
 
 // ---------------------------------------------------------------- colour
 // WCAG relative luminance and contrast, from hsl() as the tokens are written.
