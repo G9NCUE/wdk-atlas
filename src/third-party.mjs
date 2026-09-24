@@ -6,7 +6,7 @@
 import { el, withTip } from "./dom.mjs";
 import { createSeries } from "./series.mjs";
 import { use } from "./context.mjs";
-import { steadyWeekly, STEADY_WEEKS } from "./../lib/steady.mjs";
+import { steadyWeekly, trendWeekly, STEADY_WEEKS, TREND_WEEKS } from "./../lib/steady.mjs";
 
 // The columns, in order. `num` columns sort descending first and draw a bar beside the value.
 const COLUMNS = [
@@ -22,7 +22,7 @@ const COLUMNS = [
 
 export function createThirdParty(ctx) {
   use(ctx, createSeries);
-  const { query, setUrlParams, fmtNum, defFor, trendPill, lineChart, hBars, chartCard, dashSection, exportControls,
+  const { query, setUrlParams, fmtNum, defFor, trendPill, deltaPill, lineChart, hBars, chartCard, dashSection, exportControls,
     coverageOf, seriesBuckets, lastTwo, coverageNote, releaseMarks, unit, SERIES } = ctx;
 
   // Sort and filter live in the address, like the map's chain and search, so a view can be sent.
@@ -47,7 +47,8 @@ export function createThirdParty(ctx) {
     const rows = names.map((p) => {
       const { title, publisher, repo, since, allTime, dependents, hostedByOrg } = packages[p];
       const steady = steadyWeekly(perPkg[p], cov[1], since);
-      return { pkg: p, title, publisher, repo, since, hostedByOrg, median: steady.median, weeks: steady.weeks, dependents, last: inLast(p), all: allTime };
+      const trend = trendWeekly(perPkg[p], cov[1], since);
+      return { pkg: p, title, publisher, repo, since, hostedByOrg, median: steady.median, weeks: steady.weeks, trend, dependents, last: inLast(p), all: allTime };
     });
     const collected = String(third.updated || "").slice(0, 10);
     const exportMeta = { collected, scope: `${names.length} third-party packages` };
@@ -116,14 +117,31 @@ export function createThirdParty(ctx) {
     const unmeasured = (third.unmeasured || []).map((u) => `${u.title} (${u.publisher}): ${u.reason}`);
     const allTimeTotal = rows.every((r) => r.all != null) ? rows.reduce((n, r) => n + r.all, 0) : null;
 
+    // Two plain rankings, the two halves of "doing well": how much, and which way. The table
+    // below has every number; these carry the answer.
+    // Names are the module's title on the map, in every card, the way the bar charts write them.
+    const byUse = [...rows].filter((r) => r.median != null).sort((a, b) => b.median - a.median || a.pkg.localeCompare(b.pkg)).slice(0, 8)
+      .map((r) => ({ label: r.title, hint: r.publisher, value: r.median }));
+    const change = (r) => (r.trend.now == null ? null : r.trend.now - r.trend.before);
+    const withTrend = rows.filter((r) => change(r) != null).sort((a, b) => change(b) - change(a));
+    const rising = withTrend.filter((r) => change(r) > 0).slice(0, 4), fading = withTrend.filter((r) => change(r) < 0).slice(-4);
+    const trendRow = (r) => el("div", { class: "trend-row" }, el("span", { class: "hbar-label" }, r.title), deltaPill("third-party-downloads", r.trend.now, r.trend.before, { note: `${fmtNum(r.trend.now)} a week` }));
+    const trendList = el("div", { class: "trend-list" }, rising.map(trendRow), fading.length && rising.length ? el("div", { class: "trend-gap" }) : null, fading.map(trendRow));
+
     return dashSection("Third-party packages", [
       chartCard(defFor("third-party-downloads"), `npm downloads of third-party packages per ${unit}`, last.now == null ? "—" : fmtNum(last.now), trendPill("third-party-downloads", total),
-        total.length ? lineChart(total, { marks }) : el("p", { class: "chart-foot" }, coverageNote(cov)), `${names.length} packages, summed. Ticks mark releases. Not part of the selection above.`,
+        total.length ? lineChart(total, { marks }) : el("p", { class: "chart-foot" }, coverageNote(cov)), null,
         { ...exportMeta, columns: ["period", "downloads"], rows: total.map((p) => [p.key, p.y]) }),
+      chartCard(defFor("third-party-downloads"), `Most used: median weekly downloads, last ${STEADY_WEEKS} weeks`, null, null,
+        byUse.length ? hBars(byUse, { color: SERIES[0] }) : el("p", { class: "chart-foot" }, "No complete week yet."), null,
+        { ...exportMeta, columns: ["module", "publisher", "median weekly downloads"], rows: byUse.map((r) => [r.label, r.hint, r.value]) }),
+      chartCard(defFor("third-party-downloads"), `Gaining and fading: last ${TREND_WEEKS.recent} weeks against the ${TREND_WEEKS.prior} before`, null, null,
+        withTrend.length ? trendList : el("p", { class: "chart-foot" }, "No package has twelve complete weeks yet."), null,
+        { ...exportMeta, columns: ["module", "publisher", `mean weekly downloads, last ${TREND_WEEKS.recent} weeks`, `mean weekly downloads, the ${TREND_WEEKS.prior} before`], rows: withTrend.map((r) => [r.title, r.publisher, r.trend.now, r.trend.before]) }),
       chartCard(defFor("third-party-downloads"), `By publisher, last full ${unit}`, String(perPublisher.size), null,
-        byPublisher.length ? hBars(byPublisher, { color: SERIES[2] }) : el("p", { class: "chart-foot" }, "No downloads in the period."), "Every package a publisher ships, summed.",
+        byPublisher.length ? hBars(byPublisher, { color: SERIES[2] }) : el("p", { class: "chart-foot" }, "No downloads in the period."), null,
         { ...exportMeta, columns: ["publisher", "packages", "downloads"], rows: byPublisher.map((r) => [r.label, r.hint, r.value]) }),
-      el("div", { class: "ready-card" }, tools, table,
+      el("details", { class: "ready-card table-fold" }, el("summary", { class: "repo-panel-summary" }, "Every package, with every number ", el("span", { class: "view-count" }, String(rows.length))), tools, table,
         el("p", { class: "chart-foot" }, `Every shipped module on the map whose publisher is not ${org}, read from npm alone. Click a heading to sort.`
           + ` Weekly median is the middle week of the last twelve complete weeks, which one burst week cannot lift. Dependents are public repositories outside ${org} whose manifest names the package.`
           + (allTimeTotal == null ? "" : ` All time runs from each package's first publish: ${fmtNum(allTimeTotal)} across the ${rows.length}.`)

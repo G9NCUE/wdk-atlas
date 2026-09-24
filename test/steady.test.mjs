@@ -3,7 +3,7 @@
 // a partial week at either end.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isoWeekOf, median, steadyWeekly } from "../lib/steady.mjs";
+import { isoWeekOf, median, steadyWeekly, trendWeekly } from "../lib/steady.mjs";
 
 // Fourteen full ISO weeks, Monday 2026-06-01 to Sunday 2026-09-06, ten downloads a day.
 const series = {};
@@ -43,6 +43,18 @@ test("a package younger than the window is measured over the weeks it has, and s
   for (let t = new Date("2026-08-24T00:00:00Z"); t <= new Date("2026-09-06T00:00:00Z"); t.setUTCDate(t.getUTCDate() + 1)) young[t.toISOString().slice(0, 10)] = 3;
   assert.deepEqual(steadyWeekly(young, "2026-09-06", "2026-08-24"), { median: 21, weeks: 2 });
   assert.deepEqual(steadyWeekly(young, "2026-09-06", "2026-08-24", 1), { median: 21, weeks: 1 });
+});
+
+test("the trend is the mean of the last four complete weeks against the mean of the eight before", () => {
+  const rising = { ...series };
+  for (let t = new Date("2026-08-10T00:00:00Z"); t <= new Date("2026-09-06T00:00:00Z"); t.setUTCDate(t.getUTCDate() + 1)) rising[t.toISOString().slice(0, 10)] = 20;
+  assert.deepEqual(trendWeekly(rising, "2026-09-06", "2026-06-01"), { now: 140, before: 70, weeks: 14 });
+  assert.deepEqual(trendWeekly(series, "2026-09-06", "2026-06-01"), { now: 70, before: 70, weeks: 14 });
+});
+
+test("younger than twelve complete weeks there is no trend, only the count", () => {
+  assert.deepEqual(trendWeekly(series, "2026-09-06", "2026-06-22"), { now: null, before: null, weeks: 11 });
+  assert.deepEqual(trendWeekly({}, "2026-09-06", null), { now: null, before: null, weeks: 0 });
 });
 
 test("no complete week is null, not zero", () => {
