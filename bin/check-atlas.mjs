@@ -115,6 +115,10 @@ for (const m of modules) {
   // private repos, every private module would otherwise be reported every run.
   if (m.repo && f.repo && !f.repoInfo && !m.private) findings.links.push({ id: m.id, evidence: `repo link 404: ${m.repo}` });
   if (f.repoInfo && f.repoInfo.archived) findings.links.push({ id: m.id, evidence: `repo is archived` });
+  // GitHub redirects a renamed repo, so the old link still resolves; the name coming back is the tell.
+  if (f.repoInfo && f.repoInfo.full_name && f.repoInfo.full_name.toLowerCase() !== `${f.repo.owner}/${f.repo.name}`.toLowerCase()) {
+    findings.links.push({ id: m.id, evidence: `repo renamed to ${f.repoInfo.full_name}; update \`repo:\` (and the id if it carries the name)` });
+  }
   // The `private` flag draws a lock on the card; report it when it stops matching GitHub.
   if (f.repoInfo && Boolean(f.repoInfo.private) !== Boolean(m.private)) {
     findings.links.push({ id: m.id, evidence: f.repoInfo.private ? "repo is private; add `private: true` to draw the lock" : "repo is public now; drop `private: true`" });
