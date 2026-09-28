@@ -739,10 +739,9 @@ modules:
     section: core
     band: protocols
     kind: multisig
-    status: wip
+    status: shipped
     publisher: tetherto
     chains: [EVM]
-    progress: 80
     summary: 'Shared wallets on Ethereum-like chains where several people must approve each transaction, built on Safe as a smart account.'
     repo: https://github.com/tetherto/wdk-wallet-multisig-safe
     relations:
@@ -755,11 +754,10 @@ modules:
     section: core
     band: protocols
     kind: multisig
-    status: wip
+    status: shipped
     publisher: tetherto
     chains: [SOL]
-    progress: 80
-    summary: 'Shared wallets on Solana where several people must approve each transaction, built on Squads. In progress.'
+    summary: 'Shared wallets on Solana where several people must approve each transaction, built on Squads.'
     repo: https://github.com/tetherto/wdk-wallet-multisig-squads
     relations:
       - { type: on, target: wdk-wallet-solana }
@@ -1264,7 +1262,7 @@ roadmap:
     label: Safe multisig on EVM
     summary: 'Shared wallets on Ethereum-like chains where several people approve each transaction, built on Safe.'
     quarter: 2026Q3
-    status: wip
+    status: done
     priority: P1
     modules: [wdk-wallet-multisig-safe]
   - id: multisig-squads
@@ -1272,7 +1270,7 @@ roadmap:
     label: Squads multisig on Solana
     summary: 'Shared wallets on Solana where several people approve each transaction, built on Squads.'
     quarter: 2026Q3
-    status: wip
+    status: done
     priority: P1
     modules: [wdk-wallet-multisig-squads]
   - id: multisig-psbt
@@ -1304,7 +1302,7 @@ roadmap:
     label: CLI completion
     summary: Swap, bridge and gasless transactions from the command line.
     quarter: 2026Q3
-    status: wip
+    status: done
     priority: P1
     modules: [wdk-cli]
   - id: docs-seo-geo
