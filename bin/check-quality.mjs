@@ -83,7 +83,17 @@ const VENDOR = {
 // 2026-09-24, every bar re-based: atlas.yaml is 18.2 KB compressed, up 2.5 KB in three days of
 // roadmap writing, and had used the headroom the bars left it. Measured: map 75.39, dev 73.79,
 // overview 135.17, roadmap 138.59, results 133.65, dashboard 150.74; each bar 1.5 KB above.
-const BUDGET_KB = { map: 77, dev: 75, overview: 137, roadmap: 140, results: 135, dashboard: 152 };
+// 2026-10-07, code and data weighed apart. The daily metrics run adds about 0.3 KB a day to
+// data/metrics.json, so 1.5 KB of headroom failed its own pre-commit check within a week and
+// no data was written from 2026-09-27. The page bars below now cover what a page downloads
+// except the data files, and stay tight; the data files have ceilings of their own, sized for
+// full retention. Downloads already span the 400 days and only slide (25 KB); the GitHub series
+// grow about 0.085 KB a day until they span 400 days too (about +30 KB), and snapshots go daily
+// to monthly at 90 days. metrics.json measured 38 KB on 2026-09-26, projected 70 to 75 KB at full
+// retention with today's packages; the ceiling leaves room for a few more. Pages measured without
+// data: map 75.56, dev 73.96, overview 98.34, roadmap 101.77, results 96.83, dashboard 106.67.
+const BUDGET_KB = { map: 77, dev: 75, overview: 100, roadmap: 103, results: 98, dashboard: 108 };
+const DATA_KB = { "data/metrics.json": 85, "data/summary.json": 1, "data/third-party.json": 15 };
 
 // ---------------------------------------------------------------- colour
 // WCAG relative luminance and contrast, from hsl() as the tokens are written.
@@ -257,14 +267,18 @@ function pageWeightGate() {
   const rows = [];
   for (const [page, budget] of Object.entries(BUDGET_KB)) {
     const data = (lightPages.includes(page) && summary ? summary : metrics) + (page === "dashboard" ? thirdParty : 0);
-    const total = (fixed + scriptsFor(page) + data) / KB;
-    rows.push({ page, kb: Math.round(total), budget, pass: total <= budget });
+    const total = (fixed + scriptsFor(page)) / KB;
+    rows.push({ page, kb: Math.round(total), dataKb: Math.round(data / KB), budget, pass: total <= budget });
+  }
+  for (const [file, budget] of Object.entries(DATA_KB)) {
+    const kb = gz(file) / KB;
+    rows.push({ page: file, kb: Math.round(kb), budget, pass: kb <= budget });
   }
   const over = rows.filter((r) => !r.pass);
   return {
     pass: over.length === 0,
     detail: over.length ? over.map((r) => `${r.page} ${r.kb}KB over ${r.budget}KB`).join(", ")
-      : rows.map((r) => `${r.page} ${r.kb}KB`).join(", "),
+      : rows.map((r) => `${r.page} ${r.kb}KB${r.dataKb ? ` + ${r.dataKb}KB data` : ""}`).join(", "),
   };
 }
 
