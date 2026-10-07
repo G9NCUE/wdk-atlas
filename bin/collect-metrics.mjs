@@ -102,7 +102,7 @@ const SNAPSHOT_HISTORY = ["openIssues", "contributors", "dependents", "examples"
 // retention window every run rather than the trailing 30 days. One request per package, self-healing,
 // and it backfills history the first time it runs.
 
-const gh = async (path, attempt = 0) => {
+const gh = async (path, attempt = 0, maxWait = 900) => {
   const res = await fetch(`https://api.github.com${path}`, {
     headers: { accept: "application/vnd.github+json", "user-agent": "wdk-atlas-metrics", ...(TOKEN ? { authorization: `Bearer ${TOKEN}` } : {}) },
   });
@@ -115,19 +115,21 @@ const gh = async (path, attempt = 0) => {
     if (wait > 0 && wait <= 120000 && attempt < 2) {
       console.error(`collect-metrics: GitHub quota spent on ${path.split("?")[0]}; back in ${Math.ceil(wait / 1000)}s`);
       await sleep(wait + 1000);
-      return gh(path, attempt + 1);
+      return gh(path, attempt + 1, maxWait);
     }
     throw new Error("GitHub rate limit exhausted; set GITHUB_TOKEN");
   }
   if (res.status === 429 || res.status === 403) {
     // Secondary rate limit (code search trips it easily): GitHub says how long to wait, in a header or
-    // in the message. Wait it out and retry twice; the job has hours, the data has one shot a day.
+    // in the message. Wait it out and retry twice. With neither, GitHub's advice is a minute, which
+    // is what the issue search needed on 2026-10-05 when it died on a bare 403. A caller that can do
+    // without the answer passes a shorter maxWait and gets the error instead of a long wait.
     const text = await res.text();
-    const wait = Number(res.headers.get("retry-after")) || Number((/try again in (\d+)/.exec(text) || [])[1]) || 0;
-    if (wait && attempt < 2) {
+    const wait = Number(res.headers.get("retry-after")) || Number((/try again in (\d+)/.exec(text) || [])[1]) || 60;
+    if (wait <= maxWait && attempt < 2) {
       console.error(`collect-metrics: GitHub ${res.status} on ${path.split("?")[0]}; waiting ${wait}s`);
-      await sleep(Math.min(wait, 900) * 1000 + 1000);
-      return gh(path, attempt + 1);
+      await sleep(wait * 1000 + 1000);
+      return gh(path, attempt + 1, maxWait);
     }
     throw new Error(`GitHub ${res.status} on ${path}: ${text.slice(0, 120)}`);
   }
@@ -364,11 +366,16 @@ try {
     if (Array.isArray(root)) snap.examples = root.filter((e) => e.type === "dir" && !e.name.startsWith(".") && !EXAMPLES_IGNORE.has(e.name)).length;
   }
   // Code search works with the Actions token and allows ten calls a minute; skipped, not guessed, when unavailable.
+  // Once GitHub throttles it for longer than two minutes it stays off for the run: from 2026-09-27 every
+  // run spent its thirty minutes waiting out 735-second throttles, one per third-party package, and
+  // timed out before writing anything. Nothing it measures is a key result.
+  let codeSearchOff = false;
   const codeSearch = async (q, pages = 10) => {
+    if (codeSearchOff) return null;
     const seen = new Set();
     for (let pageNo = 1; pageNo <= pages; pageNo += 1) {
       let body;
-      try { body = await gh(`/search/code?q=${encodeURIComponent(q)}&per_page=100&page=${pageNo}`); } catch (e) { console.error(`collect-metrics: code search failed: ${e.message}`); return null; }
+      try { body = await gh(`/search/code?q=${encodeURIComponent(q)}&per_page=100&page=${pageNo}`, 0, 120); } catch (e) { console.error(`collect-metrics: code search failed: ${e.message}`); codeSearchOff = true; return null; }
       if (!body || !Array.isArray(body.items)) return pageNo === 1 ? null : seen;
       for (const item of body.items) seen.add(item.repository.full_name);
       if (body.items.length < 100 || seen.size >= body.total_count) break;
