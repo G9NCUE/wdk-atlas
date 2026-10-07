@@ -785,10 +785,10 @@ modules:
     section: core
     band: protocols
     kind: sda
-    status: planned
+    status: wip
     publisher: tetherto
     placeholder: true
-    summary: Smart Deposit Address implementations are not published yet.
+    summary: Smart Deposit Address implementations are not published yet. Rhino.fi and Candide are building the first two.
 
   - id: wdk-protocol-lending-morpho-evm
     name: wdk-protocol-lending-morpho-evm
@@ -1676,10 +1676,10 @@ roadmap:
     northStar: ecosystem
     label: Smart deposit addresses, partner implementations
     partners: [Rhino.fi, Candide]
-    summary: 'The interface shipped in Q3; these are the first partner modules that fill it, so a deposit on one chain arrives on another. Rhino.fi and Candide are in the pipeline. Partner-paced.'
+    summary: 'The interface shipped in Q3; these are the first partner modules that fill it, so a deposit on one chain arrives on another. Rhino.fi and Candide are both building theirs now.'
     quarter: 2026Q4
-    status: planned
-    priority: P2
+    status: wip
+    priority: P0
     modules: [wdk-wallet]
   - id: repo-cleanup
     northStar: ecosystem
