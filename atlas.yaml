@@ -128,6 +128,7 @@ audit:
 #   seriesTotal (series, days, target: a count over a rolling window), issueResponse (withinHours, target %),
 #   currency (target: share of chosen installs on the latest release).
 # Rewritten 2026-09-13 from the Q3 2026 OKR sheet so every result is public and checkable; pending review.
+# Carried into Q4 2026 unchanged on 2026-10-07: same results, same targets.
 northStars:
   # A published audit, green CI and the shared signer interface were key results here until
   # 2026-09-20. They are gates on a checklist: binary, and each one is already on the release
@@ -1127,14 +1128,14 @@ roadmap:
   - id: signers
     northStar: kit
     label: Abstract signers
-    summary: One signer interface on every wallet package, so seed, private key, hardware and remote signers plug into the same account. Merged on EVM, in review on Bitcoin. Solana has a proof of concept from the first design round (wdk-wallet-solana#31), never merged, to be redone against the final contract.
+    summary: One signer interface on every wallet package, so seed, private key, hardware and remote signers plug into the same account. Merged on EVM and Bitcoin on 2026-10-05, not released yet. Solana is in review against the final contract (wdk-wallet-solana#99).
     quarter: 2026Q4
     status: wip
     priority: P0
     modules:
       - { id: wdk-wallet-btc, status: wip, progress: 80 }
       - { id: wdk-wallet-evm, status: wip, progress: 80 }
-      - { id: wdk-wallet-solana, status: planned }
+      - { id: wdk-wallet-solana, status: wip }
       - wdk-wallet-evm-erc-4337
       - wdk-wallet-evm-7702-gasless
       - wdk-wallet-solana-gasless
@@ -1148,7 +1149,7 @@ roadmap:
     northStar: kit
     label: Ledger
     parent: signers
-    summary: Hardware signing through a standalone Ledger package, first on Bitcoin, EVM and Solana; other hardware wallets can follow. Draft signers exist for all three from the first design round, none merged. The package is not created yet, and Bitcoin and Solana wait on the abstract signer.
+    summary: Hardware signing through a standalone Ledger package, first on Bitcoin, EVM and Solana; other hardware wallets can follow. Draft signers exist for all three from the first design round, none merged. The package is not created yet, and Solana waits on the abstract signer.
     quarter: 2026Q4
     status: planned
     priority: P2
@@ -1252,7 +1253,7 @@ roadmap:
   - id: sda
     northStar: kit
     label: Smart deposit address interface
-    summary: Deposit on chain X, receive on chain Y. The interface is in wdk-wallet; the first module is next.
+    summary: Deposit on chain X, receive on chain Y. The interface is in wdk-wallet; Rhino.fi and Candide are building the first modules.
     quarter: 2026Q3
     status: done
     priority: P0
