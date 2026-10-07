@@ -122,11 +122,13 @@ const gh = async (path, attempt = 0, maxWait = 900) => {
   if (res.status === 429 || res.status === 403) {
     // Secondary rate limit (code search trips it easily): GitHub says how long to wait, in a header or
     // in the message. Wait it out and retry twice. With neither, GitHub's advice is a minute, which
-    // is what the issue search needed on 2026-10-05 when it died on a bare 403. A caller that can do
+    // is what the issue search needed on 2026-10-05 when it died on a bare 403. A 403 that is not about
+    // the rate (a permission the Actions token lacks) is not retried. A caller that can do
     // without the answer passes a shorter maxWait and gets the error instead of a long wait.
     const text = await res.text();
-    const wait = Number(res.headers.get("retry-after")) || Number((/try again in (\d+)/.exec(text) || [])[1]) || 60;
-    if (wait <= maxWait && attempt < 2) {
+    const limited = res.status === 429 || /rate.limit/i.test(text);
+    const wait = Number(res.headers.get("retry-after")) || Number((/try again in (\d+)/.exec(text) || [])[1]) || (limited ? 60 : 0);
+    if (wait && wait <= maxWait && attempt < 2) {
       console.error(`collect-metrics: GitHub ${res.status} on ${path.split("?")[0]}; waiting ${wait}s`);
       await sleep(wait * 1000 + 1000);
       return gh(path, attempt + 1, maxWait);
