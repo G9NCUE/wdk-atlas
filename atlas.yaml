@@ -852,12 +852,11 @@ modules:
     title: Balances & history
     section: platform
     band: services
-    status: wip
+    status: shipped
     publisher: tetherto
     summary: 'Asks Tether''s indexer for balances and token transfer history across many chains, so an app does not have to read each chain itself.'
     notes:
       - The indexing service behind this client stays closed source; its API is open and documented
-      - Marked live on the map but never published to npm; open question
     repo: https://github.com/tetherto/wdk-indexer-http
 
 
@@ -1771,9 +1770,9 @@ roadmap:
   - id: publish-indexer-npm
     northStar: dx
     label: Publish the indexer client to npm
-    summary: "@tetherto/wdk-indexer-http is a WDK client for the indexer API: 1.0.0-beta.1 in the repo, npm install in its README, nothing on npm. Publishing the client is WDK work; the service behind it is not."
+    summary: "@tetherto/wdk-indexer-http, the WDK client for the indexer API, is on npm as 1.0.1 since 7 October 2026. The service behind it stays closed source."
     quarter: 2026Q4
-    status: planned
+    status: done
     priority: P1
     modules: [wdk-indexer-http]
   - id: indexer-swagger
