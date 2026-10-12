@@ -1658,9 +1658,9 @@ roadmap:
   - id: contribution-guidelines
     northStar: ecosystem
     label: Contribution guidelines, public
-    summary: One clear, public page on how to propose, build and get a module reviewed, replacing guidelines that exist but point nowhere. Owner not yet defined.
+    summary: One clear, public page on how to propose, build and get a module reviewed, replacing guidelines that exist but point nowhere. Owner: Maharshi. A draft is in team review; eight decisions remain before it can be published.
     quarter: 2026Q4
-    status: planned
+    status: wip
     priority: P1
   - id: changelog-cadence
     northStar: ecosystem
