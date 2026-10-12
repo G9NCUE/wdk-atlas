@@ -316,7 +316,7 @@ modules:
     summary: 'The rulebook every wallet and protocol package follows. It fixes the shape of a wallet, an account and each kind of protocol, so all modules plug in the same way. Apps never use it directly.'
     notes:
       - Protocol forms in src/protocols (checked 2026-09-02): bridge, fiat, lending, sda, swap, swidge
-      - ISigner, the signer form. wdk-wallet-evm ships seed and private-key signers; btc has none yet
+      - ISigner, the signer form. wdk-wallet-evm ships seed and private-key signers; btc's are merged, not yet released
     repo: https://github.com/tetherto/wdk-wallet
 
   - id: wdk-policies
@@ -1127,13 +1127,13 @@ roadmap:
   - id: signers
     northStar: kit
     label: Abstract signers
-    summary: One signer interface on every wallet package, so seed, private key, hardware and remote signers plug into the same account. Merged on EVM and Bitcoin on 2026-10-05, not released yet. Solana is in review against the final contract (wdk-wallet-solana#99).
+    summary: One signer interface on every wallet package, so seed, private key, hardware and remote signers plug into the same account. Released on EVM in 1.0.0-beta.21 on 9 October 2026. Bitcoin is merged but not released; Solana is in review (wdk-wallet-solana#99).
     quarter: 2026Q4
     status: wip
     priority: P0
     modules:
       - { id: wdk-wallet-btc, status: wip, progress: 80 }
-      - { id: wdk-wallet-evm, status: wip, progress: 80 }
+      - { id: wdk-wallet-evm, status: done }
       - { id: wdk-wallet-solana, status: wip }
       - wdk-wallet-evm-erc-4337
       - wdk-wallet-evm-7702-gasless
