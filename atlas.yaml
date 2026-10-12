@@ -779,17 +779,38 @@ modules:
     relations:
       - { type: on, target: wdk-wallet-btc }
 
-  - id: wdk-protocol-sda-coming-soon
-    name: implementations coming soon
-    title: Smart deposit addresses
-    short: Smart deposit addresses
+  - id: wdk-protocol-sda-rhinofi
+    name: wdk-protocol-sda-rhinofi
+    title: Smart deposit addresses via Rhino.fi
+    short: Rhino.fi deposit addresses
     section: core
     band: protocols
     kind: sda
-    status: wip
-    publisher: tetherto
-    placeholder: true
-    summary: Smart Deposit Address implementations are not published yet. Rhino.fi and Candide are building the first two.
+    status: shipped
+    publisher: Rhino.fi
+    package: '@rhino.fi/wdk-protocol-sda-rhinofi'
+    summary: 'One deposit address per user. Funds sent to it from another chain are swapped and delivered to a fixed address on the destination chain by Rhino.fi.'
+    notes:
+      - Not maintained by Tether
+    repo: https://github.com/rhinofi/wdk-protocol-sda-rhinofi
+    relations:
+      - { type: requires, target: wdk-wallet }
+
+  - id: wdk-protocol-sda-candide
+    name: wdk-protocol-sda-candide
+    title: Smart deposit addresses via Candide
+    short: Candide deposit addresses
+    section: core
+    band: protocols
+    kind: sda
+    status: shipped
+    publisher: Candide
+    chains: [EVM]
+    package: '@candidelabs/wdk-protocol-sda-candide'
+    summary: 'A self-custodial forwarding contract as the deposit address. It accepts tokens on any supported EVM chain and forwards them to a recipient on the destination chain.'
+    notes:
+      - Not maintained by Tether
+    repo: https://github.com/candidelabs/wdk-protocol-sda-candide
 
   - id: wdk-protocol-lending-morpho-evm
     name: wdk-protocol-lending-morpho-evm
@@ -1252,11 +1273,11 @@ roadmap:
   - id: sda
     northStar: kit
     label: Smart deposit address interface
-    summary: Deposit on chain X, receive on chain Y. The interface is in wdk-wallet; Rhino.fi and Candide are building the first modules.
+    summary: Deposit on chain X, receive on chain Y. The interface is in wdk-wallet; Rhino.fi and Candide have published the first modules.
     quarter: 2026Q3
     status: done
     priority: P0
-    modules: [wdk-wallet, wdk-protocol-sda-coming-soon]
+    modules: [wdk-wallet]
   - id: multisig-safe
     northStar: kit
     label: Safe multisig on EVM
@@ -1676,11 +1697,11 @@ roadmap:
     northStar: ecosystem
     label: Smart deposit addresses, partner implementations
     partners: [Rhino.fi, Candide]
-    summary: 'The interface shipped in Q3; these are the first partner modules that fill it, so a deposit on one chain arrives on another. Rhino.fi and Candide are both building theirs now.'
+    summary: 'The interface shipped in Q3; these are the first partner modules that fill it, so a deposit on one chain arrives on another. Both are on npm: Candide since 5 October 2026, Rhino.fi since 4 September (1.1.0 on 6 October).'
     quarter: 2026Q4
-    status: wip
+    status: done
     priority: P0
-    modules: [wdk-wallet]
+    modules: [wdk-wallet, wdk-protocol-sda-rhinofi, wdk-protocol-sda-candide]
   - id: repo-cleanup
     northStar: ecosystem
     label: Repository cleanup across the org
