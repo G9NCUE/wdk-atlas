@@ -913,26 +913,6 @@ modules:
     relations:
       - { type: requires, target: pear-wrk-wdk }
 
-  - id: wdk-secret-manager
-    name: wdk-secret-manager
-    title: Seed and secret manager
-    section: platform
-    band: services
-    status: shipped
-    publisher: tetherto
-    summary: 'Generates, encrypts and stores wallet seeds and secrets, so an app never handles a plain seed phrase itself.'
-    repo: https://github.com/tetherto/wdk-secret-manager
-
-  - id: wdk-backup-cloud-react-native
-    name: wdk-backup-cloud-react-native
-    title: Cloud backup
-    section: platform
-    band: services
-    status: shipped
-    publisher: tetherto
-    summary: 'Backs up an encrypted wallet to the user''s own cloud storage from a React Native app, and restores it on a new phone.'
-    repo: https://github.com/tetherto/wdk-backup-cloud-react-native
-
   - id: wdk-uikit-react-native
     name: wdk-uikit-react-native
     title: UI kit, React Native
