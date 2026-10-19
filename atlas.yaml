@@ -1265,8 +1265,8 @@ roadmap:
   - id: native-cores-v2
     northStar: kit
     label: Swift core at parity with React Native
-    summary: Strong typing, sensitive storage and a plug-in interface for native packages, matching the React Native host. The HRPC transport rewrite is drafted on a branch and not yet merged.
-    quarter: 2026Q4
+    summary: Strong typing, sensitive storage and a plug-in interface for native packages, matching the React Native host. Phases 5 and 6 of the native roadmap (wdk-worklet-bundler#84), after lifecycle, runtime and publishing. The HRPC transport rewrite is drafted on a branch and not yet merged.
+    quarter: 2027Q1
     status: wip
     priority: P0
     modules: [wdk-core-swift]
@@ -1720,7 +1720,8 @@ roadmap:
   - id: publish-swift-spm
     northStar: kit
     label: Publish the Swift core on Swift Package Manager
-    summary: Installable with one line in a Swift project from a Git URL and a tag. Needs a first tag and a pinned bare-kit-swift version; no Apple account required for the package itself.
+    partners: [Holepunch]
+    summary: Installable with one line in a Swift project from a Git URL and a tag. Phase 3 of the native roadmap (wdk-worklet-bundler#84), targeted for December. Needs tagged bare-kit-swift releases from Holepunch first; no Apple account required for the package itself.
     quarter: 2026Q4
     status: wip
     priority: P1
@@ -1728,7 +1729,7 @@ roadmap:
   - id: publish-kotlin-maven
     northStar: kit
     label: Publish the Kotlin core on Maven Central
-    summary: Publish the Kotlin core on Maven Central under to.tether.wdk. Needs a Sonatype namespace owner at Tether and a maven-publish setup; neither exists yet.
+    summary: Publish the Kotlin core on Maven Central under to.tether.wdk. Phase 3 of the native roadmap (wdk-worklet-bundler#84), targeted for December. Needs a Sonatype namespace owner at Tether and a maven-publish setup; neither exists yet.
     quarter: 2026Q4
     status: planned
     priority: P1
