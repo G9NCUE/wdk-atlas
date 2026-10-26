@@ -71,26 +71,6 @@ audit:
   # Org repos that are not modules; not reported as missing from the atlas. This list is about the map
   # only: bin/collect-metrics.mjs ignores it and tracks every public wdk-* repo, wdk-docs included.
   ignoreRepos:
-    # Empty scaffolds and superseded prototypes agreed for deletion or archive on 2026-09-06; remove
-    # each line when its repo goes.
-    - wdk-protocol-bridge
-    - wdk-protocol-swap
-    - wdk-protocol-swap-dedust-ton
-    - wdk-protocol-swap-moonpay
-    - wdk-protocol-lending-morpho-evm
-    - wdk-signer-evm
-    - wdk-signer-tron
-    - wdk-local-signer-cpp
-    - wdk-wallet-rgb
-    - wdk-wallet-solana-jupiterz
-    - wdk-safe-protocol-kit
-    - wdk-safe-relay-kit
-    - wdk-protocol-lending-aave
-    - wdk-protocol-bridge-usdt0
-    - wdk-protocol-bridge-stargate
-    - wdk-protocol-bridge-allbridge
-    - wdk-demo-wallet
-    - wdk-backup-remote
     # Test bench, private: one test suite per module, not a module.
     - wdk-playground
     # Private port of ethers for Bare, never published. Revisit if it is.
@@ -913,18 +893,6 @@ modules:
     relations:
       - { type: requires, target: pear-wrk-wdk }
 
-  - id: wdk-uikit-react-native
-    name: wdk-uikit-react-native
-    title: UI kit, React Native
-    section: platform
-    band: native
-    status: shipped
-    publisher: tetherto
-    summary: 'Ready-made screens and components for wallet apps in React Native: balances, send, receive and more. Stateless, so any app can use them.'
-    repo: https://github.com/tetherto/wdk-uikit-react-native
-    relations:
-      - { type: under, target: wdk-react-native-core }
-
   - id: wdk-core-kotlin
     name: wdk-core-kotlin
     title: Android bridge (Kotlin)
@@ -960,7 +928,6 @@ modules:
     repo: https://github.com/tetherto/wdk-starter-react-native
     relations:
       - { type: requires, target: wdk-react-native-core }
-      - { type: requires, target: wdk-uikit-react-native }
 
   - id: wdk-starter-kotlin
     name: wdk-starter-kotlin
@@ -1685,9 +1652,9 @@ roadmap:
   - id: repo-cleanup
     northStar: ecosystem
     label: Repository cleanup across the org
-    summary: Delete twelve empty scaffolds, archive the superseded protocol, backup and fork repos, and deprecate their npm packages. Agreed 2026-09-06.
+    summary: Thirteen empty scaffolds and prototypes deleted, the superseded bridge, lending and backup repos archived, and the one placeholder package deprecated on npm. Agreed 2026-09-06.
     quarter: 2026Q4
-    status: wip
+    status: done
     priority: P1
   - id: publish-mcp-toolkit-npm
     northStar: dx
