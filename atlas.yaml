@@ -85,6 +85,8 @@ audit:
     - wdk-ansible-playbooks
     - wdk-module-templates
     - wdk-lib-lookup-storage
+    # Private storage library, outside the WDK scope (2026-10-26).
+    - wdk-lib-outbox-storage
   # Org repos that hold a partner's module: the org hosts the repo and publishes the package, so the map
   # keeps them as the org's, but the Dashboard measures them with the third-party packages, under the
   # partner's name, and leaves them out of every first-party number. Repo name: who built it.
@@ -586,6 +588,21 @@ modules:
       - { type: requires, target: wdk-wallet-evm-erc-4337 }
       - { type: requires, target: wdk-wallet-evm }
       - { type: requires, target: wdk-utils }
+
+  - id: wdk-protocol-bridge-usdt0-solana
+    name: wdk-protocol-bridge-usdt0-solana
+    title: Move USD₮0 from Solana
+    short: USD₮0 from Solana
+    section: core
+    band: protocols
+    kind: bridge
+    status: planned
+    publisher: tetherto
+    chains: [SOL]
+    summary: 'Move USD₮0 from a Solana wallet to another chain, the counterpart of the EVM bridge module. Planned: the repo is open and nothing is published yet.'
+    repo: https://github.com/tetherto/wdk-protocol-bridge-usdt0-solana
+    relations:
+      - { type: on, target: wdk-wallet-solana }
 
   - id: wdk-protocol-swidge-orchestra
     name: wdk-protocol-swidge-orchestra
@@ -1649,6 +1666,13 @@ roadmap:
     status: done
     priority: P0
     modules: [wdk-wallet, wdk-protocol-sda-rhinofi, wdk-protocol-sda-candide]
+  - id: bridge-usdt0-solana
+    northStar: kit
+    label: USD₮0 bridge from Solana
+    summary: Bridge USD₮0 out of Solana wallets, as the EVM module already does for Ethereum-like chains.
+    quarter: 2026Q4
+    status: planned
+    modules: [wdk-protocol-bridge-usdt0-solana]
   - id: repo-cleanup
     northStar: ecosystem
     label: Repository cleanup across the org
