@@ -821,6 +821,8 @@
   }
 
   .roadmap-module.wip { border-color: var(--wip-line); }
+  .roadmap-module.done { border-color: var(--success); }
+  .roadmap-module.done::before { content: "✓ "; color: var(--success); }
   .roadmap-module.missing { color: var(--text-muted); border-style: dashed; cursor: default; }
   .roadmap-module.more { color: var(--accent); border-color: transparent; background: transparent; }
   .roadmap-module.more:hover { border-color: var(--accent); }
@@ -2664,7 +2666,8 @@
      at once, so the dotted hint underline would read as noise rather than as an invitation. The
      detail still opens on hover and on focus. */
   .mod.has-tip, .mx-th.has-tip, .status-toggle.has-tip,
-  .kr.has-tip, .brief-kr-label.has-tip { text-decoration: none; cursor: pointer; }
+  .kr.has-tip, .brief-kr-label.has-tip,
+  .roadmap-module.wip.has-tip, .roadmap-module.done.has-tip { text-decoration: none; cursor: pointer; }
   .has-tip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
   /* The closed tip is `display: none`, not hidden. A hidden box still counts towards scrollable
      overflow, and `width: max-content` makes a tip near the right edge of a page several tens of

@@ -1132,6 +1132,14 @@ roadmap:
       - { id: wdk-wallet-btc, status: planned }
       - { id: wdk-wallet-evm, status: planned }
       - { id: wdk-wallet-solana, status: planned }
+  - id: btc-wallet-rework
+    northStar: kit
+    label: Bitcoin wallet rework
+    summary: Rebuilding the base of the Bitcoin wallet, so shared wallets, Taproot, hardware signers and fee bumping can be added without reworking it each time. Six steps in a set order (wdk-wallet-btc#131); the first three are in open pull requests, none merged yet.
+    quarter: 2026Q4
+    status: wip
+    priority: P1
+    modules: [wdk-wallet-btc]
   - id: passkey-signer
     northStar: kit
     label: Passkey signer
