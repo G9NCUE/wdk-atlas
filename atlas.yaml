@@ -1336,6 +1336,13 @@ roadmap:
     status: planned
     priority: P2
     modules: []
+  - id: zero-evm
+    northStar: ecosystem
+    label: ZERO integration in the EVM wallet
+    summary: Support ZERO, a new chain with mainnet announced for 30 November, in the EVM wallet. Its two zones are listed as EVM, so this should be configuration; if not, it becomes a new wallet module. No network address or final chain ID is public yet.
+    quarter: 2026Q4
+    status: planned
+    modules: [wdk-wallet-evm]
   - id: new-chains
     northStar: ecosystem
     label: New chains under review
