@@ -596,13 +596,14 @@ modules:
     section: core
     band: protocols
     kind: bridge
-    status: planned
+    status: wip
     publisher: tetherto
     chains: [SOL]
-    summary: 'Move USD₮0 from a Solana wallet to another chain, the counterpart of the EVM bridge module. Planned: the repo is open and nothing is published yet.'
+    summary: 'Move USD₮0 from a Solana wallet to another chain, the counterpart of the EVM bridge module. Merged and tagged 1.0.0-beta.1, but npm only holds an empty placeholder until that version is published.'
     repo: https://github.com/tetherto/wdk-protocol-bridge-usdt0-solana
     relations:
       - { type: on, target: wdk-wallet-solana }
+      - { type: requires, target: wdk-utils }
 
   - id: wdk-protocol-swidge-orchestra
     name: wdk-protocol-swidge-orchestra
@@ -1053,18 +1054,8 @@ modules:
     band: tools
     status: shipped
     publisher: tetherto
-    summary: 'A wallet you drive from the command line, made for AI agents such as Claude or ChatGPT but usable by people. Sends, swaps and checks balances across chains.'
+    summary: 'A wallet you drive from the command line, made for AI agents such as Claude or ChatGPT but usable by people. Sends, swaps and checks balances across chains, and includes WDK''s MCP server.'
     repo: https://github.com/tetherto/wdk-cli
-
-  - id: wdk-mcp-toolkit
-    name: wdk-mcp-toolkit
-    title: Tools for AI agents
-    section: dev
-    band: tools
-    status: wip
-    publisher: tetherto
-    summary: 'Lets AI agents use wallets through the Model Context Protocol, the standard way agents call tools. Build a server, and an agent can act across chains.'
-    repo: https://github.com/tetherto/wdk-mcp-toolkit
 
   - id: wdk-agent-skills
     name: wdk-agent-skills
@@ -1133,7 +1124,7 @@ roadmap:
     northStar: kit
     label: Ledger
     parent: signers
-    summary: Hardware signing through a standalone Ledger package, first on Bitcoin, EVM and Solana; other hardware wallets can follow. Draft signers exist for all three from the first design round, none merged. The package is not created yet, and Solana waits on the abstract signer.
+    summary: Hardware signing through a standalone Ledger package, first on Bitcoin, EVM and Solana; other hardware wallets can follow. The first draft signers were all closed unmerged by 28 October 2026. The package is not created yet, and Solana waits on the abstract signer.
     quarter: 2026Q4
     status: planned
     priority: P2
@@ -1167,16 +1158,16 @@ roadmap:
     quarter: 2026Q4
     status: planned
     priority: P0
-    modules: [wdk, wdk-cli, wdk-mcp-toolkit]
+    modules: [wdk, wdk-cli]
   - id: policy-engine-promise
     northStar: kit
     label: Say what the policy engine promises today
     parent: agent-wallet-plan
-    summary: Write down in the docs what the policy engine does and does not protect against. Today it runs in the same process as the agent, so a compromised agent can get around it. Say so, and say it is not ready for agents running on their own.
+    summary: The docs now say what the policy engine does and does not protect against, including that it does not isolate keys from the agent. Still to add, a plain statement that it is not ready for agents running on their own.
     quarter: 2026Q4
-    status: planned
+    status: wip
     priority: P0
-    modules: [wdk, wdk-mcp-toolkit]
+    modules: [wdk]
   - id: agent-default-deny
     northStar: kit
     label: Default deny on the agent path
@@ -1185,7 +1176,7 @@ roadmap:
     quarter: 2026Q4
     status: planned
     priority: P1
-    modules: [wdk-mcp-toolkit, wdk-cli]
+    modules: [wdk-cli]
   - id: policy-tier-1
     northStar: kit
     label: Policy engine tier 1, the Vault
@@ -1293,9 +1284,9 @@ roadmap:
   - id: docs-seo-geo
     northStar: dx
     label: Docs SEO and GEO
-    summary: Make WDK resolve to the Wallet Development Kit wherever a search engine or an AI assistant looks. The full name in page titles, npm and GitHub descriptions, structured data and crawler rules.
-    quarter: 2026Q3
-    status: wip
+    summary: WDK now reads as Wallet Development Kit by Tether across the docs, READMEs, npm and GitHub, through 44 merged pull requests, finished on 12 October 2026. Measuring the effect on search results and AI answers continues.
+    quarter: 2026Q4
+    status: done
     priority: P1
     modules: []
   # Added 2026-09-20 on the PM's decision. The evidence is on the dashboard: the median package
@@ -1404,10 +1395,10 @@ roadmap:
   - id: openclaw-mcp
     northStar: dx
     label: OpenClaw support in the MCP toolkit
-    summary: 'The agent toolkit can now be driven from OpenClaw, one more agent host that can hold a wallet.'
+    summary: 'The agent toolkit could be driven from OpenClaw, one more agent host that could hold a wallet. The toolkit was retired in October 2026.'
     quarter: 2026Q1
     status: done
-    modules: [wdk-mcp-toolkit]
+    modules: []
   - id: x402-support
     northStar: ecosystem
     label: x402 guide for WDK wallets
@@ -1647,7 +1638,7 @@ roadmap:
     label: Groundwork for the first external audit
     summary: 'Everything the auditors need before they start: scope, threat model, coverage and the fixes that cannot wait. The gate to 1.0.'
     quarter: 2026Q4
-    status: planned
+    status: wip
     priority: P0
   - id: kotlin-beta
     northStar: kit
@@ -1669,9 +1660,10 @@ roadmap:
   - id: bridge-usdt0-solana
     northStar: kit
     label: USD₮0 bridge from Solana
-    summary: Bridge USD₮0 out of Solana wallets, as the EVM module already does for Ethereum-like chains.
+    summary: Bridge USD₮0 out of Solana wallets, as the EVM module already does for Ethereum-like chains. Merged on 2 November 2026 and tagged 1.0.0-beta.1.
     quarter: 2026Q4
-    status: planned
+    status: done
+    priority: P1
     modules: [wdk-protocol-bridge-usdt0-solana]
   - id: repo-cleanup
     northStar: ecosystem
@@ -1680,19 +1672,19 @@ roadmap:
     quarter: 2026Q4
     status: done
     priority: P1
-  - id: publish-mcp-toolkit-npm
+  - id: one-mcp-server
     northStar: dx
-    label: Publish the MCP toolkit to npm
-    summary: The toolkit is in the repo and documented as installable, but npm only holds an empty placeholder since May 2026. Publish beta.1 so agents can actually use it.
+    label: One MCP server, the CLI's
+    summary: The plan to publish the standalone MCP toolkit to npm was dropped, and the toolkit was archived on 28 October 2026. WDK keeps one MCP server, the one in wdk-cli.
     quarter: 2026Q4
-    status: wip
+    status: done
     priority: P1
-    modules: [wdk-mcp-toolkit]
+    modules: [wdk-cli]
   - id: publish-swift-spm
     northStar: kit
     label: Publish the Swift core on Swift Package Manager
     partners: [Holepunch]
-    summary: Installable with one line in a Swift project from a Git URL and a tag. Phase 3 of the native roadmap (wdk-worklet-bundler#84), targeted for December. Needs tagged bare-kit-swift releases from Holepunch first; no Apple account required for the package itself.
+    summary: Installable with one line in a Swift project from a Git URL and a tag. Phase 3 of the native roadmap (wdk-worklet-bundler#84), targeted for December. Holepunch now tags bare-kit-swift releases; the setup automation is in review (wdk-core-swift#19). No Apple account required for the package itself.
     quarter: 2026Q4
     status: wip
     priority: P1
@@ -1771,8 +1763,8 @@ roadmap:
   - id: indexer-swagger
     northStar: dx
     label: Indexer API reference in the docs
-    summary: 'Publish the indexer API as a Swagger/OpenAPI reference on the docs site, so the open API has documentation to match. The service stays closed source; the API does not.'
+    summary: 'Publish the indexer API as a Swagger/OpenAPI reference on the docs site, so the open API has documentation to match. The service stays closed source; the API does not. A generated reference is in an open pull request (wdk-docs#313).'
     quarter: 2026Q4
-    status: planned
+    status: wip
     priority: P1
     modules: [wdk-indexer-http]
