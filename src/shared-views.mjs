@@ -62,10 +62,12 @@ export function createSharedViews(ctx) {
     const module = itemById(id);
     if (!module) return el("span", withTip({ class: "roadmap-module missing" }, "Not on the map", id), id);
     const status = (typeof ref === "string" ? null : ref.status) || null;
+    const title = module.title || module.name || id;
+    const tip = status === "done" ? "Done for this module" : status === "wip" ? "In progress for this module" : "";
     return el(
       "button",
-      { class: `roadmap-module${status ? " " + status : ""}`, type: "button", "data-id": id, "data-node": id, "aria-expanded": "false" },
-      module.title || module.name || id
+      withTip({ class: `roadmap-module${status ? " " + status : ""}`, type: "button", "data-id": id, "data-node": id, "aria-expanded": "false" }, tip, title),
+      title
     );
   }
 
