@@ -565,10 +565,10 @@ modules:
     section: core
     band: protocols
     kind: bridge
-    status: wip
+    status: shipped
     publisher: tetherto
     chains: [SOL]
-    summary: 'Move USD₮0 from a Solana wallet to another chain, the counterpart of the EVM bridge module. Merged and tagged 1.0.0-beta.1, but npm only holds an empty placeholder until that version is published.'
+    summary: 'Move USD₮0 from a Solana wallet to another chain, the counterpart of the EVM bridge module.'
     repo: https://github.com/tetherto/wdk-protocol-bridge-usdt0-solana
     relations:
       - { type: on, target: wdk-wallet-solana }
@@ -1629,7 +1629,7 @@ roadmap:
   - id: bridge-usdt0-solana
     northStar: kit
     label: USD₮0 bridge from Solana
-    summary: Bridge USD₮0 out of Solana wallets, as the EVM module already does for Ethereum-like chains. Merged on 2 November 2026 and tagged 1.0.0-beta.1.
+    summary: Bridge USD₮0 out of Solana wallets, as the EVM module already does for Ethereum-like chains. Published on npm as 1.0.0-beta.1 on 2 November 2026.
     quarter: 2026Q4
     status: done
     priority: P1
