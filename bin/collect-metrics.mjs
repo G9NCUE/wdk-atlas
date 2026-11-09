@@ -153,12 +153,16 @@ const ghAll = async (path) => {
 // The registry answers a burst of requests with 429 rather than with data. Collecting version
 // currency doubled the number of calls, so the retry is no longer optional: without it a run
 // fails on whichever package happened to be next, which looks like a missing package.
+// The pause doubles from two seconds to a minute. On 2026-11-09 two runs in a row were still
+// refused at the same package after the fifteen seconds this used to wait, while the same request
+// made from elsewhere was answered at once: the limit is on the runner, and it takes longer to lift.
 const npmJson = async (url, attempt = 0) => {
   const res = await fetch(url, { headers: { accept: "application/json" } });
   if (res.status === 404) return null;
-  if ((res.status === 429 || res.status >= 500) && attempt < 4) {
-    const wait = Number(res.headers.get("retry-after")) * 1000 || 1000 * 2 ** attempt;
-    await sleep(Math.min(wait, 20000));
+  if ((res.status === 429 || res.status >= 500) && attempt < 6) {
+    const wait = Math.min(Number(res.headers.get("retry-after")) * 1000 || 2000 * 2 ** attempt, 60000);
+    console.error(`collect-metrics: npm ${res.status} on ${url.split("/").pop()}; waiting ${Math.round(wait / 1000)}s`);
+    await sleep(wait);
     return npmJson(url, attempt + 1);
   }
   if (!res.ok) throw new Error(`npm ${res.status} on ${url}`);
@@ -177,7 +181,7 @@ function writeOut(file, third) {
 // Give up on one package rather than on the run. Used for the per-version call, the only one
 // made once per package on top of the rest and so the first to be rate limited.
 //
-// The retrying is npmJson's: five attempts with a widening pause. This used to add three more
+// The retrying is npmJson's: seven attempts with a widening pause. This used to add three more
 // rounds of those five on top, which by the time it ran meant the registry had already refused
 // a package fifteen times, and the comment here claimed the three tries were the whole of it.
 async function npmSoft(url) {
