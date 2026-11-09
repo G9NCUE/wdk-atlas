@@ -21,7 +21,7 @@ export default function createDashboardPage(ctx) {
   const { query, setUrlParams, atlas, onUrlChange, poster, unscoped, walletRepos, loadMetrics, loadThirdParty,
     readinessFact, SERIES, fmtNum, deltaPill, trendPill, defFor, defTip, statTile, lineChart,
     releaseMarks, groupedBars, hBars, exportControls, chartCard, dashSection, GRAINS, grain,
-    bucketKey, bucketLabel, coverageOf, seriesBuckets, lastTwo, snapshotSeries, coverageNote,
+    bucketKey, bucketLabel, coverageOf, seriesBuckets, lastTwo, snapshotSeries, coverageNote, gapNote, fmtLast, periodRows,
     splitInstalls, keyResultsOf, firstFullMonth, unit, renderThirdParty } = ctx;
 
   const SEL_KEY = "atlas:dash:repos";
@@ -82,7 +82,12 @@ export default function createDashboardPage(ctx) {
         boxes.set(n, box);
         const r = file.repos[n];
         const pkgLabel = unscoped(r.package);
-        return el("label", withTip({ class: "repo-row" }, n, r.title), box, el("span", { class: "repo-title" }, r.title), pkgLabel && pkgLabel !== r.title && el("span", { class: "repo-pkg" }, pkgLabel));
+        // Beside the label, not in it: a label may not hold a button.
+        const only = el("button", { type: "button", class: "linkish repo-only", "aria-label": `Show only ${r.title}` }, "only");
+        only.addEventListener("click", () => { for (const [name, b] of boxes) b.checked = name === n; apply(); });
+        return el("div", { class: "repo-line" },
+          el("label", withTip({ class: "repo-row" }, n, r.title), box, el("span", { class: "repo-title" }, r.title), pkgLabel && pkgLabel !== r.title && el("span", { class: "repo-pkg" }, pkgLabel)),
+          only);
       }))));
     const tools = el("div", { class: "repo-tools" },
       el("button", { type: "button", class: "linkish" }, "All"), el("button", { type: "button", class: "linkish" }, "None"), el("button", { type: "button", class: "linkish" }, "On the map only"));
@@ -163,7 +168,7 @@ export default function createDashboardPage(ctx) {
     // chart further down the page, where a count is context rather than a headline.
     const tiles = el("div", { class: "tiles" },
       latest.dependents != null && statTile(defFor("dependents"), "Projects depending on WDK", fmtNum(latest.dependents), el("span", { class: "delta none" }, "public repos outside the org"), "from GitHub code search"),
-      statTile(defFor("downloads"), `npm downloads, last full ${unit}`, dlLast.now == null ? "—" : fmtNum(dlLast.now), trendPill("downloads", dl), splitHint || (dlLast.key ? `${withPkg} packages` : coverageNote(dlCov))),
+      statTile(defFor("downloads"), `npm downloads, last full ${unit}`, fmtLast(dlLast), trendPill("downloads", dl), splitHint || (dlLast.key ? `${withPkg} packages` : coverageNote(dlCov))),
       currencyPct != null && statTile(defFor("version-currency"), "Version currency", `${currencyPct}%`,
         el("span", { class: "delta none" }, `${currencyRepos.length} packages`),
         `median ${medianShare}% per package`),
@@ -183,8 +188,8 @@ export default function createDashboardPage(ctx) {
     const series2 = (cats, a, b, ca, cb) => ({ ...exportMeta, columns: ["period", ca, cb], rows: cats.map((c, i) => [c, a[i], b[i]]) });
 
     const adoption = dashSection("Adoption & growth", [
-      chartCard(defFor("downloads"), `npm downloads per ${unit}`, fmtNum(dlLast.now), trendPill("downloads", dl), dl.length ? lineChart(dl, { marks: releaseMarks((r) => (file.releases || {})[r], selected, (r) => unscoped(file.repos[r] && file.repos[r].package) || r) }) : el("p", { class: "chart-foot" }, coverageNote(dlCov)), "Ticks mark releases. The current period is left out; npm reports late.",
-        { ...exportMeta, columns: ["period", "downloads"], rows: dl.map((p) => [p.key, p.y]) }),
+      chartCard(defFor("downloads"), `npm downloads per ${unit}`, fmtLast(dlLast), trendPill("downloads", dl), dl.length ? lineChart(dl, { marks: releaseMarks((r) => (file.releases || {})[r], selected, (r) => unscoped(file.repos[r] && file.repos[r].package) || r) }) : el("p", { class: "chart-foot" }, coverageNote(dlCov)), ["Ticks mark releases.", gapNote(dl), "The current period is left out; npm reports late."].filter(Boolean).join(" "),
+        { ...exportMeta, columns: ["period", "downloads", "note"], rows: periodRows(dl) }),
       chartCard(defFor("downloads-direct"), `Chosen installs by package, last full ${unit}`, fmtNum(chosenTotal), null, hBars(byPackage, { color: SERIES[1] }), "Top eight. A lower bound.",
         { ...exportMeta, columns: ["package", "title", "chosen installs, at least"], rows: byPackage.map((r) => [r.label, r.hint, r.value]) }),
       byCurrency.length ? chartCard(defFor("version-currency"), "Installs on the latest release, by package", currencyPct == null ? null : `${currencyPct}%`, null,

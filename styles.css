@@ -2448,6 +2448,13 @@
   .repo-row input { accent-color: var(--accent); margin: 0; }
   .repo-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .repo-pkg { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+  .repo-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+  .repo-only { font-size: 12px; }
+  /* Shown on the row under the pointer; always shown on touch screens. */
+  @media (hover: hover) {
+    .repo-only { opacity: 0; }
+    .repo-line:hover .repo-only, .repo-only:focus-visible { opacity: 1; }
+  }
 
   .tile-feeds { align-self: flex-start; font-size: 14px; line-height: 1; color: var(--secondary); text-decoration: none; }
   .tile-feeds:hover { color: var(--accent); text-decoration: underline; }

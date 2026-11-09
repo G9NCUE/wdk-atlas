@@ -38,11 +38,14 @@ export function createKeyResults(ctx) {
   // Chosen installs per repo for the last complete period: the download total minus whatever
   // another WDK package pinned. One copy, because the dashboard and the key result quoting
   // different numbers from the same data is exactly the fault this loop keeps finding.
+  // Attributed across every package, then narrowed to `repos`: an install another package
+  // pulled in stays pulled in whether or not that package is selected.
   function splitInstalls(file, repos) {
     const D = (file && file.daily) || {};
     const cov = coverageOf(D.downloads, file, false);
+    const packaged = Object.keys(file.repos || {}).filter((r) => file.repos[r].package);
     const withPackages = repos.filter((r) => file.repos[r] && file.repos[r].package);
-    const totals = Object.fromEntries(withPackages.map((r) => [r, lastTwo(seriesBuckets({ [r]: (D.downloads || {})[r] }, [r], { coverage: cov })).now || 0]));
+    const totals = Object.fromEntries(packaged.map((r) => [r, lastTwo(seriesBuckets({ [r]: (D.downloads || {})[r] }, [r], { coverage: cov })).now || 0]));
     const repoOfPackage = new Map(Object.entries(file.repos).map(([name, info]) => [info.package, name]));
     const edges = {};
     for (const [name, pkgs] of Object.entries(file.deps || {})) {

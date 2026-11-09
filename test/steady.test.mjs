@@ -3,7 +3,7 @@
 // a partial week at either end.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isoWeekOf, median, steadyWeekly, trendWeekly } from "../lib/steady.mjs";
+import { isoWeekOf, median, npmGaps, steadyWeekly, trendWeekly, weeklyTotals } from "../lib/steady.mjs";
 
 // Fourteen full ISO weeks, Monday 2026-06-01 to Sunday 2026-09-06, ten downloads a day.
 const series = {};
@@ -42,7 +42,7 @@ test("a package younger than the window is measured over the weeks it has, and s
   const young = {};
   for (let t = new Date("2026-08-24T00:00:00Z"); t <= new Date("2026-09-06T00:00:00Z"); t.setUTCDate(t.getUTCDate() + 1)) young[t.toISOString().slice(0, 10)] = 3;
   assert.deepEqual(steadyWeekly(young, "2026-09-06", "2026-08-24"), { median: 21, weeks: 2 });
-  assert.deepEqual(steadyWeekly(young, "2026-09-06", "2026-08-24", 1), { median: 21, weeks: 1 });
+  assert.deepEqual(steadyWeekly(young, "2026-09-06", "2026-08-24", { weeks: 1 }), { median: 21, weeks: 1 });
 });
 
 test("the trend is the mean of the last four complete weeks against the mean of the eight before", () => {
@@ -65,4 +65,25 @@ test("no complete week is null, not zero", () => {
 test("a quiet day inside a complete week counts as zero; the week stays and the median holds", () => {
   const gaps = { ...series }; delete gaps["2026-08-19"];
   assert.deepEqual(steadyWeekly(gaps, "2026-09-06", "2026-06-01"), { median: 70, weeks: 12 });
+});
+
+test("a day every package reads as zero between busy days is a day npm did not report", () => {
+  const a = { "2026-10-12": 3915, "2026-10-13": 0, "2026-10-14": 0, "2026-10-15": 5888 };
+  const b = { "2026-10-12": 482, "2026-10-13": 0, "2026-10-14": 0, "2026-10-15": 2356 };
+  assert.deepEqual(npmGaps({ a, b }), ["2026-10-13", "2026-10-14"]);
+  // One package at zero while another was downloaded is a quiet day for that package, not a gap.
+  assert.deepEqual(npmGaps({ a, b: { ...b, "2026-10-13": 4 } }), []);
+});
+
+test("zeros at launch, when the set gets a handful a day, are zeros", () => {
+  assert.deepEqual(npmGaps({ a: { "2025-09-26": 7, "2025-09-27": 0, "2025-09-28": 0, "2025-09-29": 5 } }), []);
+  assert.deepEqual(npmGaps({ a: { "2026-10-01": 0, "2026-10-02": 900 } }), [], "nothing before it to call it busy");
+  assert.deepEqual(npmGaps({}), []);
+});
+
+test("a week holding a day npm did not report is estimated from the days it did, not counted short", () => {
+  const holed = { ...series, "2026-08-19": 0 };
+  assert.ok(weeklyTotals(holed, "2026-09-06", "2026-06-01").includes(60), "read as a zero, the week comes up short");
+  assert.deepEqual(weeklyTotals(holed, "2026-09-06", "2026-06-01", ["2026-08-19"]), Array(14).fill(70));
+  assert.deepEqual(trendWeekly(holed, "2026-09-06", "2026-06-01", { gaps: ["2026-08-19"] }), { now: 70, before: 70, weeks: 14 });
 });

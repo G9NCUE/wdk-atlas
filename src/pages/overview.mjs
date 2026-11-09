@@ -15,7 +15,7 @@ export default function createOverviewPage(ctx) {
   use(ctx, createKeyResults);
 
   const { atlas, roadmapItems, privateModules, loadMetrics, readinessFact, fmtNum, deltaPill,
-    trendPill, defFor, countedTip, statTile, grain, coverageOf, seriesBuckets, keyResultsOf,
+    trendPill, defFor, countedTip, statTile, grain, coverageOf, seriesBuckets, lastTwo, fmtLast, keyResultsOf,
     krExplain, unit } = ctx;
 
   function briefItem(item) {
@@ -48,7 +48,7 @@ export default function createOverviewPage(ctx) {
     const people = new Set(all.flatMap((r) => (file.contributors || {})[r] || [])).size;
     return el("div", { class: "tiles brief-tiles" },
       latest.dependents != null && statTile(defFor("dependents"), "Projects depending on WDK", fmtNum(latest.dependents), null, "public repos outside the org"),
-      statTile(defFor("downloads"), `npm downloads, last full ${unit}`, dl.length ? fmtNum(dl[dl.length - 1].y) : "—", trendPill("downloads", dl), `${published.length} packages`),
+      statTile(defFor("downloads"), `npm downloads, last full ${unit}`, fmtLast(lastTwo(dl)), trendPill("downloads", dl), `${published.length} packages`),
       statTile(defFor("external-prs-merged"), `External pull requests merged, last 4 ${unit}s`, xM.length ? String(sum4(xM)) : "—", deltaPill("external-prs-merged", xM.length ? sum4(xM) : null, prev4(xM), { note: "vs prev 4" }), "Tether team excluded"),
       statTile(defFor("contributors"), "Contributors", String(people), null, "people with commits, bots excluded"),
       statTile(defFor("packages-published"), "Packages published", String(published.length), el("span", { class: "delta none" }, `${stable} stable · ${published.length - stable} in beta`), "on npm, first party"),

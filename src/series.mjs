@@ -3,7 +3,7 @@
 // The Dashboard and the Overview both draw from here, and the key results read the buckets.
 
 import { el, pct, svgEl, withTip } from "./dom.mjs";
-import { isoWeekOf } from "./../lib/steady.mjs";
+import { isoWeekOf, npmGaps } from "./../lib/steady.mjs";
 import { use } from "./context.mjs";
 import { metricDef, mayShowChange } from "./../lib/metrics-defs.mjs";
 import { metricCsv, metricJson, fileName } from "./../lib/export.mjs";
@@ -33,8 +33,9 @@ export function createSeries(ctx) {
   }
 
   // Trend against the average of the previous four periods, which is what a reader means by "is it up".
-  // Falls back to the previous period while fewer than five exist.
-  function trendPill(id, pts) {
+  // Falls back to the previous period while fewer than five exist. Unreported periods are skipped.
+  function trendPill(id, all) {
+    const pts = all.filter((p) => p.y != null);
     const short = { daily: "day", weekly: "wk", monthly: "mo" }[grain];
     if (pts.length >= 5) {
       const last = pts[pts.length - 1].y, base = pts.slice(-5, -1).reduce((a, p) => a + p.y, 0) / 4;
@@ -74,13 +75,16 @@ export function createSeries(ctx) {
   };
 
   // Inline SVG line chart, one series, hover titles on points, selective direct labels (first and last).
+  // A null point is a day npm left unreported: the line breaks there rather than dropping to zero.
+  // An estimated one is drawn hollow.
   function lineChart(points, { marks = null } = {}) {
     const W = 520, H = 190, px = 46, py = 22, color = SERIES[0];
-    const ys = points.map((p) => p.y);
-    const max = Math.max(...ys, 1), min = 0;
+    const shown = points.map((p, i) => (p.y == null ? -1 : i)).filter((i) => i >= 0);
+    const ends = new Set([shown[0], shown[shown.length - 1]]);
+    const max = Math.max(...shown.map((i) => points[i].y), 1), min = 0;
     const x = (i) => px + (i * (W - 2 * px)) / Math.max(points.length - 1, 1);
     const y = (v) => H - py - ((v - min) * (H - 2 * py)) / (max - min || 1);
-    const d = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.y).toFixed(1)}`).join(" ");
+    const d = shown.map((i, k) => `${k && shown[k - 1] === i - 1 ? "L" : "M"}${x(i).toFixed(1)},${y(points[i].y).toFixed(1)}`).join(" ");
 
     const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart", role: "img", "aria-label": "line chart" },
       [0, 0.5, 1].flatMap((t) => [
@@ -88,11 +92,11 @@ export function createSeries(ctx) {
         svgEl("text", { class: "axis", x: px - 6, y: (y(max * t) + 4).toFixed(1), "text-anchor": "end" }, fmtNum(Math.round(max * t))),
       ]),
       svgEl("path", { d, fill: "none", style: `stroke:${color}`, "stroke-width": 2, "stroke-linejoin": "round" }),
-      points.map((p, i) => svgEl("g", null,
-        svgEl("circle", { cx: x(i).toFixed(1), cy: y(p.y).toFixed(1), r: 4.5, style: `fill:${color}`, stroke: "var(--card)", "stroke-width": 2 }),
-        svgEl("title", null, `${p.label}: ${p.y.toLocaleString()}`))),
-      points.map((p, i) => (i === 0 || i === points.length - 1
-        ? svgEl("text", { class: "dlabel", x: x(i).toFixed(1), y: (y(p.y) - 10).toFixed(1), "text-anchor": "middle" }, fmtNum(p.y))
+      shown.map((i) => { const p = points[i], est = p.estimate; return svgEl("g", null,
+        svgEl("circle", { cx: x(i).toFixed(1), cy: y(p.y).toFixed(1), r: 4.5, style: est ? `fill:var(--card);stroke:${color}` : `fill:${color};stroke:var(--card)`, "stroke-width": 2 }),
+        svgEl("title", null, `${p.label}: ${est ? `about ${p.y.toLocaleString()}, estimated from the ${est.reported} of ${est.days} days npm reported` : p.y.toLocaleString()}`)); }),
+      shown.map((i) => (ends.has(i)
+        ? svgEl("text", { class: "dlabel", x: x(i).toFixed(1), y: (y(points[i].y) - 10).toFixed(1), "text-anchor": "middle" }, `${points[i].estimate ? "≈" : ""}${fmtNum(points[i].y)}`)
         : null)),
       points.map((p, i) => (labelEvery(points.length, i)
         ? svgEl("text", { class: "axis", x: x(i).toFixed(1), y: H - 2, "text-anchor": "middle" }, p.label)
@@ -226,24 +230,48 @@ export function createSeries(ctx) {
     return [monday.toISOString().slice(0, 10), sunday.toISOString().slice(0, 10)];
   }
 
-  // Days the data covers: downloads from their own first and last day; event series from the collector's window start to yesterday.
+  // Days the data covers: downloads from their own first and last day, plus the days npm left
+  // unreported across every package; event series from the collector's window start to yesterday.
   function coverageOf(perRepo, file, event) {
     const days = Object.values(perRepo || {}).flatMap((x) => Object.keys(x)).sort();
     const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
     if (event) return [file.since || days[0] || yesterday, yesterday];
-    return [days[0] || yesterday, days[days.length - 1] || yesterday];
+    return [days[0] || yesterday, days[days.length - 1] || yesterday, npmGaps(perRepo)];
   }
 
   // Sum a per-repo daily series over the selected repos into complete buckets of the current grain.
+  // A bucket holding days npm left unreported is the days it did report scaled to the whole
+  // period, and carries `estimate`; with none reported (a single day) it is null, a break.
   function seriesBuckets(perRepo, selected, { coverage }) {
     const sums = new Map();
     for (const repo of selected) for (const [d, n] of Object.entries((perRepo || {})[repo] || {})) sums.set(bucketKey(d), (sums.get(bucketKey(d)) || 0) + n);
+    const missing = new Map();
+    for (const d of coverage[2] || []) missing.set(bucketKey(d), (missing.get(bucketKey(d)) || 0) + 1);
     const now = todayKey();
     const complete = (k) => { if (k >= now) return false; const [a, b] = bucketRange(k); return a >= coverage[0] && b <= coverage[1]; };
-    return [...sums].filter(([k]) => complete(k)).sort().slice(-MAX_BUCKETS[grain]).map(([k, y]) => ({ key: k, label: bucketLabel(k), y }));
+    return [...sums].filter(([k]) => complete(k)).sort().slice(-MAX_BUCKETS[grain]).map(([k, y]) => {
+      const gone = missing.get(k);
+      if (!gone) return { key: k, label: bucketLabel(k), y };
+      const [a, b] = bucketRange(k), days = (Date.parse(b) - Date.parse(a)) / 864e5 + 1, reported = days - gone;
+      return { key: k, label: bucketLabel(k), y: reported ? Math.round((y * days) / reported) : null, estimate: { reported, days } };
+    });
   }
 
-  const lastTwo = (pts) => ({ now: pts.length ? pts[pts.length - 1].y : null, prev: pts.length > 1 ? pts[pts.length - 2].y : null, key: pts.length ? pts[pts.length - 1].key : null });
+  const gapNote = (pts) => [
+    pts.some((p) => p.estimate && p.y != null) && "Hollow points are estimates: npm left some days unreported.",
+    pts.some((p) => p.y == null) && "A break is a day npm has not reported.",
+  ].filter(Boolean).join(" ");
+
+  // A download series as export rows, with what a hollow point or a break says on screen.
+  const periodRows = (pts) => pts.map((p) => [p.key, p.y, !p.estimate ? "" : p.y == null ? "not reported by npm" : `estimated from ${p.estimate.reported} of ${p.estimate.days} days`]);
+
+  const lastTwo = (all) => {
+    const pts = all.filter((p) => p.y != null), last = pts[pts.length - 1];
+    return { now: last ? last.y : null, prev: pts.length > 1 ? pts[pts.length - 2].y : null, key: last ? last.key : null, estimate: Boolean(last && last.estimate) };
+  };
+
+  // The last reported period as a headline, marked when it is an estimate.
+  const fmtLast = (last) => (last.now == null ? "—" : `${last.estimate ? "≈" : ""}${fmtNum(last.now)}`);
 
   // Snapshot totals for the selection, per snapshot day; then bucketed as end-of-bucket values.
   function snapshotSeries(snapshots, field, selected, reduce = (vals) => vals.reduce((a, b) => a + b, 0)) {
@@ -280,7 +308,7 @@ export function createSeries(ctx) {
 
   return {
     firstFullMonth, unit, GRAINS, SERIES, bucketKey, bucketLabel, chartCard, countedTip, coverageNote, coverageOf,
-    dashSection, defFor, defTip, deltaPill, exportControls, fmtNum, grain, groupedBars, hBars,
-    lastTwo, lineChart, releaseMarks, seriesBuckets, snapshotSeries, statTile, trendPill,
+    dashSection, defFor, defTip, deltaPill, exportControls, fmtLast, fmtNum, gapNote, grain, groupedBars, hBars,
+    lastTwo, lineChart, periodRows, releaseMarks, seriesBuckets, snapshotSeries, statTile, trendPill,
   };
 }

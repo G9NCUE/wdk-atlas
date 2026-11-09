@@ -23,7 +23,7 @@ const COLUMNS = [
 export function createThirdParty(ctx) {
   use(ctx, createSeries);
   const { query, setUrlParams, fmtNum, defFor, trendPill, deltaPill, lineChart, hBars, chartCard, dashSection, exportControls,
-    coverageOf, seriesBuckets, lastTwo, coverageNote, releaseMarks, unit, SERIES } = ctx;
+    coverageOf, seriesBuckets, lastTwo, coverageNote, gapNote, fmtLast, periodRows, releaseMarks, unit, SERIES } = ctx;
 
   // Sort and filter live in the address, like the map's chain and search, so a view can be sent.
   const readSort = () => {
@@ -46,8 +46,8 @@ export function createThirdParty(ctx) {
     const inLast = (p) => (last.key ? (seriesBuckets({ [p]: perPkg[p] }, [p], { coverage: cov }).find((pt) => pt.key === last.key) || {}).y || 0 : null);
     const rows = names.map((p) => {
       const { title, publisher, repo, since, allTime, dependents, hostedByOrg } = packages[p];
-      const steady = steadyWeekly(perPkg[p], cov[1], since);
-      const trend = trendWeekly(perPkg[p], cov[1], since);
+      const steady = steadyWeekly(perPkg[p], cov[1], since, { gaps: cov[2] });
+      const trend = trendWeekly(perPkg[p], cov[1], since, { gaps: cov[2] });
       return { pkg: p, title, publisher, repo, since, hostedByOrg, median: steady.median, weeks: steady.weeks, trend, dependents, last: inLast(p), all: allTime };
     });
     const collected = String(third.updated || "").slice(0, 10);
@@ -129,9 +129,9 @@ export function createThirdParty(ctx) {
     const trendList = el("div", { class: "trend-list" }, rising.map(trendRow), fading.length && rising.length ? el("div", { class: "trend-gap" }) : null, fading.map(trendRow));
 
     return dashSection("Third-party packages", [
-      chartCard(defFor("third-party-downloads"), `npm downloads of third-party packages per ${unit}`, last.now == null ? "—" : fmtNum(last.now), trendPill("third-party-downloads", total),
-        total.length ? lineChart(total, { marks }) : el("p", { class: "chart-foot" }, coverageNote(cov)), null,
-        { ...exportMeta, columns: ["period", "downloads"], rows: total.map((p) => [p.key, p.y]) }),
+      chartCard(defFor("third-party-downloads"), `npm downloads of third-party packages per ${unit}`, fmtLast(last), trendPill("third-party-downloads", total),
+        total.length ? lineChart(total, { marks }) : el("p", { class: "chart-foot" }, coverageNote(cov)), gapNote(total) || null,
+        { ...exportMeta, columns: ["period", "downloads", "note"], rows: periodRows(total) }),
       chartCard(defFor("third-party-downloads"), `Most used: median weekly downloads, last ${STEADY_WEEKS} weeks`, null, null,
         byUse.length ? hBars(byUse, { color: SERIES[0] }) : el("p", { class: "chart-foot" }, "No complete week yet."), null,
         { ...exportMeta, columns: ["module", "publisher", "median weekly downloads"], rows: byUse.map((r) => [r.label, r.hint, r.value]) }),

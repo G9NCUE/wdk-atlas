@@ -92,7 +92,10 @@ const VENDOR = {
 // to monthly at 90 days. metrics.json measured 38 KB on 2026-09-26, projected 70 to 75 KB at full
 // retention with today's packages; the ceiling leaves room for a few more. Pages measured without
 // data: map 75.56, dev 73.96, overview 98.34, roadmap 101.77, results 96.83, dashboard 106.67.
-const BUDGET_KB = { map: 77, dev: 75, overview: 100, roadmap: 103, results: 98, dashboard: 108 };
+// 2026-11-09, +1 KB on the four pages that draw series: the days npm left unreported become
+// breaks or estimates, not zeros, and installs are attributed over every package. Measured
+// overview 100.15, roadmap 103.57, results 98.63, dashboard 108.61.
+const BUDGET_KB = { map: 77, dev: 75, overview: 101, roadmap: 104, results: 99, dashboard: 109 };
 const DATA_KB = { "data/metrics.json": 85, "data/summary.json": 1, "data/third-party.json": 15 };
 
 // ---------------------------------------------------------------- colour
