@@ -12,12 +12,11 @@
 // data/metrics.json, schema 3:
 //   repos:     { name: { title, module, package } }
 //   daily:     { downloads | prsOpened | prsMerged | externalPrsOpened | externalPrsMerged | issuesOpened | issuesClosed:
-//                { repo: { "YYYY-MM-DD": n } } }         rewritten for the last 30 days on every run, older days kept
+//                { repo: { "YYYY-MM-DD": n } } }         downloads and pull requests rewritten across the window
+//                                                         on every run; issues for the last 30 days, older days kept
 //              issueResponse: { repo: { "YYYY-MM-DD": [hours to first response, -1 if none yet] } }
 //              externalAuthorsOpened | externalAuthorsMerged: { repo: { "YYYY-MM-DD": { login: n } } }
 //   authors:   { login: GitHub's association label last seen }   external authors only
-//   team:      [sha256(login)…]   teammates seen by a run that could see membership; hashed so the public
-//              file names nobody's private membership, matched by hashing the login again
 //   snapshots: { "YYYY-MM-DD": { stars, forks, openIssues, openPrs, contributors: { repo: count }, published: [repo…],
 //                ci: { repo: conclusion of the last completed run on the default branch },
 //                health: { repo: GitHub community-profile percentage }, community: { repo: { readme, license, contributing, codeOfConduct } },
@@ -50,9 +49,9 @@
 // Who is a teammate: GitHub's author_association only says MEMBER when the token can see the org's
 // membership. The Actions token cannot (memberships in this org are mostly private), so with it every
 // teammate reads CONTRIBUTOR and lands in the external charts. The list in `audit.team` (atlas.yaml) is
-// the source of truth and is maintained by hand; no secret is needed for it. Two fallbacks remain for a
-// local run: the org member list when the token belongs to a member, and hashes remembered from runs
-// that could see.
+// the source of truth and is maintained by hand; no secret is needed for it. One fallback remains for a
+// local run: the org member list when the token belongs to a member. Nothing about teammates is
+// written to the file; a run that meets one missing from the roster says how many, never who.
 //
 // Stars, forks, contributors and open counts are snapshots, not history: GitHub's dated stargazer
 // list is closed to us. Probed 2026-09-07 — an Actions token gets 403 "Resource not accessible by
@@ -67,6 +66,7 @@ import { join, dirname } from "node:path";
 import { loadAtlas, ROOT } from "./lib/load-atlas.mjs";
 import { summarise } from "./lib/summary.mjs";
 import { measuredUnder, thirdPartyModules, repoParts, packageNameOf, trimDownloads, rangeChunks } from "./lib/packages.mjs";
+import { pullsSince } from "./lib/pulls.mjs";
 
 const OUT = join(ROOT, "data", "metrics.json");
 const SUMMARY_OUT = join(ROOT, "data", "summary.json");
@@ -413,21 +413,24 @@ try {
     const viewer = await gh(`/user/memberships/orgs/${ORG}`);
     if (viewer && viewer.state === "active") members = new Set((await ghAll(`/orgs/${ORG}/members`)).map((u) => u.login));
   } catch { members = null; }
-  // Teammates remembered from earlier runs live in file.team as hashes; older files carried plain labels, drop those.
-  const remembered = new Set(file.team || []);
-  for (const [login, label] of Object.entries(file.authors || {})) if (INTERNAL.has(label)) { remembered.add(hashLogin(login)); delete file.authors[login]; }
-  if (members) console.error(`collect-metrics: ${members.size} org members visible; teammate list is refreshed`);
-  else console.error(`collect-metrics: the token cannot list org members; ${remembered.size} teammates kept from earlier runs, ${team.size} from audit.team`);
-  const isInternal = (login, association) => team.has(login) || INTERNAL.has(association) || (members ? members.has(login) : remembered.has(hashLogin(login)));
+  // Older files carried teammates' labels among the authors; drop those.
+  for (const [login, label] of Object.entries(file.authors || {})) if (INTERNAL.has(label)) delete file.authors[login];
+  if (members) console.error(`collect-metrics: ${members.size} org members visible`);
+  else console.error(`collect-metrics: the token cannot list org members; ${team.size} teammates from audit.team`);
+  const isInternal = (login, association) => team.has(login) || INTERNAL.has(association) || Boolean(members && members.has(login));
   const external = (item) => Boolean(item.user && item.user.login) && !isBot(item.user.login) && !isInternal(item.user.login, item.author_association);
   const search = async (q) => (await ghAll(`/search/issues?q=${encodeURIComponent(`org:${ORG} ${q}`)}`)).filter(inScope);
   for (const i of await search("is:issue is:open")) snap.openIssues[repoOf(i)] = (snap.openIssues[repoOf(i)] || 0) + 1;
 
   for (const i of await search("is:pr is:open")) snap.openPrs[repoOf(i)] = (snap.openPrs[repoOf(i)] || 0) + 1;
 
-  // ---------------------------------------------------------------- GitHub daily series: last 30 days of PRs and issues, per repo
-  const prsOpened30 = await search(`is:pr created:>=${since30}`);
-  const prsMerged30 = await search(`is:pr is:merged merged:>=${since30}`);
+  // ---------------------------------------------------------------- GitHub daily series: PRs over the whole window, issues over 30 days, per repo
+  // Pull requests come from each repo's own list (bin/lib/pulls.mjs), read back to the first day
+  // the series cover, so every run rewrites their whole history. Issues are few enough for search.
+  const prFrom = [file.since || since30, new Date(Date.now() - SERIES_DAYS * 864e5).toISOString().slice(0, 10)].sort().pop();
+  const prs = await pullsSince(gh, ORG, wdkRepos.map((r) => r.name), prFrom);
+  const prsOpened = prs.filter((p) => day(p.created_at) >= prFrom);
+  const prsMerged = prs.filter((p) => day(p.pull_request.merged_at) >= prFrom);
   const issuesOpened30 = await search(`is:issue created:>=${since30}`);
   const issuesClosed30 = await search(`is:issue closed:>=${since30}`);
   // External authors per repo per day: { repo: { day: { login: count } } }, for opened and for merged.
@@ -435,26 +438,28 @@ try {
     const out = {};
     for (const i of items) {
       if (!external(i)) continue;
-      const d = day(key(i)); if (d < since30) continue;
+      const d = day(key(i)); if (d < prFrom) continue;
       const r = repoOf(i), l = i.user.login;
       out[r] = out[r] || {}; out[r][d] = out[r][d] || {}; out[r][d][l] = (out[r][d][l] || 0) + 1;
     }
     return out;
   };
-  // External authors keep GitHub's label for the dashboard hint; teammates go into the hashed team list.
+  // External authors keep GitHub's label for the dashboard hint. Teammates are written nowhere: a
+  // teammate the roster misses is only counted, so the log can say the roster needs a name.
   const authorLabel = {};
-  const teamSeen = new Set(remembered);
-  for (const i of [...prsOpened30, ...prsMerged30]) {
+  const offRoster = new Set();
+  for (const i of [...prsOpened, ...prsMerged]) {
     const login = i.user && i.user.login;
     if (!login || isBot(login)) continue;
-    if (isInternal(login, i.author_association)) teamSeen.add(hashLogin(login));
-    else authorLabel[login] = i.author_association;
+    if (!isInternal(login, i.author_association)) authorLabel[login] = i.author_association;
+    else if (!team.has(login)) offRoster.add(login);
   }
-  const bucket = (items, key, filter = () => true) => {
+  if (offRoster.size) console.error(`collect-metrics: ${offRoster.size} teammate(s) with pull requests are not on audit.team; add them in atlas.yaml so a run that cannot see membership still counts them as the team`);
+  const bucket = (items, key, filter = () => true, from = since30) => {
     const out = {};
     for (const i of items) {
       if (!filter(i)) continue;
-      const d = day(key(i)); if (d < since30) continue;
+      const d = day(key(i)); if (d < from) continue;
       const r = repoOf(i);
       out[r] = out[r] || {}; out[r][d] = (out[r][d] || 0) + 1;
     }
@@ -475,12 +480,12 @@ try {
   const daily = {
     downloads,
     issueResponse,
-    externalAuthorsOpened: byAuthor(prsOpened30, (i) => i.created_at),
-    externalAuthorsMerged: byAuthor(prsMerged30, (i) => i.pull_request && i.pull_request.merged_at),
-    prsOpened: bucket(prsOpened30, (i) => i.created_at),
-    prsMerged: bucket(prsMerged30, (i) => i.pull_request && i.pull_request.merged_at),
-    externalPrsOpened: bucket(prsOpened30, (i) => i.created_at, external),
-    externalPrsMerged: bucket(prsMerged30, (i) => i.pull_request && i.pull_request.merged_at, external),
+    externalAuthorsOpened: byAuthor(prsOpened, (i) => i.created_at),
+    externalAuthorsMerged: byAuthor(prsMerged, (i) => i.pull_request.merged_at),
+    prsOpened: bucket(prsOpened, (i) => i.created_at, undefined, prFrom),
+    prsMerged: bucket(prsMerged, (i) => i.pull_request.merged_at, undefined, prFrom),
+    externalPrsOpened: bucket(prsOpened, (i) => i.created_at, external, prFrom),
+    externalPrsMerged: bucket(prsMerged, (i) => i.pull_request.merged_at, external, prFrom),
     issuesOpened: bucket(issuesOpened30, (i) => i.created_at),
     issuesClosed: bucket(issuesClosed30, (i) => i.closed_at),
   };
@@ -488,8 +493,8 @@ try {
   // ---------------------------------------------------------------- merge into the file
   file.repos = repos;
   for (const [name, perRepo] of Object.entries(daily)) {
-    // downloads come back for the whole retention window, so the fetch is authoritative and replaces
-    if (name === "downloads") { file.daily.downloads = perRepo; continue; }
+    // Downloads and pull requests come back for the whole window, so the fetch is authoritative and replaces.
+    if (name === "downloads" || /^(prs|externalPrs|externalAuthors)/.test(name)) { file.daily[name] = perRepo; continue; }
     file.daily[name] = file.daily[name] || {};
     const allRepos = new Set([...Object.keys(file.daily[name]), ...Object.keys(perRepo)]);
     for (const repo of allRepos) {
@@ -542,10 +547,11 @@ try {
       if (!Object.keys(days).length) delete perRepo[repo];
     }
   }
-  // External authors: login -> GitHub's label, last seen. Teammates: hashes only, never a login.
+  // External authors: login -> GitHub's label, last seen. Teammates: nothing, not even a hash. The
+  // hashes this used to keep were every one a login already listed in plain text in audit.team.
   file.authors = { ...(file.authors || {}), ...authorLabel };
-  for (const h of teamSeen) for (const login of Object.keys(file.authors)) if (hashLogin(login) === h) delete file.authors[login];
-  file.team = [...teamSeen].sort();
+  for (const login of Object.keys(file.authors)) if (team.has(login) || offRoster.has(login)) delete file.authors[login];
+  delete file.team;
   file.updated = new Date().toISOString();
   if (DRY) console.log(JSON.stringify({ repos: Object.keys(repos).length, snapshot: snap, thirdParty: { packages: Object.keys(third.packages), unmeasured: third.unmeasured } }, null, 2));
   else {

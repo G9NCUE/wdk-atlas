@@ -17,7 +17,7 @@ export function createKeyResults(ctx) {
   use(ctx, createSeries);
 
   const { dataUrl, atlas, metrics, orgName, privateModules, walletRepos, examplesRepoUrl,
-    publishedRepos, latestSnapshot, readinessFact, coverageOf, seriesBuckets, lastTwo } = ctx;
+    publishedRepos, latestSnapshot, readinessFact, coverageOf, seriesBuckets, lastTwo, lastWholeDay } = ctx;
 
   // A link to the very file the page fetched. dataUrl gives an absolute address, and the link
   // allow-list refuses plain http, so a same-origin address is handed over as a path: the link
@@ -111,9 +111,11 @@ export function createKeyResults(ctx) {
     if (m.kind === "seriesTotal") {
       // A count over a rolling window, where a percentage would have said more about the size of
       // the base than about the work. The window is half open, like every other range here.
+      // Ends on the last whole day collected, so an old file does not read as quiet days.
       const days = Math.max(1, Number(m.days) || 30);
-      const to = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
-      const from = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
+      const end = Date.parse(lastWholeDay(metrics()));
+      const to = new Date(end + 864e5).toISOString().slice(0, 10);
+      const from = new Date(end - (days - 1) * 864e5).toISOString().slice(0, 10);
       const total = sumSeries(D[m.series], from, to);
       out.origin = originFor(m, originContext(null));
       Object.assign(out, { current: total, target: m.target, progress: m.target ? Math.min(100, Math.round((100 * total) / m.target)) : null,

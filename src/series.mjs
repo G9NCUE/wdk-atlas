@@ -67,11 +67,12 @@ export function createSeries(ctx) {
   }
 
   // Which category labels an axis draws: the last, and enough of the rest to read without
-  // overlapping. A month label ("Sep 25") is twice the width of a week's ("W37"), so the monthly
-  // axis keeps five where the others keep eight; twelve months at full width ran into each other.
+  // overlapping, none crowding the last. A month label ("Sep 25") is twice the width of a week's
+  // ("W37"), so the monthly axis keeps five where the others keep eight.
   const labelEvery = (n, i) => {
     const [all, room] = grain === "monthly" ? [5, 5] : [12, 8];
-    return n <= all || i === n - 1 || i % Math.ceil(n / room) === 0;
+    const step = Math.ceil(n / room);
+    return n <= all || i === n - 1 || (i % step === 0 && n - 1 - i >= step / 2);
   };
 
   // Inline SVG line chart, one series, hover titles on points, selective direct labels (first and last).
@@ -96,7 +97,7 @@ export function createSeries(ctx) {
         svgEl("circle", { cx: x(i).toFixed(1), cy: y(p.y).toFixed(1), r: 4.5, style: est ? `fill:var(--card);stroke:${color}` : `fill:${color};stroke:var(--card)`, "stroke-width": 2 }),
         svgEl("title", null, `${p.label}: ${est ? `about ${p.y.toLocaleString()}, estimated from the ${est.reported} of ${est.days} days npm reported` : p.y.toLocaleString()}`)); }),
       shown.map((i) => (ends.has(i)
-        ? svgEl("text", { class: "dlabel", x: x(i).toFixed(1), y: (y(points[i].y) - 10).toFixed(1), "text-anchor": "middle" }, `${points[i].estimate ? "≈" : ""}${fmtNum(points[i].y)}`)
+        ? svgEl("text", { class: "dlabel", x: x(i).toFixed(1), y: (y(points[i].y) - 10).toFixed(1), "text-anchor": ends.size < 2 ? "middle" : i === shown[0] ? "start" : "end" }, `${points[i].estimate ? "≈" : ""}${fmtNum(points[i].y)}`)
         : null)),
       points.map((p, i) => (labelEvery(points.length, i)
         ? svgEl("text", { class: "axis", x: x(i).toFixed(1), y: H - 2, "text-anchor": "middle" }, p.label)
@@ -231,19 +232,23 @@ export function createSeries(ctx) {
   }
 
   // Days the data covers: downloads from their own first and last day, plus the days npm left
-  // unreported across every package; event series from the collector's window start to yesterday.
+  // unreported across every package; event series from the window start to the last whole day collected.
   function coverageOf(perRepo, file, event) {
     const days = Object.values(perRepo || {}).flatMap((x) => Object.keys(x)).sort();
     const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
-    if (event) return [file.since || days[0] || yesterday, yesterday];
+    if (event) return [file.since || days[0] || yesterday, [yesterday, lastWholeDay(file)].sort()[0]];
     return [days[0] || yesterday, days[days.length - 1] || yesterday, npmGaps(perRepo)];
   }
+
+  const lastWholeDay = (file) => new Date(new Date(file.updated || Date.now()).getTime() - 864e5).toISOString().slice(0, 10);
 
   // Sum a per-repo daily series over the selected repos into complete buckets of the current grain.
   // A bucket holding days npm left unreported is the days it did report scaled to the whole
   // period, and carries `estimate`; with none reported (a single day) it is null, a break.
-  function seriesBuckets(perRepo, selected, { coverage }) {
+  // With `fill` a quiet period reads zero: event series store only the days something happened.
+  function seriesBuckets(perRepo, selected, { coverage, fill = false }) {
     const sums = new Map();
+    if (fill) for (let t = Date.parse(coverage[0]); t <= Date.parse(coverage[1]); t += 864e5) sums.set(bucketKey(new Date(t).toISOString().slice(0, 10)), 0);
     for (const repo of selected) for (const [d, n] of Object.entries((perRepo || {})[repo] || {})) sums.set(bucketKey(d), (sums.get(bucketKey(d)) || 0) + n);
     const missing = new Map();
     for (const d of coverage[2] || []) missing.set(bucketKey(d), (missing.get(bucketKey(d)) || 0) + 1);
@@ -309,6 +314,6 @@ export function createSeries(ctx) {
   return {
     firstFullMonth, unit, GRAINS, SERIES, bucketKey, bucketLabel, chartCard, countedTip, coverageNote, coverageOf,
     dashSection, defFor, defTip, deltaPill, exportControls, fmtLast, fmtNum, gapNote, grain, groupedBars, hBars,
-    lastTwo, lineChart, periodRows, releaseMarks, seriesBuckets, snapshotSeries, statTile, trendPill,
+    lastTwo, lastWholeDay, lineChart, periodRows, releaseMarks, seriesBuckets, snapshotSeries, statTile, trendPill,
   };
 }

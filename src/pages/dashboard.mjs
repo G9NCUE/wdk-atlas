@@ -109,7 +109,7 @@ export default function createDashboardPage(ctx) {
     const D = file.daily || {};
     const dlCov = coverageOf(D.downloads, file, false), evCov = coverageOf(D.prsOpened, file, true);
     const dl = seriesBuckets(D.downloads, selected, { coverage: dlCov });
-    const ev = (series) => seriesBuckets(series, selected, { coverage: evCov });
+    const ev = (series) => seriesBuckets(series, selected, { coverage: evCov, fill: true });
     const prsO = ev(D.prsOpened), prsM = ev(D.prsMerged);
     const xO = ev(D.externalPrsOpened), xM = ev(D.externalPrsMerged);
     const isO = ev(D.issuesOpened), isC = ev(D.issuesClosed);
@@ -148,7 +148,8 @@ export default function createDashboardPage(ctx) {
     const currencyRepos = withPackages.filter((r) => typeof onLatest[r] === "number");
     const currencyPct = weightedCurrency(onLatest, Object.fromEntries(withPackages.map((r) => [r, Math.max(partOf(r, "direct"), 0)])));
     const medianShare = median(currencyRepos.map((r) => onLatest[r]));
-    const byCurrency = currencyRepos
+    // Only packages someone chose: one installed only through our pins says where the pins point.
+    const byCurrency = currencyRepos.filter((r) => partOf(r, "direct") > 0)
       .map((r) => ({ label: unscoped(file.repos[r].package), value: onLatest[r] }))
       .sort((a, b) => a.value - b.value).slice(0, 8);
 
@@ -193,12 +194,10 @@ export default function createDashboardPage(ctx) {
       chartCard(defFor("downloads-direct"), `Chosen installs by package, last full ${unit}`, fmtNum(chosenTotal), null, hBars(byPackage, { color: SERIES[1] }), "Top eight. A lower bound.",
         { ...exportMeta, columns: ["package", "title", "chosen installs, at least"], rows: byPackage.map((r) => [r.label, r.hint, r.value]) }),
       byCurrency.length ? chartCard(defFor("version-currency"), "Installs on the latest release, by package", currencyPct == null ? null : `${currencyPct}%`, null,
-        hBars(byCurrency, { color: SERIES[0], unit: "%", scale: 100 }), "The eight furthest behind.",
+        hBars(byCurrency, { color: SERIES[0], unit: "%", scale: 100 }), "Of the packages people chose, the eight furthest behind.",
         { ...exportMeta, columns: ["package", "share of installs on the latest release"], rows: byCurrency.map((r) => [r.label, r.value]) }) : null,
       byInduced.length ? chartCard(defFor("downloads-induced"), `Pulled in as a dependency, last full ${unit}`, fmtNum(inducedTotal), null, hBars(byInduced, { color: SERIES[2] }), "Top eight. An upper bound.",
         { ...exportMeta, columns: ["package", "title", "pulled in, at most"], rows: byInduced.map((r) => [r.label, r.hint, r.value]) }) : null,
-      chartCard(defFor("stars"), "Stars by repository", fmtNum(sum(latest.stars)), null, hBars(byStars, { color: SERIES[2] }), "Top eight of the selection.",
-        { ...exportMeta, columns: ["repo", "title", "stars"], rows: byStars.map((r) => [r.label, r.hint, r.value]) }),
     ]);
     // External contributors over the same complete periods the pull request charts show.
     const windowKeys = new Set([...prsO, ...prsM].map((p) => p.key));
@@ -212,7 +211,9 @@ export default function createDashboardPage(ctx) {
       chartCard(defFor("external-authors"), `External contributors, ${windowLabel}`, String(Object.keys(authors).length), null, topAuthors.length ? hBars(topAuthors, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, windowKeys.size ? "No external pull requests in the window." : coverageNote(evCov)), "Top five by pull requests opened.",
         { ...exportMeta, columns: ["author", "detail", "pull requests opened"], rows: topAuthors.map((r) => [r.label, r.hint, r.value]) }),
       chartCard(defFor("prs-flow"), `Pull requests per ${unit}`, lastTwo(prsO).now == null ? "—" : String(lastTwo(prsO).now), null, pr.cats.length ? groupedBars(pr.cats, [{ label: "Opened", values: pr.a }, { label: "Merged", values: pr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Complete periods only.", series2(pr.cats, pr.a, pr.b, "opened", "merged")),
-      chartCard(defFor("external-prs-merged"), `External pull requests per ${unit}`, lastTwo(xO).now == null ? "—" : String(lastTwo(xO).now), null, xpr.cats.length ? groupedBars(xpr.cats, [{ label: "Opened", values: xpr.a }, { label: "Merged", values: xpr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Authors outside the org.", series2(xpr.cats, xpr.a, xpr.b, "opened", "merged")),
+      chartCard(defFor("external-prs-merged"), `External pull requests per ${unit}`, lastTwo(xM).now == null ? "—" : String(lastTwo(xM).now), null, xpr.cats.length ? groupedBars(xpr.cats, [{ label: "Opened", values: xpr.a }, { label: "Merged", values: xpr.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Authors outside the org.", series2(xpr.cats, xpr.a, xpr.b, "opened", "merged")),
+      chartCard(defFor("stars"), "Stars by repository", fmtNum(sum(latest.stars)), null, hBars(byStars, { color: SERIES[2] }), "Top eight of the selection.",
+        { ...exportMeta, columns: ["repo", "title", "stars"], rows: byStars.map((r) => [r.label, r.hint, r.value]) }),
     ]);
     const support = dashSection("Support & responsiveness", [
       chartCard(defFor("issues-flow"), `Issues opened and closed per ${unit}`, String(sum(latest.openIssues)), deltaPill("open-issues", lastTwo(backlogSeries).now, lastTwo(backlogSeries).prev, { invert: true }), iss.cats.length ? groupedBars(iss.cats, [{ label: "Opened", values: iss.a }, { label: "Closed", values: iss.b }]) : el("p", { class: "chart-foot" }, coverageNote(evCov)), "Headline is today's backlog.", series2(iss.cats, iss.a, iss.b, "opened", "closed")),

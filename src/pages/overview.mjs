@@ -41,7 +41,7 @@ export default function createOverviewPage(ctx) {
     const snaps = file.snapshots || {}; const snapDays = Object.keys(snaps).sort(); const latest = snaps[snapDays[snapDays.length - 1]] || {};
     const D = file.daily || {};
     const dl = seriesBuckets(D.downloads, all, { coverage: coverageOf(D.downloads, file, false) });
-    const xM = seriesBuckets(D.externalPrsMerged, all, { coverage: coverageOf(D.prsOpened, file, true) });
+    const xM = seriesBuckets(D.externalPrsMerged, all, { coverage: coverageOf(D.prsOpened, file, true), fill: true });
     const sum4 = (pts) => pts.slice(-4).reduce((a, p) => a + p.y, 0);
     const prev4 = (pts) => (pts.length >= 8 ? pts.slice(-8, -4).reduce((a, p) => a + p.y, 0) : null);
     const published = all.filter((r) => file.repos[r].version), stable = published.filter((r) => readinessFact("stable", r, latest)).length;
