@@ -25,13 +25,14 @@
 //                health: { repo: GitHub community-profile percentage }, community: { repo: { readme, license, contributing, codeOfConduct } },
 //                audits: { repo: true when an audit folder or file sits at the repo root },
 //                signer: { repo: true when the code references ISigner }   (code search; absent when the token cannot search)
-//                examples: number of example folders in the examples repo, dependents: repos outside the org that depend on a WDK package } }
+//                examples: number of example folders in the examples repo, dependents: repos outside the org that depend on a WDK package,
+//                WDK modules' own left out from 2026-11-10 } }
 //   contributors: { repo: [sha256(login)…] }   current, kept once; hashed, see the collector
 //   owners: { repo: [handle…] }        from CODEOWNERS, current, kept once
 //   releases: { repo: { "YYYY-MM-DD": version } }   npm publish dates inside the retention window, rewritten each run
-//   adopters:  { measured, projects, building, organisations, cohorts: { "YYYY-MM": [started, building] }, packages: { name: n },
+//   adopters:  { measured, projects, modules, building, organisations, cohorts: { "YYYY-MM": [started, building] }, packages: { name: n },
 //                repos: [ { repo, created, pushed, stars, org, packages } ] }   the public projects behind `dependents`,
-//              teammates' own left out, only those still building named (bin/lib/census.mjs);
+//              teammates' own left out, WDK modules' own only counted, only those still building named (bin/lib/census.mjs);
 //              kept from the last run when code search cannot be made
 //   atlasUpdated: last commit touching atlas.yaml, from git
 //   since: first day the event series cover
@@ -452,8 +453,10 @@ try {
     try {
       // A WDK package is one of the org's whose name fits the repo pattern, published here or not.
       const isWdk = (name) => name.startsWith(`@${ORG}/`) && REPO_PATTERN.test(name.slice(ORG.length + 2));
+      // A module the map shows is one whatever its package is called.
+      const catalogued = new Set((atlas.modules || []).map((m) => repoParts(m.repo)).filter(Boolean).map((r) => `${r.owner}/${r.name}`.toLowerCase()));
       // A teammate's own repository is the team's work, not somebody else's adoption.
-      const outside = (await profile(graphql, dependents, isWdk)).filter((r) => !isInternal(r.repo.split("/")[0]));
+      const outside = (await profile(graphql, dependents, isWdk, catalogued)).filter((r) => !isInternal(r.repo.split("/")[0]));
       file.adopters = tally(outside, today);
       snap.dependents = file.adopters.projects;
     } catch (e) { console.error(`collect-metrics: census failed, last one kept: ${e.message}`); }

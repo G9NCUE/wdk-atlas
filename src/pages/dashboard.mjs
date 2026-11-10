@@ -237,7 +237,7 @@ export default function createDashboardPage(ctx) {
     return dashSection("Projects building on WDK", [
       chartCard(defFor("dependents-active"), "Projects started and still building, by month", String(c.building), null,
         groupedBars(months.map(short), [{ label: "Started", values: counts.map((v) => v[0]) }, { label: "Still building", values: counts.map((v) => v[1]) }]),
-        `${c.organisations} of those still building belong to organisations. ${earlier} started before ${short(months[0])} ${months[0].slice(0, 4)}. Public GitHub only.`,
+        `${c.organisations} of those still building belong to organisations. ${earlier} started before ${short(months[0])} ${months[0].slice(0, 4)}. ${c.modules ? `${c.modules} WDK modules' own repositories left out. ` : ""}Public GitHub only.`,
         { ...meta, columns: ["month", "started", "still building"], rows: months.map((k, i) => [k, ...counts[i]]) }),
       chartCard(defFor("dependents"), "Packages public projects use", fmtNum(c.projects), null, hBars(top, { color: SERIES[1] }),
         "Projects naming each package, top eight. A project can name several.",
@@ -261,7 +261,7 @@ export default function createDashboardPage(ctx) {
       el("summary", { class: "repo-panel-summary" }, "Every project still building ", el("span", { class: "view-count" }, String(repos.length))),
       el("div", { class: "ready-tools" }, exportControls(defFor("dependents-active"), data)),
       table,
-      el("p", { class: "chart-foot" }, "Named as GitHub lists them, not reviewed or endorsed. Most recently pushed first; teammates' own repositories left out."));
+      el("p", { class: "chart-foot" }, "Named as GitHub lists them, not reviewed or endorsed. Most recently pushed first; teammates' repositories and WDK modules' own left out."));
   }
 
   // Release readiness: the facts behind the "production-grade kit" key results, one row per published package.
