@@ -242,7 +242,26 @@ export default function createDashboardPage(ctx) {
       chartCard(defFor("dependents"), "Packages public projects use", fmtNum(c.projects), null, hBars(top, { color: SERIES[1] }),
         "Projects naming each package, top eight. A project can name several.",
         { ...meta, columns: ["package", "projects"], rows: Object.entries(c.packages) }),
+      c.repos && renderProjectList(c.repos, meta),
     ]);
+  }
+
+  // The projects still building, by name, as GitHub lists them. A link here is not a recommendation:
+  // anything public can name a package, and the foot says so.
+  function renderProjectList(repos, meta) {
+    const columns = ["project", "owner", "stars", "started", "last push", "packages"];
+    const rows = repos.map((r) => [r.repo, r.org ? "organisation" : "person", r.stars, r.created, r.pushed, r.packages.map(unscoped).join(" ")]);
+    const data = { ...meta, title: "Projects still building on WDK", columns, rows };
+    const table = el("div", { class: "table-wrap" }, el("table", { class: "ready" },
+      el("thead", null, el("tr", null, columns.map((h) => el("th", null, h[0].toUpperCase() + h.slice(1))))),
+      el("tbody", null, rows.map(([repo, ...rest]) => el("tr", null,
+        el("td", null, el("a", { href: `https://github.com/${repo}`, rel: "nofollow noopener" }, repo)),
+        rest.map((v, i) => el("td", { class: i ? "mono" : null }, i === 1 ? fmtNum(v) : v)))))));
+    return el("details", { class: "ready-card table-fold" },
+      el("summary", { class: "repo-panel-summary" }, "Every project still building ", el("span", { class: "view-count" }, String(repos.length))),
+      el("div", { class: "ready-tools" }, exportControls(defFor("dependents-active"), data)),
+      table,
+      el("p", { class: "chart-foot" }, "Named as GitHub lists them, not reviewed or endorsed. Most recently pushed first; teammates' own repositories left out."));
   }
 
   // Release readiness: the facts behind the "production-grade kit" key results, one row per published package.

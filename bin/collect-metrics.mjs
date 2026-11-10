@@ -29,8 +29,9 @@
 //   contributors: { repo: [sha256(login)…] }   current, kept once; hashed, see the collector
 //   owners: { repo: [handle…] }        from CODEOWNERS, current, kept once
 //   releases: { repo: { "YYYY-MM-DD": version } }   npm publish dates inside the retention window, rewritten each run
-//   adopters:  { measured, projects, building, organisations, cohorts: { "YYYY-MM": [started, building] }, packages: { name: n } }
-//              the public projects behind `dependents`, counted and never named (bin/lib/census.mjs);
+//   adopters:  { measured, projects, building, organisations, cohorts: { "YYYY-MM": [started, building] }, packages: { name: n },
+//                repos: [ { repo, created, pushed, stars, org, packages } ] }   the public projects behind `dependents`,
+//              teammates' own left out, only those still building named (bin/lib/census.mjs);
 //              kept from the last run when code search cannot be made
 //   atlasUpdated: last commit touching atlas.yaml, from git
 //   since: first day the event series cover
@@ -418,16 +419,6 @@ try {
   else console.error("collect-metrics: code search unavailable with this token; signer coverage not measured");
   await sleep(6500);
   const dependents = await codeSearch(`"@${ORG}/wdk" filename:package.json -org:${ORG}`);
-  // The census reads the repositories the search found. Its count replaces the search's, which also
-  // took in manifests that mention a package without depending on it (10 of 232 on 2026-11-09).
-  if (dependents) {
-    try {
-      // A WDK package is one of the org's whose name fits the repo pattern, published here or not.
-      const isWdk = (name) => name.startsWith(`@${ORG}/`) && REPO_PATTERN.test(name.slice(ORG.length + 2));
-      file.adopters = tally(await profile(graphql, dependents, isWdk), today);
-      snap.dependents = file.adopters.projects;
-    } catch (e) { console.error(`collect-metrics: census failed, last one kept: ${e.message}`); }
-  }
   // The same question per third-party package, with the same answer shape as the first-party
   // one: public repos outside the org whose manifest names it, the package's own repo left out
   // too. One search per package at ten a minute, so this is the slow part of the run.
@@ -455,6 +446,18 @@ try {
   if (members) console.error(`collect-metrics: ${members.size} org members visible`);
   else console.error(`collect-metrics: the token cannot list org members; ${team.size} teammates from TEAM`);
   const isInternal = (login, association) => team.has(login) || INTERNAL.has(association) || Boolean(members && members.has(login));
+  // The census reads the repositories the search found. Its count replaces the search's, which also
+  // took in manifests that mention a package without depending on it (10 of 232 on 2026-11-09).
+  if (dependents) {
+    try {
+      // A WDK package is one of the org's whose name fits the repo pattern, published here or not.
+      const isWdk = (name) => name.startsWith(`@${ORG}/`) && REPO_PATTERN.test(name.slice(ORG.length + 2));
+      // A teammate's own repository is the team's work, not somebody else's adoption.
+      const outside = (await profile(graphql, dependents, isWdk)).filter((r) => !isInternal(r.repo.split("/")[0]));
+      file.adopters = tally(outside, today);
+      snap.dependents = file.adopters.projects;
+    } catch (e) { console.error(`collect-metrics: census failed, last one kept: ${e.message}`); }
+  }
   const external = (item) => Boolean(item.user && item.user.login) && !isBot(item.user.login) && !isInternal(item.user.login, item.author_association);
   const search = async (q) => (await ghAll(`/search/issues?q=${encodeURIComponent(`org:${ORG} ${q}`)}`)).filter(inScope);
   for (const i of await search("is:issue is:open")) snap.openIssues[repoOf(i)] = (snap.openIssues[repoOf(i)] || 0) + 1;
