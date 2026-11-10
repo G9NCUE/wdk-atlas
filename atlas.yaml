@@ -522,6 +522,24 @@ modules:
     relations:
       - { type: under, target: wdk-wallet-btc }
 
+  - id: wdk-wallet-evm-hinkal
+    name: wdk-wallet-evm-hinkal
+    title: Ethereum, private sends (Hinkal)
+    short: Private sends
+    section: core
+    band: wallets
+    kind: layer
+    status: shipped
+    publisher: Hinkal
+    chains: [EVM]
+    summary: 'Ethereum wallets that can send tokens privately through Hinkal, a privacy protocol that shields transfers on chain: the funds go in at once and reach the recipient in a later step. Built by Hinkal on the kit''s Ethereum wallet; every usual command still works.'
+    notes:
+      - Not maintained by Tether
+    repo: https://github.com/Hinkal-Protocol/wdk-wallet-evm-hinkal
+    relations:
+      - { type: under, target: wdk-wallet-evm }
+      - { type: requires, target: wdk-wallet-evm }
+
   - id: wdk-protocol-swap-velora-evm
     name: wdk-protocol-swap-velora-evm
     title: Swap via Velora
