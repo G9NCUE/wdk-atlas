@@ -168,7 +168,7 @@ export default function createDashboardPage(ctx) {
     // the open-issue level were demoted by the review and removed by the PM. Both keep their
     // chart further down the page, where a count is context rather than a headline.
     const tiles = el("div", { class: "tiles" },
-      latest.dependents != null && statTile(defFor("dependents"), "Projects depending on WDK", fmtNum(latest.dependents), el("span", { class: "delta none" }, "public repos outside the org"), "from GitHub code search"),
+      file.adopters && statTile(defFor("dependents"), "Projects depending on WDK", fmtNum(file.adopters.projects), el("span", { class: "delta none" }, `${file.adopters.building} still building`), `public repos, counted ${file.adopters.measured}`),
       statTile(defFor("downloads"), `npm downloads, last full ${unit}`, fmtLast(dlLast), trendPill("downloads", dl), splitHint || (dlLast.key ? `${withPkg} packages` : coverageNote(dlCov))),
       currencyPct != null && statTile(defFor("version-currency"), "Version currency", `${currencyPct}%`,
         el("span", { class: "delta none" }, `${currencyRepos.length} packages`),
@@ -220,7 +220,29 @@ export default function createDashboardPage(ctx) {
     ]);
     const readiness = renderReadiness(file, selected, latest);
     const note = el("p", { class: "dash-note" }, `${selected.length} of ${Object.keys(file.repos).length} public WDK repos · npm and GitHub only · collected ${String(file.updated).slice(0, 10)} · snapshots since ${snapDays[0]}`);
-    return [tiles, adoption, renderThirdParty(third), community, support, readiness, note];
+    return [tiles, adoption, file.adopters && renderProjects(file.adopters), renderThirdParty(third), community, support, readiness, note];
+  }
+
+  // The public projects behind the dependents count, from the census the collector keeps
+  // (bin/lib/census.mjs): counts only, and all of WDK whatever the selection. A month is the one
+  // the project's repository was created in, and only whole months are drawn, like every other chart.
+  function renderProjects(c) {
+    const [y, m] = c.measured.split("-").map(Number);
+    const months = Array.from({ length: 12 }, (_, i) => new Date(Date.UTC(y, m - 13 + i, 1)).toISOString().slice(0, 7));
+    const counts = months.map((k) => c.cohorts[k] || [0, 0]);
+    const earlier = Object.entries(c.cohorts).filter(([k]) => k < months[0]).reduce((n, [, v]) => n + v[0], 0);
+    const short = (k) => new Date(`${k}-01T00:00:00Z`).toLocaleDateString("en", { month: "short", timeZone: "UTC" });
+    const top = Object.entries(c.packages).slice(0, 8).map(([name, n]) => ({ label: unscoped(name), value: n }));
+    const meta = { collected: c.measured, scope: "public repositories outside the org, all of WDK" };
+    return dashSection("Projects building on WDK", [
+      chartCard(defFor("dependents-active"), "Projects started and still building, by month", String(c.building), null,
+        groupedBars(months.map(short), [{ label: "Started", values: counts.map((v) => v[0]) }, { label: "Still building", values: counts.map((v) => v[1]) }]),
+        `${c.organisations} of those still building belong to organisations. ${earlier} started before ${short(months[0])} ${months[0].slice(0, 4)}. Public GitHub only.`,
+        { ...meta, columns: ["month", "started", "still building"], rows: months.map((k, i) => [k, ...counts[i]]) }),
+      chartCard(defFor("dependents"), "Packages public projects use", fmtNum(c.projects), null, hBars(top, { color: SERIES[1] }),
+        "Projects naming each package, top eight. A project can name several.",
+        { ...meta, columns: ["package", "projects"], rows: Object.entries(c.packages) }),
+    ]);
   }
 
   // Release readiness: the facts behind the "production-grade kit" key results, one row per published package.

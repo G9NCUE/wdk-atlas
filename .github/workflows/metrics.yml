@@ -30,9 +30,11 @@ jobs:
           node-version: 22
       - name: Collect today
         # TEAM is the roster of teammates, one login per line, kept secret because org membership is.
+        # SEARCH_TOKEN is optional, for code search and the census that reads it; see the collector's header.
         env:
           GITHUB_TOKEN: ${{ github.token }}
           TEAM: ${{ secrets.TEAM }}
+          SEARCH_TOKEN: ${{ secrets.SEARCH_TOKEN }}
         run: node bin/collect-metrics.mjs
       # Nothing checked this before committing, so a bad collection reached the site and the
       # Pages build was requested for it. These are the same commands the Checks workflow runs.

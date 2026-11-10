@@ -95,7 +95,9 @@ const VENDOR = {
 // 2026-11-09, +1 KB on the four pages that draw series: the days npm left unreported become
 // breaks or estimates, not zeros, and installs are attributed over every package. Measured
 // overview 100.15, roadmap 103.57, results 98.63, dashboard 108.61.
-const BUDGET_KB = { map: 77, dev: 75, overview: 101, roadmap: 104, results: 99, dashboard: 109 };
+// 2026-11-10, dashboard +1 KB for the public-project census, its own section of two charts.
+// Measured 109.63; the other pages 0.1 KB up from the registry entries they share.
+const BUDGET_KB = { map: 77, dev: 75, overview: 101, roadmap: 104, results: 99, dashboard: 110 };
 const DATA_KB = { "data/metrics.json": 85, "data/summary.json": 1, "data/third-party.json": 15 };
 
 // ---------------------------------------------------------------- colour

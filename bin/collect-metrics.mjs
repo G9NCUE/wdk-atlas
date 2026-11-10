@@ -4,8 +4,11 @@
 //   node bin/collect-metrics.mjs            collect today, write data/metrics.json
 //   node bin/collect-metrics.mjs --dry      print the day's snapshot instead of writing
 //
-// Sources: the npm registry download API and the GitHub API (GITHUB_TOKEN for the rate limit; the Actions
-// token is enough, code search included, probed 2026-09-18).
+// Sources: the npm registry download API and the GitHub API (GITHUB_TOKEN for the rate limit). Code
+// search answered the Actions token when probed on 2026-09-18 and has refused it on every run since
+// 2026-10-13, asking for a 735-second wait before the first call, so it and the census that reads its
+// results (bin/lib/census.mjs) use SEARCH_TOKEN when set:
+// a fine-grained token with no permissions beyond reading public repositories.
 // Public figures only. Scope: the org's public repos matching audit.repoPattern in atlas.yaml, and the npm
 // package each publishes (from its package.json). The page sums whatever repos the reader selects.
 //
@@ -26,6 +29,9 @@
 //   contributors: { repo: [sha256(login)…] }   current, kept once; hashed, see the collector
 //   owners: { repo: [handle…] }        from CODEOWNERS, current, kept once
 //   releases: { repo: { "YYYY-MM-DD": version } }   npm publish dates inside the retention window, rewritten each run
+//   adopters:  { measured, projects, building, organisations, cohorts: { "YYYY-MM": [started, building] }, packages: { name: n } }
+//              the public projects behind `dependents`, counted and never named (bin/lib/census.mjs);
+//              kept from the last run when code search cannot be made
 //   atlasUpdated: last commit touching atlas.yaml, from git
 //   since: first day the event series cover
 // Pruning keeps the file small: snapshots stay daily for 90 days then thin to one a month; daily
@@ -68,11 +74,13 @@ import { loadAtlas, ROOT } from "./lib/load-atlas.mjs";
 import { summarise } from "./lib/summary.mjs";
 import { measuredUnder, thirdPartyModules, repoParts, packageNameOf, trimDownloads, rangeChunks } from "./lib/packages.mjs";
 import { pullsSince } from "./lib/pulls.mjs";
+import { profile, tally } from "./lib/census.mjs";
 
 const OUT = join(ROOT, "data", "metrics.json");
 const SUMMARY_OUT = join(ROOT, "data", "summary.json");
 const THIRD_OUT = join(ROOT, "data", "third-party.json");
 const TOKEN = process.env.GITHUB_TOKEN || "";
+const SEARCH_TOKEN = process.env.SEARCH_TOKEN || TOKEN;
 const DRY = process.argv.includes("--dry");
 // Refresh only what npm can answer. The GitHub half needs a token and a rate-limit budget; the
 // npm half needs neither, so a figure that comes from the registry can be rechecked at any time
@@ -97,15 +105,16 @@ const hashLogin = (login) => createHash("sha256").update(String(login).toLowerCa
 const SNAPSHOT_DAILY_DAYS = 90;  // every snapshot for this long, then one per month
 const SERIES_DAYS = 400;         // daily series kept this long (a year plus a margin)
 // Fields kept on every snapshot rather than only the newest: the two the dashboard charts over
-// time, and two scalars that cost nothing and are already key results.
+// time, the examples key result, and the dependents count, which nothing draws over time yet but
+// whose history GitHub cannot give back later.
 const SNAPSHOT_HISTORY = ["openIssues", "contributors", "dependents", "examples"];
 // npm serves an arbitrary date range (up to 18 months per call), so downloads are fetched for the whole
 // retention window every run rather than the trailing 30 days. One request per package, self-healing,
 // and it backfills history the first time it runs.
 
-const gh = async (path, attempt = 0, maxWait = 900) => {
+const gh = async (path, attempt = 0, maxWait = 900, token = TOKEN) => {
   const res = await fetch(`https://api.github.com${path}`, {
-    headers: { accept: "application/vnd.github+json", "user-agent": "wdk-atlas-metrics", ...(TOKEN ? { authorization: `Bearer ${TOKEN}` } : {}) },
+    headers: { accept: "application/vnd.github+json", "user-agent": "wdk-atlas-metrics", ...(token ? { authorization: `Bearer ${token}` } : {}) },
   });
   if (res.status === 404) return null;
   if (res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0") {
@@ -116,7 +125,7 @@ const gh = async (path, attempt = 0, maxWait = 900) => {
     if (wait > 0 && wait <= 120000 && attempt < 2) {
       console.error(`collect-metrics: GitHub quota spent on ${path.split("?")[0]}; back in ${Math.ceil(wait / 1000)}s`);
       await sleep(wait + 1000);
-      return gh(path, attempt + 1, maxWait);
+      return gh(path, attempt + 1, maxWait, token);
     }
     throw new Error("GitHub rate limit exhausted; set GITHUB_TOKEN");
   }
@@ -132,13 +141,26 @@ const gh = async (path, attempt = 0, maxWait = 900) => {
     if (wait && wait <= maxWait && attempt < 2) {
       console.error(`collect-metrics: GitHub ${res.status} on ${path.split("?")[0]}; waiting ${wait}s`);
       await sleep(wait * 1000 + 1000);
-      return gh(path, attempt + 1, maxWait);
+      return gh(path, attempt + 1, maxWait, token);
     }
     throw new Error(`GitHub ${res.status} on ${path}: ${text.slice(0, 120)}`);
   }
   if (!res.ok) throw new Error(`GitHub ${res.status} on ${path}`);
   const text = await res.text();
   return text ? JSON.parse(text) : null;
+};
+// GraphQL answers forty repositories in one call where REST takes eighty. A repository GitHub will
+// not show (deleted, blocked) comes back as null beside an error and is left out; only an answer
+// with no data at all is a failure.
+const graphql = async (query) => {
+  const res = await fetch("https://api.github.com/graphql", {
+    method: "POST",
+    headers: { "content-type": "application/json", "user-agent": "wdk-atlas-metrics", authorization: `Bearer ${SEARCH_TOKEN}` },
+    body: JSON.stringify({ query }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!body.data) throw new Error(`GitHub GraphQL ${res.status}: ${body.message || body.errors?.[0]?.message || ""}`);
+  return body.data;
 };
 const ghAll = async (path) => {
   const out = [];
@@ -350,10 +372,10 @@ try {
     // profile, an audit folder or file at the root, and CODEOWNERS for who owns the repo.
     const runs = await gh(`/repos/${ORG}/${r.name}/actions/runs?branch=${encodeURIComponent(r.default_branch || "main")}&status=completed&per_page=1`);
     snap.ci[r.name] = runs && runs.workflow_runs && runs.workflow_runs[0] ? runs.workflow_runs[0].conclusion : null;
-    const profile = await gh(`/repos/${ORG}/${r.name}/community/profile`);
-    if (profile) {
-      snap.health[r.name] = profile.health_percentage;
-      const f = profile.files || {};
+    const community = await gh(`/repos/${ORG}/${r.name}/community/profile`);
+    if (community) {
+      snap.health[r.name] = community.health_percentage;
+      const f = community.files || {};
       snap.community[r.name] = { readme: Boolean(f.readme), license: Boolean(f.license), contributing: Boolean(f.contributing), codeOfConduct: Boolean(f.code_of_conduct) };
     }
     const root = await gh(`/repos/${ORG}/${r.name}/contents`);
@@ -372,19 +394,20 @@ try {
     const root = await gh(`/repos/${ORG}/${EXAMPLES_REPO}/contents`);
     if (Array.isArray(root)) snap.examples = root.filter((e) => e.type === "dir" && !e.name.startsWith(".") && !EXAMPLES_IGNORE.has(e.name)).length;
   }
-  // Code search works with the Actions token and allows ten calls a minute; skipped, not guessed, when unavailable.
+  // Code search allows ten calls a minute; skipped, not guessed, when unavailable. It answers with a
+  // map of repository to the paths matched.
   // Once GitHub throttles it for longer than two minutes it stays off for the run: from 2026-09-27 every
   // run spent its thirty minutes waiting out 735-second throttles, one per third-party package, and
   // timed out before writing anything. Nothing it measures is a key result.
   let codeSearchOff = false;
   const codeSearch = async (q, pages = 10) => {
     if (codeSearchOff) return null;
-    const seen = new Set();
+    const seen = new Map();
     for (let pageNo = 1; pageNo <= pages; pageNo += 1) {
       let body;
-      try { body = await gh(`/search/code?q=${encodeURIComponent(q)}&per_page=100&page=${pageNo}`, 0, 120); } catch (e) { console.error(`collect-metrics: code search failed: ${e.message}`); codeSearchOff = true; return null; }
+      try { body = await gh(`/search/code?q=${encodeURIComponent(q)}&per_page=100&page=${pageNo}`, 0, 120, SEARCH_TOKEN); } catch (e) { console.error(`collect-metrics: code search failed: ${e.message}`); codeSearchOff = true; return null; }
       if (!body || !Array.isArray(body.items)) return pageNo === 1 ? null : seen;
-      for (const item of body.items) seen.add(item.repository.full_name);
+      for (const item of body.items) seen.set(item.repository.full_name, [...(seen.get(item.repository.full_name) || []), item.path]);
       if (body.items.length < 100 || seen.size >= body.total_count) break;
       await sleep(6500);
     }
@@ -395,7 +418,16 @@ try {
   else console.error("collect-metrics: code search unavailable with this token; signer coverage not measured");
   await sleep(6500);
   const dependents = await codeSearch(`"@${ORG}/wdk" filename:package.json -org:${ORG}`);
-  if (dependents) snap.dependents = dependents.size;
+  // The census reads the repositories the search found. Its count replaces the search's, which also
+  // took in manifests that mention a package without depending on it (10 of 232 on 2026-11-09).
+  if (dependents) {
+    try {
+      // A WDK package is one of the org's whose name fits the repo pattern, published here or not.
+      const isWdk = (name) => name.startsWith(`@${ORG}/`) && REPO_PATTERN.test(name.slice(ORG.length + 2));
+      file.adopters = tally(await profile(graphql, dependents, isWdk), today);
+      snap.dependents = file.adopters.projects;
+    } catch (e) { console.error(`collect-metrics: census failed, last one kept: ${e.message}`); }
+  }
   // The same question per third-party package, with the same answer shape as the first-party
   // one: public repos outside the org whose manifest names it, the package's own repo left out
   // too. One search per package at ten a minute, so this is the slow part of the run.
