@@ -8,7 +8,8 @@
 # 2026-09-22 when the rule learned that a hash is not a name; the file holds no names.
 # 2026-11-09, the teammate-hash finding retired, both fingerprints with it: every hash was a login
 # already listed in audit.team, and the collector no longer writes them.
-f04ec40ebc18
+# 2026-11-10, the published-roster finding retired: the roster moved to a secret and was taken out
+# of the history. The rule stays, so a roster put back in atlas.yaml is caught again.
 99ab429a75ba
 7b22323e8e56
 d2cf245f82f7

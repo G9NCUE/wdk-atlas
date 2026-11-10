@@ -33,10 +33,8 @@ about: >-
 audit:
   org: tetherto
   repoPattern: "^(wdk$|wdk-|pear-wrk-wdk$|create-wdk-module$)"
-  # GitHub logins counted as the Tether team on the Dashboard, so their pull requests and issues do
-  # not read as external. Maintained by hand: GitHub reveals private org membership only to a member's
-  # token, and the workflows run without any stored secret. Seed (2026-09-18): every tetherto member
-  # with a commit in a WDK repo. Add people when they join, remove them when they leave.
+  # The Tether team, so their pull requests do not read as external, is the TEAM secret of the metrics
+  # workflow and not a list here: org membership is private on GitHub. See bin/collect-metrics.mjs.
   # Org repos that are not modules; not reported as missing from the atlas. This list is about the map
   # only: bin/collect-metrics.mjs ignores it and tracks every public wdk-* repo, wdk-docs included.
   ignoreRepos:

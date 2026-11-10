@@ -48,10 +48,11 @@
 //
 // Who is a teammate: GitHub's author_association only says MEMBER when the token can see the org's
 // membership. The Actions token cannot (memberships in this org are mostly private), so with it every
-// teammate reads CONTRIBUTOR and lands in the external charts. The list in `audit.team` (atlas.yaml) is
-// the source of truth and is maintained by hand; no secret is needed for it. One fallback remains for a
-// local run: the org member list when the token belongs to a member. Nothing about teammates is
-// written to the file; a run that meets one missing from the roster says how many, never who.
+// teammate reads CONTRIBUTOR and lands in the external charts. The roster is the TEAM secret, one login
+// per line, maintained by hand. It is a secret because those memberships are private: the list was
+// public in atlas.yaml until 2026-11-10 and was taken out of the history. A local run needs no roster
+// when the token belongs to a member, since the org member list then answers. Nothing about teammates
+// is written to the file; a run that meets one missing from the roster says how many, never who.
 //
 // Stars, forks, contributors and open counts are snapshots, not history: GitHub's dated stargazer
 // list is closed to us. Probed 2026-09-07 — an Actions token gets 403 "Resource not accessible by
@@ -411,7 +412,7 @@ try {
   // Teammates (see the header). The member list counts only when the token holder is an org member:
   // for anyone else GitHub quietly answers with the public members, which would look complete and is not.
   const INTERNAL = new Set(["MEMBER", "OWNER", "COLLABORATOR"]);
-  const team = new Set((atlas.audit && atlas.audit.team) || []);
+  const team = new Set((process.env.TEAM || "").split(/[\s,]+/).filter(Boolean));
   let members = null;
   try {
     const viewer = await gh(`/user/memberships/orgs/${ORG}`);
@@ -420,7 +421,7 @@ try {
   // Older files carried teammates' labels among the authors; drop those.
   for (const [login, label] of Object.entries(file.authors || {})) if (INTERNAL.has(label)) delete file.authors[login];
   if (members) console.error(`collect-metrics: ${members.size} org members visible`);
-  else console.error(`collect-metrics: the token cannot list org members; ${team.size} teammates from audit.team`);
+  else console.error(`collect-metrics: the token cannot list org members; ${team.size} teammates from TEAM`);
   const isInternal = (login, association) => team.has(login) || INTERNAL.has(association) || Boolean(members && members.has(login));
   const external = (item) => Boolean(item.user && item.user.login) && !isBot(item.user.login) && !isInternal(item.user.login, item.author_association);
   const search = async (q) => (await ghAll(`/search/issues?q=${encodeURIComponent(`org:${ORG} ${q}`)}`)).filter(inScope);
@@ -458,7 +459,7 @@ try {
     if (!isInternal(login, i.author_association)) authorLabel[login] = i.author_association;
     else if (!team.has(login)) offRoster.add(login);
   }
-  if (offRoster.size) console.error(`collect-metrics: ${offRoster.size} teammate(s) with pull requests are not on audit.team; add them in atlas.yaml so a run that cannot see membership still counts them as the team`);
+  if (offRoster.size) console.error(`collect-metrics: ${offRoster.size} teammate(s) with pull requests are not in TEAM; add them to the secret so a run that cannot see membership still counts them as the team`);
   const bucket = (items, key, filter = () => true, from = since30) => {
     const out = {};
     for (const i of items) {
@@ -551,11 +552,9 @@ try {
       if (!Object.keys(days).length) delete perRepo[repo];
     }
   }
-  // External authors: login -> GitHub's label, last seen. Teammates: nothing, not even a hash. The
-  // hashes this used to keep were every one a login already listed in plain text in audit.team.
+  // External authors: login -> GitHub's label, last seen. Teammates: nothing, not even a hash.
   file.authors = { ...(file.authors || {}), ...authorLabel };
   for (const login of Object.keys(file.authors)) if (team.has(login) || offRoster.has(login)) delete file.authors[login];
-  delete file.team;
   file.updated = new Date().toISOString();
   if (DRY) console.log(JSON.stringify({ repos: Object.keys(repos).length, snapshot: snap, thirdParty: { packages: Object.keys(third.packages), unmeasured: third.unmeasured } }, null, 2));
   else {

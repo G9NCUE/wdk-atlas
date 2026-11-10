@@ -170,7 +170,7 @@ function scanStructure(findings) {
     }
   }
 
-  // Contributor names in the metrics file, and hashes a list in this same repo can reverse.
+  // Contributor names in the metrics file.
   const metricsPath = join(ROOT, "data/metrics.json");
   if (!existsSync(metricsPath)) return;
   let metrics = null;
@@ -183,10 +183,6 @@ function scanStructure(findings) {
   const names = new Set(contributors.flat().filter((v) => typeof v === "string" && !/^[a-f\d]{64}$/.test(v)));
   if (names.size) findings.push({ category: "aggregated-identities", why: `gathers ${names.size} account names from ${contributors.length} repos into one downloadable file`,
     file: "data/metrics.json", line: 1, evidence: `contributors: ${names.size} unique names` });
-  const hashed = Array.isArray(metrics.team) ? metrics.team.filter((v) => typeof v === "string" && /^[a-f\d]{64}$/.test(v)) : [];
-  const roster = atlas && atlas.audit && Array.isArray(atlas.audit.team) ? atlas.audit.team : [];
-  if (hashed.length && roster.length) findings.push({ category: "reversible-hash", why: `${hashed.length} unsalted hashes stand next to a plain-text list of ${roster.length} candidates in the same repo, so they invert instantly`,
-    file: "data/metrics.json", line: 1, evidence: `team: ${hashed.length} hashes, audit.team: ${roster.length} names` });
 }
 
 // ---------------------------------------------------------------- run

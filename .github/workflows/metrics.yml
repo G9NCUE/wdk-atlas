@@ -29,9 +29,10 @@ jobs:
         with:
           node-version: 22
       - name: Collect today
-        # The workflow token is the only credential: no stored secret. Teammates come from audit.team.
+        # TEAM is the roster of teammates, one login per line, kept secret because org membership is.
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          TEAM: ${{ secrets.TEAM }}
         run: node bin/collect-metrics.mjs
       # Nothing checked this before committing, so a bad collection reached the site and the
       # Pages build was requested for it. These are the same commands the Checks workflow runs.
