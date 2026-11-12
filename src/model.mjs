@@ -67,13 +67,16 @@ export function createModel(ctx) {
     return atlas.modules.find((module) => module.id === id);
   }
 
+  // One entry per module, the first relation named: a variant both sits under its base and
+  // requires it, and was listed twice in the drawer.
   function relationsOf(id) {
     const requires = [];
     const requiredBy = [];
+    const add = (list, entry) => list.some((r) => r.id === entry.id) || list.push(entry);
     for (const module of atlas.modules) {
       for (const rel of module.relations || []) {
-        if (module.id === id && itemById(rel.target)) requires.push({ id: rel.target, type: rel.type });
-        if (rel.target === id) requiredBy.push({ id: module.id, type: rel.type });
+        if (module.id === id && itemById(rel.target)) add(requires, { id: rel.target, type: rel.type });
+        if (rel.target === id) add(requiredBy, { id: module.id, type: rel.type });
       }
     }
     return { requires, requiredBy };

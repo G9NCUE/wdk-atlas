@@ -97,7 +97,10 @@ const VENDOR = {
 // overview 100.15, roadmap 103.57, results 98.63, dashboard 108.61.
 // 2026-11-10, dashboard +1 KB for the public-project census, its own section of two charts.
 // Measured 109.63; the other pages 0.1 KB up from the registry entries they share.
-const BUDGET_KB = { map: 77, dev: 75, overview: 101, roadmap: 104, results: 99, dashboard: 110 };
+// 2026-11-11, +1 KB on roadmap, results and dashboard: three documented partner modules joined the
+// map (Bermuda, Butter, MoonPay), 0.47 KB of atlas.yaml on every page. Measured map 76.30, dev
+// 74.71, overview 100.82, roadmap 104.23, results 99.29, dashboard 110.38.
+const BUDGET_KB = { map: 77, dev: 75, overview: 101, roadmap: 105, results: 100, dashboard: 111 };
 const DATA_KB = { "data/metrics.json": 85, "data/summary.json": 1, "data/third-party.json": 15 };
 
 // ---------------------------------------------------------------- colour

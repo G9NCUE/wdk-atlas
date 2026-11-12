@@ -540,6 +540,25 @@ modules:
       - { type: under, target: wdk-wallet-evm }
       - { type: requires, target: wdk-wallet-evm }
 
+  - id: wdk-wallet-evm-bermuda
+    name: wdk-wallet-evm-bermuda
+    title: Ethereum, shielded accounts (Bermuda)
+    short: Shielded accounts
+    section: core
+    band: wallets
+    kind: layer
+    status: wip
+    publisher: Bermuda
+    chains: [EVM]
+    summary: 'Ethereum wallets that can also open shielded accounts: deposit supported tokens, send them privately and withdraw to a public address. Built by Bermuda on the kit''s Ethereum wallet; in beta on the Plasma test network only.'
+    notes:
+      - Not maintained by Tether
+      - Installed from GitHub; not on npm
+    repo: https://github.com/BermudaBay/wdk-wallet-evm-bermuda
+    relations:
+      - { type: under, target: wdk-wallet-evm }
+      - { type: requires, target: wdk-wallet-evm }
+
   - id: wdk-protocol-swap-velora-evm
     name: wdk-protocol-swap-velora-evm
     title: Swap via Velora
@@ -674,6 +693,41 @@ modules:
     notes:
       - Not maintained by Tether
     repo: https://github.com/0xProject/wdk-protocol-swidge-0x
+    relations:
+      - { type: on, target: wdk-wallet-evm }
+
+  - id: wdk-protocol-swidge-butter
+    name: wdk-protocol-swidge-butter
+    title: Swap & bridge via Butter
+    section: core
+    band: protocols
+    kind: swidge
+    status: shipped
+    publisher: Butter Network
+    chains: [EVM]
+    summary: 'Swap and move tokens across chains through Butter Network, which finds a route and quotes it before anything is sent. Works out of the box on Ethereum-like chains; other chains need an extra adapter.'
+    notes:
+      - Not maintained by Tether
+    repo: https://github.com/butternetwork/wdk-protocol-swidge-butter
+    relations:
+      - { type: on, target: wdk-wallet-evm }
+
+  - id: wdk-protocol-swidge-moonpay-trade
+    name: wdk-protocol-swidge-moonpay-trade
+    title: Swap & bridge via MoonPay
+    section: core
+    band: protocols
+    kind: swidge
+    status: shipped
+    publisher: MoonPay
+    chains: [EVM, BTC, TON, TRON, SOL]
+    summary: 'Swap and move tokens on one chain or between chains through MoonPay''s trading service, on Ethereum-like chains, Bitcoin, TON, TRON and Solana. The routes on offer depend on the service at the time. Needs an API key from MoonPay.'
+    notes:
+      - Not maintained by Tether
+      - Source code not public; published on npm
+    repo: https://github.com/swaps-xyz/wdk-protocol-swidge-moonpay-trade
+    private: true
+    package: "@moonpay/wdk-protocol-swidge-moonpay-trade"
     relations:
       - { type: on, target: wdk-wallet-evm }
 

@@ -8,7 +8,7 @@ import { createModel, countByStatus, isLate, itemProgress, quarterLabel, quarter
 const atlas = {
   audit: { org: "acme" }, // not the default, so reading it is what makes the third-party test pass
   modules: [
-    { id: "wdk", name: "@tetherto/wdk", publisher: "acme", status: "shipped", repo: "https://github.com/acme/wdk", relations: [{ type: "requires", target: "wdk-wallet" }, { type: "requires", target: "ghost" }] },
+    { id: "wdk", name: "@tetherto/wdk", publisher: "acme", status: "shipped", repo: "https://github.com/acme/wdk", relations: [{ type: "requires", target: "wdk-wallet" }, { type: "requires", target: "ghost" }, { type: "under", target: "wdk-wallet" }] },
     { id: "wdk-wallet", name: "@tetherto/wdk-wallet", publisher: "acme", status: "shipped", chains: ["BTC", "EVM"] },
     { id: "third", publisher: "tetherto", status: "shipped", private: true }, // the default org, which here is somebody else
   ],
@@ -66,9 +66,9 @@ test("stable means no pre-release suffix on the version", () => {
   for (const v of ["1.0.0-beta.18", "2.0.0-rc.1", "0.9.0-alpha", "3.1.0-next.4", "1.2.0-canary", "1.0.0-dev", "1.0.0-pre", ""]) assert.equal(isStableVersion(v), false, v);
 });
 
-test("relations point both ways and only at things that exist", () => {
-  assert.deepEqual(model.relationsOf("wdk").requires, [{ id: "wdk-wallet", type: "requires" }], "the relation to a module that is not there is dropped");
-  assert.deepEqual(model.relationsOf("wdk-wallet").requiredBy, [{ id: "wdk", type: "requires" }]);
+test("relations point both ways, once per module, and only at things that exist", () => {
+  assert.deepEqual(model.relationsOf("wdk").requires, [{ id: "wdk-wallet", type: "requires" }], "the relation to a module that is not there is dropped, and the second one to wdk-wallet folded in");
+  assert.deepEqual(model.relationsOf("wdk-wallet").requiredBy, [{ id: "wdk", type: "requires" }], "requiring and sitting under the same module lists it once");
   assert.equal(model.itemById("nope"), undefined);
 });
 
