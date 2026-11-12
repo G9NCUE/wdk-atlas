@@ -18,7 +18,7 @@ export default function createDashboardPage(ctx) {
   use(ctx, createKeyResults);
   use(ctx, createThirdParty);
 
-  const { query, setUrlParams, atlas, onUrlChange, poster, unscoped, walletRepos, loadMetrics, loadThirdParty,
+  const { query, setUrlParams, atlas, onUrlChange, poster, unscoped, walletRepos, loadMetrics, loadProjects, loadThirdParty,
     readinessFact, SERIES, fmtNum, deltaPill, trendPill, defFor, defTip, statTile, lineChart,
     releaseMarks, groupedBars, hBars, exportControls, chartCard, dashSection, GRAINS, grain,
     bucketKey, bucketLabel, coverageOf, seriesBuckets, lastTwo, snapshotSeries, coverageNote, gapNote, fmtLast, periodRows,
@@ -99,7 +99,7 @@ export default function createDashboardPage(ctx) {
     return panel;
   }
 
-  function buildDashboard(file, selected, third) {
+  function buildDashboard(file, selected, third, projects) {
     const snaps = file.snapshots || {};
     const snapDays = Object.keys(snaps).sort();
     const latest = snaps[snapDays[snapDays.length - 1]] || {};
@@ -220,13 +220,13 @@ export default function createDashboardPage(ctx) {
     ]);
     const readiness = renderReadiness(file, selected, latest);
     const note = el("p", { class: "dash-note" }, `${selected.length} of ${Object.keys(file.repos).length} public WDK repos · npm and GitHub only · collected ${String(file.updated).slice(0, 10)} · snapshots since ${snapDays[0]}`);
-    return [tiles, adoption, file.adopters && renderProjects(file.adopters), renderThirdParty(third), community, support, readiness, note];
+    return [tiles, adoption, file.adopters && renderProjects(file.adopters, projects), renderThirdParty(third), community, support, readiness, note];
   }
 
   // The public projects behind the dependents count, from the census the collector keeps
-  // (bin/lib/census.mjs): counts only, and all of WDK whatever the selection. A month is the one
-  // the project's repository was created in, and only whole months are drawn, like every other chart.
-  function renderProjects(c) {
+  // (bin/lib/census.mjs): all of WDK whatever the selection. A month is the one the project's
+  // repository was created in, and only whole months are drawn, like every other chart.
+  function renderProjects(c, list) {
     const [y, m] = c.measured.split("-").map(Number);
     const months = Array.from({ length: 12 }, (_, i) => new Date(Date.UTC(y, m - 13 + i, 1)).toISOString().slice(0, 7));
     const counts = months.map((k) => c.cohorts[k] || [0, 0]);
@@ -242,26 +242,48 @@ export default function createDashboardPage(ctx) {
       chartCard(defFor("dependents"), "Packages public projects use", fmtNum(c.projects), null, hBars(top, { color: SERIES[1] }),
         "Projects naming each package, top eight. A project can name several.",
         { ...meta, columns: ["package", "projects"], rows: Object.entries(c.packages) }),
-      c.repos && renderProjectList(c.repos, meta),
+      list && renderProjectList(list.repos, { ...meta, collected: list.measured }),
     ]);
   }
 
-  // The projects still building, by name, as GitHub lists them. A link here is not a recommendation:
-  // anything public can name a package, and the foot says so.
+  // Every project the census found, the most starred first, WDK modules' own among them and marked,
+  // with one box to hide those. "On the map" is read from atlas.yaml, so it is right as soon as the
+  // map changes. A link here is not a recommendation: anything public can name a package, and the
+  // foot says so.
   function renderProjectList(repos, meta) {
-    const columns = ["project", "owner", "stars", "started", "last push", "packages"];
-    const rows = repos.map((r) => [r.repo, r.org ? "organisation" : "person", r.stars, r.created, r.pushed, r.packages.map(unscoped).join(" ")]);
-    const data = { ...meta, title: "Projects still building on WDK", columns, rows };
-    const table = el("div", { class: "table-wrap" }, el("table", { class: "ready" },
-      el("thead", null, el("tr", null, columns.map((h) => el("th", null, h[0].toUpperCase() + h.slice(1))))),
-      el("tbody", null, rows.map(([repo, ...rest]) => el("tr", null,
+    const mapped = new Set((atlas.modules || []).map((m) => (/github\.com\/([^/]+\/[^/#?]+)/.exec(m.repo || "") || [])[1])
+      .filter(Boolean).map((r) => r.replace(/\.git$/, "").toLowerCase()));
+    const kind = (r) => (!r.module ? "project" : mapped.has(r.repo.toLowerCase()) ? "WDK module, on the map" : "WDK module");
+    const columns = ["project", "stars", "kind", "owner", "started", "last push", "still building", "packages"];
+    const toRow = (r) => [r.repo, r.stars, kind(r), r.org ? "organisation" : "person", r.created, r.pushed, r.building ? "yes" : "no", r.packages.map(unscoped).join(" ")];
+    const building = (yes) => (yes === "yes" ? el("span", { class: "fact yes" }, "✓", el("span", { class: "visually-hidden" }, "yes")) : el("span", { class: "visually-hidden" }, "no"));
+    let hide = query.get("pnomod") === "1";
+    const tbody = el("tbody");
+    const count = el("span", { class: "view-count" });
+    const exportSlot = el("span");
+    const apply = () => {
+      const rows = repos.filter((r) => !hide || !r.module).map(toRow);
+      tbody.replaceChildren(...rows.map(([repo, stars, ...rest]) => el("tr", null,
         el("td", null, el("a", { href: `https://github.com/${repo}`, rel: "nofollow noopener" }, repo)),
-        rest.map((v, i) => el("td", { class: i ? "mono" : null }, i === 1 ? fmtNum(v) : v)))))));
+        el("td", { class: "mono" }, fmtNum(stars)),
+        rest.map((v, i) => (i === 4 ? el("td", null, building(v)) : el("td", { class: i > 1 ? "mono" : null }, v))))));
+      count.textContent = String(rows.length);
+      exportSlot.replaceChildren(exportControls(defFor("dependents"), { ...meta, title: "Public projects depending on WDK", columns, rows }));
+      setUrlParams({ pnomod: hide ? "1" : null });
+    };
+    const box = el("input", { type: "checkbox" });
+    box.checked = hide;
+    box.addEventListener("change", () => { hide = box.checked; apply(); });
+    apply();
+    const modules = repos.filter((r) => r.module).length;
     return el("details", { class: "ready-card table-fold" },
-      el("summary", { class: "repo-panel-summary" }, "Every project still building ", el("span", { class: "view-count" }, String(repos.length))),
-      el("div", { class: "ready-tools" }, exportControls(defFor("dependents-active"), data)),
-      table,
-      el("p", { class: "chart-foot" }, "Named as GitHub lists them, not reviewed or endorsed. Most recently pushed first; teammates' repositories and WDK modules' own left out."));
+      el("summary", { class: "repo-panel-summary" }, "Every public project ", count),
+      el("div", { class: "tp-tools" }, el("label", { class: "tp-toggle" }, box, `Hide WDK modules (${modules})`), exportSlot),
+      el("div", { class: "table-wrap" }, el("table", { class: "ready" },
+        el("thead", null, el("tr", null, columns.map((h) => el("th", { scope: "col" }, h[0].toUpperCase() + h.slice(1))))), tbody)),
+      el("p", { class: "chart-foot" }, "Named as GitHub lists them, not reviewed or endorsed. Most stars first. A WDK module's own repository is marked as one,"
+        + " and as on the map when the map lists it; teammates' repositories are left out. A tick marks a project still building:"
+        + " pushed to in the last 90 days, after at least 14 days of work."));
   }
 
   // Release readiness: the facts behind the "production-grade kit" key results, one row per published package.
@@ -318,13 +340,13 @@ export default function createDashboardPage(ctx) {
   }
 
   async function renderDashboard() {
-    const [file, third] = await Promise.all([loadMetrics(), loadThirdParty()]);
+    const [file, third, projects] = await Promise.all([loadMetrics(), loadThirdParty(), loadProjects()]);
     if (!file) throw new Error("No data/metrics.json yet. Run bin/collect-metrics.mjs or the Metrics action.");
     if (file.schema !== 3) throw new Error("data/metrics.json is an older schema; run the collector again.");
     const all = Object.keys(file.repos || {}).sort();
     let selected = readSelection(all);
-    const body = el("div", { class: "dash-body" }, buildDashboard(file, selected, third));
-    const controls = el("div", { class: "dash-controls" }, renderGrainSwitch(file), renderRepoPanel(file, selected, (chosen) => { selected = chosen; body.replaceChildren(...buildDashboard(file, selected, third)); }));
+    const body = el("div", { class: "dash-body" }, buildDashboard(file, selected, third, projects));
+    const controls = el("div", { class: "dash-controls" }, renderGrainSwitch(file), renderRepoPanel(file, selected, (chosen) => { selected = chosen; body.replaceChildren(...buildDashboard(file, selected, third, projects)); }));
     return el("div", { class: "dash-page" }, controls, body);
   }
 

@@ -58,6 +58,10 @@ export function createData(ctx) {
   // can mistake one for ours. Null until the collector has written it once.
   const loadThirdParty = () => fetchJsonOnce(dataUrl("data/third-party.json")).then((file) => (file && file.schema === 1 ? file : null));
 
+  // Every public project depending on WDK, named: the dashboard's alone, so no other page pays for
+  // the list. Null until the collector has written it once.
+  const loadProjects = () => fetchJsonOnce(dataUrl("data/projects.json")).then((file) => (file && file.schema === 1 ? file : null));
+
   function publishedRepos() { return Object.entries((METRICS && METRICS.repos) || {}).filter(([, r]) => r.version).map(([n]) => n).sort(); }
 
   function latestSnapshot() { const snaps = (METRICS && METRICS.snapshots) || {}; const days = Object.keys(snaps).sort(); return days.length ? snaps[days[days.length - 1]] : null; }
@@ -75,6 +79,6 @@ export function createData(ctx) {
   const metrics = () => METRICS;
 
   return {
-    latestSnapshot, loadMetrics, loadSummary, loadThirdParty, metrics, publishedRepos, readinessFact,
+    latestSnapshot, loadMetrics, loadProjects, loadSummary, loadThirdParty, metrics, publishedRepos, readinessFact,
   };
 }

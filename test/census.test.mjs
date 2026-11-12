@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { profile, tally } from "../bin/lib/census.mjs";
+import { listing, profile, tally } from "../bin/lib/census.mjs";
 
 const isWdk = (name) => /^@tetherto\/(wdk$|wdk-|pear-wrk-wdk$)/.test(name);
 const repo = (createdAt, pushedAt, type, ...manifests) => ({ createdAt, pushedAt, stargazerCount: 3, owner: { __typename: type },
@@ -56,7 +56,7 @@ test("profile: forty repositories to a query, every alias read back", async () =
   assert.deepEqual(sizes, [40, 40, 1]);
 });
 
-test("tally: modules only counted; by month started, still building needs a recent push after two weeks of work, and only those are named", () => {
+test("tally: modules only counted; by month started, still building needs a recent push after two weeks of work; nobody named", () => {
   const row = (repo, created, pushed, org, packages, module = false) => ({ repo, created, pushed, stars: 0, org, packages, module });
   const c = tally([
     row("o/a", "2026-03-22", "2026-10-20", true, ["@tetherto/wdk", "@tetherto/wdk-wallet-evm"]), // building
@@ -74,10 +74,26 @@ test("tally: modules only counted; by month started, still building needs a rece
     organisations: 1,
     cohorts: { "2026-03": [2, 1], "2026-07": [1, 0], "2026-08": [1, 1], "2026-11": [1, 0] },
     packages: { "@tetherto/wdk-wallet-evm": 3, "@tetherto/wdk": 2, "@tetherto/wdk-wallet-solana": 1 },
-    repos: [
-      { repo: "o/e", created: "2026-08-01", pushed: "2026-11-02", stars: 0, org: false, packages: ["@tetherto/wdk"] },
-      { repo: "o/a", created: "2026-03-22", pushed: "2026-10-20", stars: 0, org: true, packages: ["@tetherto/wdk", "@tetherto/wdk-wallet-evm"] },
-    ],
   });
   assert.deepEqual(Object.keys(c.packages), ["@tetherto/wdk-wallet-evm", "@tetherto/wdk", "@tetherto/wdk-wallet-solana"]);
+});
+
+test("listing: everyone, modules too, most stars first, then the latest push, then the name; each marked still building or not", () => {
+  const row = (repo, created, pushed, stars, module = false) => ({ repo, created, pushed, stars, org: false, packages: ["@tetherto/wdk"], module });
+  const l = listing([
+    row("o/quiet", "2026-01-01", "2026-02-01", 3),
+    row("o/b", "2026-08-01", "2026-11-01", 3),
+    row("o/a", "2026-08-01", "2026-11-01", 3),
+    row("p/wdk-wallet-x", "2026-03-01", "2026-11-09", 40, true),
+    row("o/new", "2026-11-05", "2026-11-09", 0),
+  ], "2026-11-10");
+  assert.equal(l.schema, 1);
+  assert.equal(l.measured, "2026-11-10");
+  assert.deepEqual(l.repos.map((r) => [r.repo, r.module, r.building]), [
+    ["p/wdk-wallet-x", true, true],
+    ["o/a", false, true],
+    ["o/b", false, true],
+    ["o/quiet", false, false],
+    ["o/new", false, false],
+  ]);
 });

@@ -101,7 +101,7 @@ const VENDOR = {
 // map (Bermuda, Butter, MoonPay), 0.47 KB of atlas.yaml on every page. Measured map 76.30, dev
 // 74.71, overview 100.82, roadmap 104.23, results 99.29, dashboard 110.38.
 const BUDGET_KB = { map: 77, dev: 75, overview: 101, roadmap: 105, results: 100, dashboard: 111 };
-const DATA_KB = { "data/metrics.json": 85, "data/summary.json": 1, "data/third-party.json": 15 };
+const DATA_KB = { "data/metrics.json": 85, "data/summary.json": 1, "data/third-party.json": 15, "data/projects.json": 10 };
 
 // ---------------------------------------------------------------- colour
 // WCAG relative luminance and contrast, from hsl() as the tokens are written.
@@ -267,8 +267,9 @@ function pageWeightGate() {
   const scriptsFor = (page) => importClosure(["site.js", "app.js", pageModule(page)]).reduce((n, rel) => n + gz(rel), 0);
   const metrics = gz("data/metrics.json");
   const summary = gz("data/summary.json");
-  // The third-party packages are the Dashboard's alone, and the Dashboard alone pays for them.
-  const thirdParty = gz("data/third-party.json");
+  // The third-party packages and the public projects are the Dashboard's alone, and the
+  // Dashboard alone pays for them.
+  const thirdParty = gz("data/third-party.json") + gz("data/projects.json");
   // Only the Map and Developer Resources can be served by the small file; every other page
   // reads the series, the snapshots or the per-repo readiness facts.
   const lightPages = ["map", "dev"];

@@ -30,14 +30,17 @@
 //   contributors: { repo: [sha256(login)…] }   current, kept once; hashed, see the collector
 //   owners: { repo: [handle…] }        from CODEOWNERS, current, kept once
 //   releases: { repo: { "YYYY-MM-DD": version } }   npm publish dates inside the retention window, rewritten each run
-//   adopters:  { measured, projects, modules, building, organisations, cohorts: { "YYYY-MM": [started, building] }, packages: { name: n },
-//                repos: [ { repo, created, pushed, stars, org, packages } ] }   the public projects behind `dependents`,
-//              teammates' own left out, WDK modules' own only counted, only those still building named (bin/lib/census.mjs);
-//              kept from the last run when code search cannot be made
+//   adopters:  { measured, projects, modules, building, organisations, cohorts: { "YYYY-MM": [started, building] }, packages: { name: n } }
+//              the public projects behind `dependents`, teammates' own left out, WDK modules' own only counted
+//              (bin/lib/census.mjs); kept from the last run when code search cannot be made
 //   atlasUpdated: last commit touching atlas.yaml, from git
 //   since: first day the event series cover
 // Pruning keeps the file small: snapshots stay daily for 90 days then thin to one a month; daily
 // series are dropped after 400 days. The page fetches this file, so it must not grow without bound.
+//
+// data/projects.json, schema 1: { measured, repos: [ { repo, created, pushed, stars, org, packages, module, building } ] }
+//   every repository the census counted, WDK modules' own too, most stars first; the dashboard alone
+//   reads it. Written only when the census ran, so the last list stays when code search cannot be made.
 //
 // data/third-party.json, schema 1: the packages built by others, kept apart from ours.
 //   The modules on the map whose publisher is not the org, plus the org-hosted repos that
@@ -76,11 +79,12 @@ import { loadAtlas, ROOT } from "./lib/load-atlas.mjs";
 import { summarise } from "./lib/summary.mjs";
 import { measuredUnder, thirdPartyModules, repoParts, packageNameOf, trimDownloads, rangeChunks } from "./lib/packages.mjs";
 import { pullsSince } from "./lib/pulls.mjs";
-import { profile, tally } from "./lib/census.mjs";
+import { listing, profile, tally } from "./lib/census.mjs";
 
 const OUT = join(ROOT, "data", "metrics.json");
 const SUMMARY_OUT = join(ROOT, "data", "summary.json");
 const THIRD_OUT = join(ROOT, "data", "third-party.json");
+const PROJECTS_OUT = join(ROOT, "data", "projects.json");
 const TOKEN = process.env.GITHUB_TOKEN || "";
 const SEARCH_TOKEN = process.env.SEARCH_TOKEN || TOKEN;
 const DRY = process.argv.includes("--dry");
@@ -194,13 +198,15 @@ const npmJson = async (url, attempt = 0) => {
   const text = await res.text();
   return text ? JSON.parse(text) : null;
 };
-// One place that writes the three files, so a partial run and a full run cannot disagree about
-// how they are written, and the summary is always built from the object just saved.
-function writeOut(file, third) {
+// One place that writes the files, so a partial run and a full run cannot disagree about how
+// they are written, and the summary is always built from the object just saved. The project list
+// only when this run made one.
+function writeOut(file, third, projects = null) {
   mkdirSync(dirname(OUT), { recursive: true });
   writeFileSync(OUT, JSON.stringify(file) + "\n");
   writeFileSync(SUMMARY_OUT, JSON.stringify(summarise(file)) + "\n");
   writeFileSync(THIRD_OUT, JSON.stringify(third) + "\n");
+  if (projects) writeFileSync(PROJECTS_OUT, JSON.stringify(projects) + "\n");
 }
 
 // Give up on one package rather than on the run. Used for the per-version call, the only one
@@ -449,6 +455,7 @@ try {
   const isInternal = (login, association) => team.has(login) || INTERNAL.has(association) || Boolean(members && members.has(login));
   // The census reads the repositories the search found. Its count replaces the search's, which also
   // took in manifests that mention a package without depending on it (10 of 232 on 2026-11-09).
+  let projects = null;
   if (dependents) {
     try {
       // A WDK package is one of the org's whose name fits the repo pattern, published here or not.
@@ -458,6 +465,7 @@ try {
       // A teammate's own repository is the team's work, not somebody else's adoption.
       const outside = (await profile(graphql, dependents, isWdk, catalogued)).filter((r) => !isInternal(r.repo.split("/")[0]));
       file.adopters = tally(outside, today);
+      projects = listing(outside, today);
       snap.dependents = file.adopters.projects;
     } catch (e) { console.error(`collect-metrics: census failed, last one kept: ${e.message}`); }
   }
@@ -598,10 +606,10 @@ try {
   else {
     // The summary holds the few values every page needs, kept apart so a page that needs
     // nothing else fetches nothing else. Both files come from the same object.
-    writeOut(file, third);
+    writeOut(file, third, projects);
     const stars = Object.values(snap.stars).reduce((a, b) => a + b, 0);
     const people = new Set(Object.values(contributorsByRepo).flat()).size;
-    console.log(`wrote data/metrics.json, data/summary.json and data/third-party.json: ${today}, ${Object.keys(repos).length} repos, ${published.length} published packages, ${Object.keys(third.packages).length} third-party packages (${third.unmeasured.length} not measured), ${stars} stars, ${people} contributors, ${Object.keys(file.snapshots).length} snapshot(s)`);
+    console.log(`wrote data/metrics.json, data/summary.json, data/third-party.json${projects ? " and data/projects.json" : ""}: ${today}, ${Object.keys(repos).length} repos, ${published.length} published packages, ${Object.keys(third.packages).length} third-party packages (${third.unmeasured.length} not measured), ${stars} stars, ${people} contributors, ${Object.keys(file.snapshots).length} snapshot(s)`);
   }
 } catch (error) {
   console.error(`collect-metrics: ${error && error.message ? error.message : error}`);

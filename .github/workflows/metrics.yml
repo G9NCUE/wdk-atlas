@@ -52,8 +52,10 @@ jobs:
           # Every file the collector writes. data/summary.json had been left out since it was
           # introduced: thirty commits to metrics.json against two to the summary, which is what
           # the Map and the Developer Resources pages read their date from. data/third-party.json
-          # holds the packages built by others, which the Dashboard reads on its own.
-          git add data/metrics.json data/summary.json data/third-party.json
+          # holds the packages built by others and data/projects.json the public projects, both
+          # read by the Dashboard alone. The whole folder, because the project list is written
+          # only when the census ran, and naming a file not there yet would fail the step.
+          git add data/
           # Nothing to commit is a quiet day, not a failure: npm can report the same numbers
           # twice, and a red cross on an unchanged day teaches everyone to ignore the crosses.
           if git diff --cached --quiet; then

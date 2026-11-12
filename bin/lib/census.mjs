@@ -3,13 +3,14 @@
 // The collector's code search lists every public repository outside the org whose package.json
 // mentions a WDK package, and used to keep only how many there were. Read on 2026-11-09, the list
 // said more than the count: a third of the projects were last touched within two days of being
-// created. This reads each repository's dates and manifests and keeps the aggregates, and names
-// only the projects still building: the rest are mostly a weekend's experiment, and naming 222
-// repositories would cost every page that loads the file about 8 KB.
+// created. This reads each repository's dates and manifests. The aggregates go in metrics.json,
+// which four pages load; the repositories themselves, all of them, go in data/projects.json, which
+// only the dashboard does, so naming about 220 costs no other page anything.
 //
 // A WDK module's own repository depends on WDK too, and on 2026-11-10 a third of the projects named
 // were modules: partners' wallets and protocols the catalog already shows. They extend the kit
-// rather than build on it, so they are counted apart and left out of everything else.
+// rather than build on it, so the aggregates count them apart and nothing else; the list keeps them,
+// marked, for the dashboard to show or hide.
 
 /** Repositories per GraphQL query: one query, one point of the hourly budget. */
 const BATCH = 40;
@@ -63,25 +64,25 @@ export async function profile(graphql, hits, isWdk, catalogued) {
   return rows;
 }
 
+const days = (a, b) => (Date.parse(b) - Date.parse(a)) / 864e5;
+const isBuilding = (r, today) => days(r.pushed, today) <= ACTIVE_DAYS && days(r.created, r.pushed) >= MIN_LIFE_DAYS;
+
 /**
- * What the file keeps, modules apart: `modules` is how many there were, and nothing else counts them.
- * `cohorts` maps the month a repository was created to [projects started,
- * still building]; `organisations` is how many of those still building an organisation owns;
- * `packages` counts the projects naming each package, most first; `repos` lists the projects still
- * building, the most recently pushed first.
+ * What metrics.json keeps, modules apart: `modules` is how many there were, and nothing else counts
+ * them. `cohorts` maps the month a repository was created to [projects started, still building];
+ * `organisations` is how many of those still building an organisation owns; `packages` counts the
+ * projects naming each package, most first.
  */
 export function tally(rows, today) {
-  const days = (a, b) => (Date.parse(b) - Date.parse(a)) / 864e5;
-  const building = (r) => days(r.pushed, today) <= ACTIVE_DAYS && days(r.created, r.pushed) >= MIN_LIFE_DAYS;
-  const projects = rows.filter((r) => !r.module).map(({ module: _, ...r }) => r);
+  const projects = rows.filter((r) => !r.module);
   const cohorts = {}, packages = {};
   for (const r of projects) {
     const c = (cohorts[r.created.slice(0, 7)] ||= [0, 0]);
     c[0] += 1;
-    if (building(r)) c[1] += 1;
+    if (isBuilding(r, today)) c[1] += 1;
     for (const p of r.packages) packages[p] = (packages[p] || 0) + 1;
   }
-  const live = projects.filter(building);
+  const live = projects.filter((r) => isBuilding(r, today));
   return {
     measured: today,
     projects: projects.length,
@@ -90,6 +91,14 @@ export function tally(rows, today) {
     organisations: live.filter((r) => r.org).length,
     cohorts: Object.fromEntries(Object.entries(cohorts).sort()),
     packages: Object.fromEntries(Object.entries(packages).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))),
-    repos: live.sort((a, b) => (a.pushed === b.pushed ? (a.repo < b.repo ? -1 : 1) : a.pushed < b.pushed ? 1 : -1)),
   };
+}
+
+/**
+ * data/projects.json: every repository, modules too, each marked `module` and `building`. Most
+ * stars first, then the most recently pushed, then by name.
+ */
+export function listing(rows, today) {
+  const order = (a, b) => b.stars - a.stars || (a.pushed === b.pushed ? (a.repo < b.repo ? -1 : 1) : a.pushed < b.pushed ? 1 : -1);
+  return { schema: 1, measured: today, repos: rows.map((r) => ({ ...r, building: isBuilding(r, today) })).sort(order) };
 }
