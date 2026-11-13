@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { listing, profile, tally } from "../bin/lib/census.mjs";
+import { listing, profile } from "../bin/lib/census.mjs";
+import { aggregate, namingAny } from "../lib/projects.mjs";
 
 const isWdk = (name) => /^@tetherto\/(wdk$|wdk-|pear-wrk-wdk$)/.test(name);
 const repo = (createdAt, pushedAt, type, ...manifests) => ({ createdAt, pushedAt, stargazerCount: 3, owner: { __typename: type },
@@ -56,18 +57,17 @@ test("profile: forty repositories to a query, every alias read back", async () =
   assert.deepEqual(sizes, [40, 40, 1]);
 });
 
-test("tally: modules only counted; by month started, still building needs a recent push after two weeks of work; nobody named", () => {
+test("aggregate over the listing: modules only counted; by month started, still building needs a recent push after two weeks of work; nobody named", () => {
   const row = (repo, created, pushed, org, packages, module = false) => ({ repo, created, pushed, stars: 0, org, packages, module });
-  const c = tally([
+  const c = aggregate(listing([
     row("o/a", "2026-03-22", "2026-10-20", true, ["@tetherto/wdk", "@tetherto/wdk-wallet-evm"]), // building
     row("o/b", "2026-03-22", "2026-03-23", true, ["@tetherto/wdk-wallet-evm"]),                 // a weekend
     row("o/c", "2026-07-01", "2026-07-30", false, ["@tetherto/wdk-wallet-solana"]),             // quiet since August
     row("o/d", "2026-11-01", "2026-11-09", false, ["@tetherto/wdk-wallet-evm"]),                // too new to tell
     row("o/e", "2026-08-01", "2026-11-02", false, ["@tetherto/wdk"]),                           // building, pushed later
     row("o/wdk-wallet-x", "2026-03-01", "2026-11-09", true, ["@tetherto/wdk-wallet"], true),   // a module, building
-  ], "2026-11-10");
+  ], "2026-11-10").repos);
   assert.deepEqual(c, {
-    measured: "2026-11-10",
     projects: 5,
     modules: 1,
     building: 2,
@@ -96,4 +96,11 @@ test("listing: everyone, modules too, most stars first, then the latest push, th
     ["o/quiet", false, false],
     ["o/new", false, false],
   ]);
+});
+
+test("namingAny: the rows naming any of the packages; every row for null, none for an empty set", () => {
+  const rows = [{ repo: "a", packages: ["@tetherto/wdk"] }, { repo: "b", packages: ["@tetherto/wdk-wallet-evm", "@tetherto/wdk"] }, { repo: "c", packages: ["@tetherto/wdk-wallet-btc"] }];
+  assert.deepEqual(namingAny(rows, new Set(["@tetherto/wdk-wallet-evm", "@tetherto/wdk-wallet-btc"])).map((r) => r.repo), ["b", "c"]);
+  assert.deepEqual(namingAny(rows, null).map((r) => r.repo), ["a", "b", "c"]);
+  assert.deepEqual(namingAny(rows, new Set()), []);
 });

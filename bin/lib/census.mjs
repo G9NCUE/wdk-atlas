@@ -68,33 +68,6 @@ const days = (a, b) => (Date.parse(b) - Date.parse(a)) / 864e5;
 const isBuilding = (r, today) => days(r.pushed, today) <= ACTIVE_DAYS && days(r.created, r.pushed) >= MIN_LIFE_DAYS;
 
 /**
- * What metrics.json keeps, modules apart: `modules` is how many there were, and nothing else counts
- * them. `cohorts` maps the month a repository was created to [projects started, still building];
- * `organisations` is how many of those still building an organisation owns; `packages` counts the
- * projects naming each package, most first.
- */
-export function tally(rows, today) {
-  const projects = rows.filter((r) => !r.module);
-  const cohorts = {}, packages = {};
-  for (const r of projects) {
-    const c = (cohorts[r.created.slice(0, 7)] ||= [0, 0]);
-    c[0] += 1;
-    if (isBuilding(r, today)) c[1] += 1;
-    for (const p of r.packages) packages[p] = (packages[p] || 0) + 1;
-  }
-  const live = projects.filter((r) => isBuilding(r, today));
-  return {
-    measured: today,
-    projects: projects.length,
-    modules: rows.length - projects.length,
-    building: live.length,
-    organisations: live.filter((r) => r.org).length,
-    cohorts: Object.fromEntries(Object.entries(cohorts).sort()),
-    packages: Object.fromEntries(Object.entries(packages).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))),
-  };
-}
-
-/**
  * data/projects.json: every repository, modules too, each marked `module` and `building`. Most
  * stars first, then the most recently pushed, then by name.
  */

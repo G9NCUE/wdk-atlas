@@ -79,7 +79,8 @@ import { loadAtlas, ROOT } from "./lib/load-atlas.mjs";
 import { summarise } from "./lib/summary.mjs";
 import { measuredUnder, thirdPartyModules, repoParts, packageNameOf, trimDownloads, rangeChunks } from "./lib/packages.mjs";
 import { pullsSince } from "./lib/pulls.mjs";
-import { listing, profile, tally } from "./lib/census.mjs";
+import { listing, profile } from "./lib/census.mjs";
+import { aggregate } from "../lib/projects.mjs";
 
 const OUT = join(ROOT, "data", "metrics.json");
 const SUMMARY_OUT = join(ROOT, "data", "summary.json");
@@ -464,8 +465,8 @@ try {
       const catalogued = new Set((atlas.modules || []).map((m) => repoParts(m.repo)).filter(Boolean).map((r) => `${r.owner}/${r.name}`.toLowerCase()));
       // A teammate's own repository is the team's work, not somebody else's adoption.
       const outside = (await profile(graphql, dependents, isWdk, catalogued)).filter((r) => !isInternal(r.repo.split("/")[0]));
-      file.adopters = tally(outside, today);
       projects = listing(outside, today);
+      file.adopters = { measured: today, ...aggregate(projects.repos) };
       snap.dependents = file.adopters.projects;
     } catch (e) { console.error(`collect-metrics: census failed, last one kept: ${e.message}`); }
   }

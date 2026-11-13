@@ -100,7 +100,13 @@ const VENDOR = {
 // 2026-11-11, +1 KB on roadmap, results and dashboard: three documented partner modules joined the
 // map (Bermuda, Butter, MoonPay), 0.47 KB of atlas.yaml on every page. Measured map 76.30, dev
 // 74.71, overview 100.82, roadmap 104.23, results 99.29, dashboard 110.38.
-const BUDGET_KB = { map: 77, dev: 75, overview: 101, roadmap: 105, results: 100, dashboard: 111 };
+// 2026-11-13, dashboard +4 KB: the public projects follow the selected repos, counted again in the
+// page by lib/projects.mjs, the collector's own counter, and the repo button names the selection
+// (lib/selection.mjs), with a box per section and named sets, and stays in view while narrowed.
+// Its 0.4 KB of styles.css reaches every page, and took dev and overview over: +1 KB each.
+// Measured map 76.74, dev 75.15, overview 101.30, roadmap 104.71, results 99.77, dashboard 113.92
+// (111.00 before).
+const BUDGET_KB = { map: 77, dev: 76, overview: 102, roadmap: 105, results: 100, dashboard: 115 };
 const DATA_KB = { "data/metrics.json": 85, "data/summary.json": 1, "data/third-party.json": 15, "data/projects.json": 10 };
 
 // ---------------------------------------------------------------- colour

@@ -199,8 +199,9 @@ export function createSeries(ctx) {
       body, foot && el("p", { class: "chart-foot" }, foot));
   }
 
-  function dashSection(title, cards) {
-    return el("details", { class: "dash-section", open: true }, el("summary", { class: "section-head" }, el("span", { class: "section-text" }, el("span", { class: "section-title-row" }, el("h2", { class: "section-title" }, title)))), el("div", { class: "chart-grid" }, cards));
+  // `blurb` says what a section counts when that is not the selected repos.
+  function dashSection(title, cards, blurb) {
+    return el("details", { class: "dash-section", open: true }, el("summary", { class: "section-head" }, el("span", { class: "section-text" }, el("span", { class: "section-title-row" }, el("h2", { class: "section-title" }, title)), blurb && el("span", { class: "section-blurb" }, blurb))), el("div", { class: "chart-grid" }, cards));
   }
 
   // ---- Dashboard data model (schema 3): per-repo daily series + daily snapshots; the page sums the selected repos.

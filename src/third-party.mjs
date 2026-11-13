@@ -20,6 +20,8 @@ const COLUMNS = [
   { key: "all", label: "All time", num: true, color: 2, tip: "From first publish to the last day npm has reported." },
 ];
 
+const SCOPE = "Every partner package on the map, whichever repos are selected.";
+
 export function createThirdParty(ctx) {
   use(ctx, createSeries);
   const { query, setUrlParams, fmtNum, defFor, trendPill, deltaPill, lineChart, hBars, chartCard, dashSection, exportControls,
@@ -33,7 +35,7 @@ export function createThirdParty(ctx) {
   };
 
   function renderThirdParty(third) {
-    if (!third) return dashSection("Third-party packages", [el("p", { class: "chart-foot" }, "Not collected yet; the next metrics run adds data/third-party.json.")]);
+    if (!third) return dashSection("Third-party packages", [el("p", { class: "chart-foot" }, "Not collected yet; the next metrics run adds data/third-party.json.")], SCOPE);
     const org = third.org || "the organisation";
     const packages = third.packages || {};
     const names = Object.keys(packages);
@@ -147,7 +149,7 @@ export function createThirdParty(ctx) {
           + (allTimeTotal == null ? "" : ` All time runs from each package's first publish: ${fmtNum(allTimeTotal)} across the ${rows.length}.`)
           + (rows.some((r) => r.hostedByOrg) ? ` An orange dot marks a third-party module maintained by ${org}.` : "")
           + (unmeasured.length ? ` Not measured: ${unmeasured.join("; ")}.` : "") + ` Collected ${collected}.`)),
-    ]);
+    ], SCOPE);
   }
 
   return { renderThirdParty };

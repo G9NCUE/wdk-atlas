@@ -10,6 +10,8 @@ import { createThirdParty } from "../third-party.mjs";
 import { weightedCurrency } from "../../lib/adoption.mjs";
 import { responseStats } from "../../lib/support.mjs";
 import { median } from "../../lib/steady.mjs";
+import { aggregate, namingAny } from "../../lib/projects.mjs";
+import { nameSelection } from "../../lib/selection.mjs";
 
 export default function createDashboardPage(ctx) {
   use(ctx, createModel);
@@ -18,7 +20,7 @@ export default function createDashboardPage(ctx) {
   use(ctx, createKeyResults);
   use(ctx, createThirdParty);
 
-  const { query, setUrlParams, atlas, onUrlChange, poster, unscoped, walletRepos, loadMetrics, loadProjects, loadThirdParty,
+  const { query, setUrlParams, atlas, onUrlChange, poster, unscoped, walletRepos, publishedRepos, loadMetrics, loadProjects, loadThirdParty,
     readinessFact, SERIES, fmtNum, deltaPill, trendPill, defFor, defTip, statTile, lineChart,
     releaseMarks, groupedBars, hBars, exportControls, chartCard, dashSection, GRAINS, grain,
     bucketKey, bucketLabel, coverageOf, seriesBuckets, lastTwo, snapshotSeries, coverageNote, gapNote, fmtLast, periodRows,
@@ -54,28 +56,56 @@ export default function createDashboardPage(ctx) {
     return el("nav", { class: "view-toggle", "aria-label": "Granularity" }, ids.map(link));
   }
 
-  // The selection panel: one checkbox per repo, grouped by atlas section; changes re-render the numbers in place.
+  // The selection panel: one checkbox per repo, grouped by atlas section, a box per section and a few
+  // named sets; changes re-render the numbers in place. The button names what is on show.
   function renderRepoPanel(file, selected, onChange) {
     const all = Object.keys(file.repos).sort();
-    const sections = (atlas.sections || []).map((sec) => sec.id);
+    const titleOf = (n) => file.repos[n].title || n;
+    const sectionIds = (atlas.sections || []).map((sec) => sec.id);
     const groupOf = (name) => file.repos[name].section || "other";
     const labelOf = (id) => ((atlas.sections || []).find((sec) => sec.id === id) || {}).label || "Not on the map";
-    const groups = [...new Set([...sections, "other"])].map((id) => [id, all.filter((n) => groupOf(n) === id)]).filter(([, names]) => names.length);
+    const groups = [...new Set([...sectionIds, "other"])].map((id) => [labelOf(id), all.filter((n) => groupOf(n) === id)]).filter(([, names]) => names.length);
+    // The two scopes the key results measure, wallets and published packages, the protocols, and the map's own.
+    const wallets = new Set(walletRepos());
+    const presets = [
+      ["Wallets", all.filter((n) => wallets.has(n))],
+      ["Protocols", all.filter((n) => /^wdk-protocol-/.test(n))],
+      ["Published on npm", publishedRepos()],
+      ["On the map", all.filter((n) => file.repos[n].module)],
+    ].filter(([, names]) => names.length);
     const panel = el("details", { class: "repo-panel" });
-    const count = el("span", { class: "view-count" }, `${selected.length}/${all.length}`);
-    const summary = el("summary", { class: "repo-panel-summary" }, "Tracked repos ", count);
-    const boxes = new Map();
+    const name = el("span", { class: "repo-panel-name" });
+    const count = el("span", { class: "view-count" });
+    const summary = el("summary", { class: "repo-panel-summary" }, el("span", { class: "repo-panel-label" }, "Showing"), name, count);
+    // Beside the button, not in it: a summary may not hold a button.
+    const reset = el("button", { type: "button", class: "linkish repo-reset" }, "Show all");
+    const boxes = new Map(), groupBoxes = [];
+    const presetButtons = presets.map(([label, names]) => [el("button", { type: "button", class: "linkish repo-preset" }, label, el("span", { class: "repo-preset-n" }, String(names.length))), names]);
+    const sync = (chosen) => {
+      const has = new Set(chosen), same = (names) => names.length === chosen.length && names.every((x) => has.has(x));
+      name.textContent = nameSelection(chosen, all, presets, groups, titleOf);
+      count.textContent = chosen.length === all.length ? String(all.length) : `${chosen.length} of ${all.length}`;
+      panel.classList.toggle("is-narrowed", chosen.length < all.length);
+      reset.hidden = chosen.length === all.length;
+      for (const [box, names] of groupBoxes) { const k = names.filter((x) => has.has(x)).length; box.checked = k === names.length; box.indeterminate = k > 0 && k < names.length; }
+      for (const [button, names] of presetButtons) button.setAttribute("aria-current", String(same(names)));
+    };
     const apply = () => {
       const chosen = all.filter((n) => boxes.get(n).checked);
-      count.textContent = `${chosen.length}/${all.length}`;
+      sync(chosen);
       saveSelection(chosen, all);
       // Read from the address but never written to it, so a dashboard link used to show the
       // recipient a different set of repositories.
       setUrlParams({ repos: chosen.length === all.length ? null : chosen.join(",") });
       onChange(chosen);
     };
-    const list = el("div", { class: "repo-groups" }, groups.map(([id, names]) =>
-      el("fieldset", { class: "repo-group" }, el("legend", null, labelOf(id)), names.map((n) => {
+    const choose = (names) => { const set = new Set(names); for (const [n, b] of boxes) b.checked = set.has(n); apply(); };
+    const list = el("div", { class: "repo-groups" }, groups.map(([label, names]) => {
+      // Ticks or clears the whole section; half-set while only some of it is on show.
+      const groupBox = el("input", { type: "checkbox" });
+      groupBox.addEventListener("change", () => { for (const n of names) boxes.get(n).checked = groupBox.checked; apply(); });
+      groupBoxes.push([groupBox, names]);
+      return el("fieldset", { class: "repo-group" }, el("legend", null, el("label", { class: "repo-group-toggle" }, groupBox, label)), names.map((n) => {
         const box = el("input", { type: "checkbox", value: n });
         box.checked = selected.includes(n);
         box.addEventListener("change", apply);
@@ -84,19 +114,20 @@ export default function createDashboardPage(ctx) {
         const pkgLabel = unscoped(r.package);
         // Beside the label, not in it: a label may not hold a button.
         const only = el("button", { type: "button", class: "linkish repo-only", "aria-label": `Show only ${r.title}` }, "only");
-        only.addEventListener("click", () => { for (const [name, b] of boxes) b.checked = name === n; apply(); });
+        only.addEventListener("click", () => choose([n]));
         return el("div", { class: "repo-line" },
           el("label", withTip({ class: "repo-row" }, n, r.title), box, el("span", { class: "repo-title" }, r.title), pkgLabel && pkgLabel !== r.title && el("span", { class: "repo-pkg" }, pkgLabel)),
           only);
-      }))));
-    const tools = el("div", { class: "repo-tools" },
-      el("button", { type: "button", class: "linkish" }, "All"), el("button", { type: "button", class: "linkish" }, "None"), el("button", { type: "button", class: "linkish" }, "On the map only"));
-    const [allBtn, noneBtn, mapBtn] = tools.querySelectorAll("button");
-    allBtn.addEventListener("click", () => { for (const b of boxes.values()) b.checked = true; apply(); });
-    noneBtn.addEventListener("click", () => { for (const b of boxes.values()) b.checked = false; apply(); });
-    mapBtn.addEventListener("click", () => { for (const [n, b] of boxes) b.checked = Boolean(file.repos[n].module); apply(); });
+      }));
+    }));
+    const noneButton = el("button", { type: "button", class: "linkish" }, "None");
+    reset.addEventListener("click", () => choose(all));
+    noneButton.addEventListener("click", () => choose([]));
+    for (const [button, names] of presetButtons) button.addEventListener("click", () => choose(names));
+    const tools = el("div", { class: "repo-tools" }, noneButton, el("span", { class: "repo-tools-sep" }), presetButtons.map(([button]) => button));
     panel.append(summary, el("div", { class: "repo-panel-body" }, tools, list));
-    return panel;
+    sync(selected);
+    return el("div", { class: "repo-scope" }, panel, reset);
   }
 
   function buildDashboard(file, selected, third, projects) {
@@ -123,6 +154,14 @@ export default function createDashboardPage(ctx) {
     const stable = selected.filter((r) => readinessFact("stable", r, latest)).length;
     const krs = new Map((atlas.northStars || []).flatMap((star) => keyResultsOf(star)).map((kr) => [kr.id, kr]));
     const feeds = (id) => { const kr = krs.get(id); return kr ? { id, label: `${kr.label}${kr.target != null ? ` · target ${kr.target}` : ""}` } : null; };
+    // The public projects naming a package the selected repos publish, counted from the list by the
+    // collector's own counter. Every published package selected is all of WDK, whatever else is left
+    // out; the collector's count stands in when the list did not load.
+    const packageSet = (names) => new Set(names.map((r) => file.repos[r]).filter((r) => r.version).map((r) => r.package));
+    const chosenPackages = packageSet(selected);
+    const tracked = projects && chosenPackages.size < packageSet(Object.keys(file.repos)).size ? chosenPackages : null;
+    const naming = projects && namingAny(projects.repos, tracked);
+    const census = naming ? { measured: projects.measured, ...aggregate(naming) } : file.adopters;
 
     // Downloads for the last complete period, per package, then split.
     //
@@ -168,10 +207,10 @@ export default function createDashboardPage(ctx) {
     // the open-issue level were demoted by the review and removed by the PM. Both keep their
     // chart further down the page, where a count is context rather than a headline.
     const tiles = el("div", { class: "tiles" },
-      file.adopters && statTile(defFor("dependents"), "Projects depending on WDK", fmtNum(file.adopters.projects), el("span", { class: "delta none" }, `${file.adopters.building} still building`), `public repos, counted ${file.adopters.measured}`),
-      statTile(defFor("downloads"), `npm downloads, last full ${unit}`, fmtLast(dlLast), trendPill("downloads", dl), splitHint || (dlLast.key ? `${withPkg} packages` : coverageNote(dlCov))),
+      census && statTile(defFor("dependents"), "Projects depending on WDK", fmtNum(census.projects), el("span", { class: "delta none" }, `${census.building} still building`), `public repos, counted ${census.measured}`),
+      statTile(defFor("downloads"), `npm downloads, last full ${unit}`, fmtLast(dlLast), trendPill("downloads", dl), splitHint || (dlLast.key ? `${withPkg} package${withPkg === 1 ? "" : "s"}` : coverageNote(dlCov))),
       currencyPct != null && statTile(defFor("version-currency"), "Version currency", `${currencyPct}%`,
-        el("span", { class: "delta none" }, `${currencyRepos.length} packages`),
+        el("span", { class: "delta none" }, `${currencyRepos.length} package${currencyRepos.length === 1 ? "" : "s"}`),
         `median ${medianShare}% per package`),
       supportStats.pct != null && statTile(defFor("issue-response"), "Answered within a week", `${supportStats.pct}%`,
         el("span", { class: "delta none" }, `${supportStats.total} issues`),
@@ -220,30 +259,35 @@ export default function createDashboardPage(ctx) {
     ]);
     const readiness = renderReadiness(file, selected, latest);
     const note = el("p", { class: "dash-note" }, `${selected.length} of ${Object.keys(file.repos).length} public WDK repos · npm and GitHub only · collected ${String(file.updated).slice(0, 10)} · snapshots since ${snapDays[0]}`);
-    return [tiles, adoption, file.adopters && renderProjects(file.adopters, projects), renderThirdParty(third), community, support, readiness, note];
+    return [tiles, adoption, census && renderProjects(census, naming, tracked), renderThirdParty(third), community, support, readiness, note];
   }
 
   // The public projects behind the dependents count, from the census the collector keeps
-  // (bin/lib/census.mjs): all of WDK whatever the selection. A month is the one the project's
-  // repository was created in, and only whole months are drawn, like every other chart.
-  function renderProjects(c, list) {
+  // (bin/lib/census.mjs). `tracked` is the packages of the selected repos, null for all of WDK; `list`
+  // the rows naming one of them, null when data/projects.json did not load. A month
+  // is the one the project's repository was created in, and only whole months are drawn, like every
+  // other chart.
+  function renderProjects(c, list, tracked) {
     const [y, m] = c.measured.split("-").map(Number);
     const months = Array.from({ length: 12 }, (_, i) => new Date(Date.UTC(y, m - 13 + i, 1)).toISOString().slice(0, 7));
     const counts = months.map((k) => c.cohorts[k] || [0, 0]);
     const earlier = Object.entries(c.cohorts).filter(([k]) => k < months[0]).reduce((n, [, v]) => n + v[0], 0);
     const short = (k) => new Date(`${k}-01T00:00:00Z`).toLocaleDateString("en", { month: "short", timeZone: "UTC" });
-    const top = Object.entries(c.packages).slice(0, 8).map(([name, n]) => ({ label: unscoped(name), value: n }));
-    const meta = { collected: c.measured, scope: "public repositories outside the org, all of WDK" };
+    const named = Object.entries(c.packages).filter(([name]) => !tracked || tracked.has(name));
+    const top = named.slice(0, 8).map(([name, n]) => ({ label: unscoped(name), value: n }));
+    const packagesOf = tracked && (tracked.size ? `one of the ${tracked.size} package${tracked.size === 1 ? "" : "s"} the selected repos publish` : null);
+    const meta = { collected: c.measured, scope: `public repositories outside the org, ${tracked ? `naming ${packagesOf || "no package: the selected repos publish none"}` : "all of WDK"}` };
     return dashSection("Projects building on WDK", [
       chartCard(defFor("dependents-active"), "Projects started and still building, by month", String(c.building), null,
         groupedBars(months.map(short), [{ label: "Started", values: counts.map((v) => v[0]) }, { label: "Still building", values: counts.map((v) => v[1]) }]),
         `${c.organisations} of those still building belong to organisations. ${earlier} started before ${short(months[0])} ${months[0].slice(0, 4)}. ${c.modules ? `${c.modules} WDK modules' own repositories left out. ` : ""}Public GitHub only.`,
         { ...meta, columns: ["month", "started", "still building"], rows: months.map((k, i) => [k, ...counts[i]]) }),
-      chartCard(defFor("dependents"), "Packages public projects use", fmtNum(c.projects), null, hBars(top, { color: SERIES[1] }),
+      chartCard(defFor("dependents"), "Packages public projects use", fmtNum(c.projects), null,
+        top.length ? hBars(top, { color: SERIES[1] }) : el("p", { class: "chart-foot" }, "No public project names a package of the selected repos."),
         "Projects naming each package, top eight. A project can name several.",
-        { ...meta, columns: ["package", "projects"], rows: Object.entries(c.packages) }),
-      list && renderProjectList(list.repos, { ...meta, collected: list.measured }),
-    ]);
+        { ...meta, columns: ["package", "projects"], rows: named }),
+      list && renderProjectList(list, meta),
+    ], tracked && (packagesOf ? `Public projects naming ${packagesOf}.` : "The selected repos publish no package, so no project is counted."));
   }
 
   // Every project the census found, the most starred first, WDK modules' own among them and marked,
@@ -301,12 +345,13 @@ export default function createDashboardPage(ctx) {
     const measured = (field) => field === "stable" || Boolean(latest[field]);
     const healthVals = repos.map((r) => (latest.health || {})[r]).filter((v) => typeof v === "number");
     const avgHealth = healthVals.length ? Math.round(healthVals.reduce((a, b) => a + b, 0) / healthVals.length) : null;
-    const summary = el("p", { class: "ready-summary" },
+    const shownWallets = repos.filter((r) => wallets.has(r));
+    const summary = !repos.length ? el("p", { class: "ready-summary" }, "No published package among the selected repos.") : el("p", { class: "ready-summary" },
       `${count("stable")} of ${repos.length} stable`, " · ",
       measured("ci") ? `${count("ci")} green CI` : "CI not collected yet", " · ",
       measured("audits") ? `${count("audits")} with an audit` : "audits not collected yet", " · ",
-      avgHealth == null ? "community health not collected yet" : `community health ${avgHealth}% on average`,
-      latest.signer ? ` · signer interface in ${[...wallets].filter((r) => latest.signer[r]).length} of ${wallets.size} wallets` : "");
+      avgHealth != null ? `community health ${avgHealth}% on average` : latest.health ? "no community health score" : "community health not collected yet",
+      latest.signer && shownWallets.length ? ` · signer interface in ${shownWallets.filter((r) => latest.signer[r]).length} of ${shownWallets.length} wallet${shownWallets.length === 1 ? "" : "s"}` : "");
     const head = el("tr", null, ["Package", "Version", "Stable", "CI", "Audit", "Health", "Signer", "Owners"].map((h) => el("th", null, h)));
     const rows = repos.map((r) => {
       const info = file.repos[r];
