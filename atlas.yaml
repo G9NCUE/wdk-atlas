@@ -251,9 +251,9 @@ modules:
     band: kernel
     status: shipped
     publisher: tetherto
-    summary: 'The conductor. One object your app talks to: it creates each wallet, hands every protocol the account it works on, and applies transaction rules. Everything else in the kit plugs into it.'
+    summary: 'The conductor. One object your app talks to: it creates each wallet and hands every protocol the account it works on. Everything else in the kit plugs into it.'
     notes:
-      - Phase 1 of the policy engine already ships inside this package (src/policy, since 1.0.0-beta.16). The wdk-policies repo is an empty README
+      - The policy engine moved out to wdk-policies in 1.0.0-beta.23 (wdk#127)
     repo: https://github.com/tetherto/wdk
 
   - id: wdk-wallet
@@ -273,10 +273,12 @@ modules:
     title: Transaction rules
     section: core
     band: kernel
-    status: planned
+    status: shipped
     publisher: tetherto
-    summary: 'A library of ready-made transaction rules: limits, allow-lists, checks before a transfer leaves. The rules engine itself lives in the conductor and stays there; this package will hold the common policies (Jonathan, 2026-09-06).'
+    summary: Opt-in transaction rules on the accounts WDK hands out. They run in the app's own process, so they are not a security boundary.
     repo: https://github.com/tetherto/wdk-policies
+    relations:
+      - { type: requires, target: wdk }
 
   - id: wdk-wallet-btc
     name: wdk-wallet-btc
@@ -1142,20 +1144,20 @@ roadmap:
   - id: signers
     northStar: kit
     label: Abstract signers
-    summary: One signer interface on every wallet package, so seed, private key, hardware and remote signers plug into the same account. Released on EVM in 1.0.0-beta.21 on 9 October 2026. Bitcoin is merged but not released; Solana is in review (wdk-wallet-solana#99).
+    summary: One signer interface on every wallet package, so seed, private key, hardware and remote signers plug into the same account. Released on EVM and its smart-account and gasless variants, Solana and TRON by 18 November 2026. Bitcoin is merged but not released; the other six have no pull request yet.
     quarter: 2026Q4
     status: wip
     priority: P0
     modules:
       - { id: wdk-wallet-btc, status: wip, progress: 80 }
       - { id: wdk-wallet-evm, status: done }
-      - { id: wdk-wallet-solana, status: wip }
-      - wdk-wallet-evm-erc-4337
-      - wdk-wallet-evm-7702-gasless
+      - { id: wdk-wallet-solana, status: done }
+      - { id: wdk-wallet-evm-erc-4337, status: done }
+      - { id: wdk-wallet-evm-7702-gasless, status: done }
       - wdk-wallet-solana-gasless
       - wdk-wallet-ton
       - wdk-wallet-ton-gasless
-      - wdk-wallet-tron
+      - { id: wdk-wallet-tron, status: done }
       - wdk-wallet-tron-gasfree
       - wdk-wallet-spark
       - wdk-wallet-aptos
@@ -1163,7 +1165,7 @@ roadmap:
     northStar: kit
     label: Ledger
     parent: signers
-    summary: Hardware signing through a standalone Ledger package, first on Bitcoin, EVM and Solana; other hardware wallets can follow. The first draft signers were all closed unmerged by 28 October 2026. The package is not created yet, and Solana waits on the abstract signer.
+    summary: Hardware signing through a standalone Ledger package, first on Bitcoin, EVM and Solana; other hardware wallets can follow. The first draft signers were all closed unmerged by 28 October 2026. The package is not created yet.
     quarter: 2026Q4
     status: planned
     priority: P2
@@ -1174,7 +1176,7 @@ roadmap:
   - id: btc-wallet-rework
     northStar: kit
     label: Bitcoin wallet rework
-    summary: Rebuilding the base of the Bitcoin wallet, so shared wallets, Taproot, hardware signers and fee bumping can be added without reworking it each time. Six steps in a set order (wdk-wallet-btc#131); the first three are in open pull requests, none merged yet.
+    summary: Rebuilding the base of the Bitcoin wallet, so shared wallets, Taproot, hardware signers and fee bumping can be added without reworking it each time. Six steps in a set order (wdk-wallet-btc#131); the first four are in open pull requests, none merged yet.
     quarter: 2026Q4
     status: wip
     priority: P1
@@ -1214,7 +1216,7 @@ roadmap:
     quarter: 2026Q4
     status: wip
     priority: P0
-    modules: [wdk]
+    modules: [wdk-policies]
   - id: agent-default-deny
     northStar: kit
     label: Default deny on the agent path
@@ -1315,9 +1317,9 @@ roadmap:
   - id: doctor-wallet
     northStar: dx
     label: WDK doctor app, a worklet console
-    summary: Plug a bundle into the worklet and poke at whatever is in it, so the team and contributor teams can dogfood and debug any package without a throwaway app per package.
-    quarter: 2026Q4
-    status: wip
+    summary: Plug a bundle into the worklet and poke at whatever is in it, so the team and contributor teams can dogfood and debug any package without a throwaway app per package. No work since September.
+    quarter: backlog
+    status: planned
     priority: P2
     modules: [wdk-doctor-app, wdk-worklet-bundler]
   - id: cli-completion
@@ -1655,7 +1657,7 @@ roadmap:
     quarter: backlog
     status: planned
     priority: P2
-    modules: [wdk]
+    modules: [wdk-policies]
   # ---- Transparency: the conditions for others to build on WDK (ecosystem star).
   - id: public-roadmap
     northStar: ecosystem
@@ -1667,16 +1669,16 @@ roadmap:
   - id: contribution-guidelines
     northStar: ecosystem
     label: Contribution guidelines, public
-    summary: 'One clear, public page on how to propose, build and get a module reviewed, replacing guidelines that exist but point nowhere. Owner: Maharshi. A draft is in team review; eight decisions remain before it can be published.'
+    summary: 'One public page on how to propose, build and get a module reviewed: the module contribution guide on docs.wdk.tether.io, published in November 2026 (wdk-docs#319). Giving each rule an ID and a check a script can run is follow-up work (wdk-docs#324, create-wdk-module#28).'
     quarter: 2026Q4
-    status: wip
+    status: done
     priority: P1
   - id: changelog-cadence
     northStar: ecosystem
     label: Changelog and release notes on a cadence
-    summary: A regular, readable account of what changed across the packages, so users and contributors do not have to read commit logs. Owner not yet defined.
+    summary: A regular, readable account of what changed across the packages, so users and contributors do not have to read commit logs. The docs changelog is updated every few weeks; no named owner.
     quarter: 2026Q4
-    status: planned
+    status: wip
     priority: P2
   - id: flutter-host
     northStar: ecosystem
@@ -1697,7 +1699,7 @@ roadmap:
   - id: kotlin-beta
     northStar: kit
     label: Kotlin core to beta
-    summary: 'The Android side brought up to a beta bar, one step behind the Swift core: docs current, QuickJS engine, minSdk 31.'
+    summary: 'The Android side brought up to a beta bar, alongside the Swift core: docs current, V8 engine, minSdk 31. v0.9.0 shipped on 18 November; the beta follows in phase 3b.'
     quarter: 2026Q4
     status: wip
     priority: P0
@@ -1738,7 +1740,7 @@ roadmap:
     northStar: kit
     label: Publish the Swift core on Swift Package Manager
     partners: [Holepunch]
-    summary: Installable with one line in a Swift project from a Git URL and a tag. Phase 3 of the native roadmap (wdk-worklet-bundler#84), targeted for December. Holepunch now tags bare-kit-swift releases; the setup automation is in review (wdk-core-swift#19). No Apple account required for the package itself.
+    summary: Installable with one line in a Swift project and listed on the Swift Package Index. v0.9.0 already installs from a Git tag; the listed beta is phase 3a of the native roadmap (wdk-worklet-bundler#84), and no earlier phase is finished. December is at risk.
     quarter: 2026Q4
     status: wip
     priority: P1
@@ -1746,7 +1748,7 @@ roadmap:
   - id: publish-kotlin-maven
     northStar: kit
     label: Publish the Kotlin core on Maven Central
-    summary: Publish the Kotlin core on Maven Central under to.tether.wdk. Phase 3 of the native roadmap (wdk-worklet-bundler#84), targeted for December. Needs a Sonatype namespace owner at Tether and a maven-publish setup; neither exists yet.
+    summary: Publish the Kotlin core on Maven Central under to.tether.wdk. The published beta is phase 3b of the same roadmap, and no earlier phase is finished. Needs a Sonatype namespace owner at Tether and a publish setup. December is at risk.
     quarter: 2026Q4
     status: planned
     priority: P1
@@ -1754,15 +1756,15 @@ roadmap:
   - id: docs-revamp
     northStar: dx
     label: Docs revamp, phase 1, clearer and simpler
-    summary: Make docs.wdk.tether.io easier to follow. Fewer pages, one path from install to first transaction, the core ideas explained once and plainly. Trim what nobody reads.
+    summary: 'Made docs.wdk.tether.io easier to follow: reorganised into five tabs, retired pages removed. Done in November 2026.'
     quarter: 2026Q4
-    status: wip
+    status: done
     priority: P1
     modules: []
   - id: docs-revamp-2
     northStar: dx
-    label: Docs revamp, phase 2, the starter path
-    summary: Every platform reachable from the docs with a starter and a recipe that runs. Browser, Node, React Native, Android and iPhone, each with the same first-transaction walkthrough.
+    label: Docs revamp, phase 2
+    summary: Exact scope to be defined. The working proposal is a starter and a recipe that runs for every platform, each with the same first-transaction walkthrough.
     quarter: 2027Q1
     status: planned
     priority: P1
@@ -1770,9 +1772,9 @@ roadmap:
   - id: starter-swift
     northStar: dx
     label: Starter app, iPhone
-    summary: The iPhone starter wallet, alongside the React Native and Android ones, so an iOS developer has a working app to begin from.
+    summary: The iPhone starter wallet, alongside the React Native and Android ones, so an iOS developer has a working app to begin from. Tagged v0.9.0 on 19 November 2026.
     quarter: 2026Q4
-    status: wip
+    status: done
     priority: P1
     modules: [wdk-starter-swift]
   - id: starter-web
@@ -1817,8 +1819,8 @@ roadmap:
   - id: indexer-swagger
     northStar: dx
     label: Indexer API reference in the docs
-    summary: 'Publish the indexer API as a Swagger/OpenAPI reference on the docs site, so the open API has documentation to match. The service stays closed source; the API does not. A generated reference is in an open pull request (wdk-docs#313).'
+    summary: 'The indexer API published as an OpenAPI reference on the docs site, generated from production in November 2026 (wdk-docs#313), so the open API has documentation to match. The service stays closed source; the API does not.'
     quarter: 2026Q4
-    status: wip
+    status: done
     priority: P1
     modules: [wdk-indexer-http]
