@@ -1688,6 +1688,13 @@ roadmap:
     quarter: 2027Q2
     status: planned
     priority: P2
+  - id: grants
+    northStar: ecosystem
+    label: Grants for external contributors
+    summary: At least three grants awarded to outside teams that build on WDK, using the existing grant template.
+    quarter: 2027Q1
+    status: planned
+    modules: []
   # ---- Q4 2026: the last stop before beta exit (Tether product presentation, September 2026).
   - id: audit-groundwork
     northStar: kit
@@ -1721,6 +1728,20 @@ roadmap:
     status: done
     priority: P1
     modules: [wdk-protocol-bridge-usdt0-solana]
+  - id: safe-signing
+    northStar: kit
+    label: Smart accounts sign as the Safe
+    summary: Smart-account wallets sign messages as the Safe itself, so contracts that check the Safe accept them, released in beta.26 on 13 November 2026. Merged and awaiting release, keeping an existing Safe after an owner change, and signatures that check out before the Safe is deployed.
+    quarter: 2026Q4
+    status: wip
+    modules: [wdk-wallet-evm-erc-4337]
+  - id: walletconnect-starter
+    northStar: ecosystem
+    label: WalletConnect in the React Native starter
+    summary: Websites and apps connect to the React Native starter through WalletConnect and ask it to sign messages; the user approves each connection and each signature. The connection runs beside the wallets and never touches the keys. In review since 11 November 2026 (wdk-starter-react-native#81).
+    quarter: 2026Q4
+    status: wip
+    modules: [wdk-starter-react-native]
   - id: repo-cleanup
     northStar: ecosystem
     label: Repository cleanup across the org
@@ -1769,6 +1790,13 @@ roadmap:
     status: planned
     priority: P1
     modules: [wdk-starter-react-native, wdk-starter-kotlin, wdk-starter-swift, wdk-examples]
+  - id: website-revamp
+    northStar: dx
+    label: wdk.tether.io revamp
+    summary: A revamp of wdk.tether.io, the WDK website. Scope to be defined.
+    quarter: 2027Q1
+    status: planned
+    modules: []
   - id: starter-swift
     northStar: dx
     label: Starter app, iPhone

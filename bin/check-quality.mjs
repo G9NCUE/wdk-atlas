@@ -106,7 +106,10 @@ const VENDOR = {
 // Its 0.4 KB of styles.css reaches every page, and took dev and overview over: +1 KB each.
 // Measured map 76.74, dev 75.15, overview 101.30, roadmap 104.71, results 99.77, dashboard 113.92
 // (111.00 before).
-const BUDGET_KB = { map: 77, dev: 76, overview: 102, roadmap: 105, results: 100, dashboard: 115 };
+// 2026-11-25, +1 KB on map, roadmap and results: four roadmap items (Safe signing, WalletConnect in
+// the starter, grants, the website revamp), 0.34 KB of atlas.yaml on every page. Measured map 77.18,
+// dev 75.61, overview 101.81, roadmap 105.22, results 100.27, dashboard 114.43.
+const BUDGET_KB = { map: 78, dev: 76, overview: 102, roadmap: 106, results: 101, dashboard: 115 };
 const DATA_KB = { "data/metrics.json": 85, "data/summary.json": 1, "data/third-party.json": 15, "data/projects.json": 10 };
 
 // ---------------------------------------------------------------- colour
